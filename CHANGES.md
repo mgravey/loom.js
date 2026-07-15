@@ -2,7 +2,37 @@
 
 This project follows a lightweight milestone changelog while packages remain private.
 
-## Unreleased — Phase 3
+## Unreleased — Phase 4
+
+### Added
+
+- `@loom/credential-broker-api`, defining a transport-neutral, versioned, strictly validated
+  access-token protocol.
+- `@loom/auth-extension`, adapting an explicitly supplied external-message runtime to Loom's
+  provider-neutral `AuthProvider` capability.
+- `@loom/extension`, a Manifest V3 credential broker with exact-origin authorization, trusted-only
+  refresh-credential storage, access-token caching, rotation support, and concurrent refresh
+  deduplication.
+- `@loom/example-extension`, demonstrating end-to-end composition through public APIs with the
+  development mock provider.
+- Real Chromium tests loading the unpacked extension and exercising allowed and unauthorized
+  origins, concurrent requests, unknown providers, and missing credentials.
+- Credential-broker security guide and ADR-008 for the extension-owned trust boundary.
+
+### Security
+
+- Refresh credentials remain inside the extension and are never included in broker responses, Loom
+  configuration, sessions, events, IndexedDB, or application logs.
+- `chrome.storage.local` access is restricted to `TRUSTED_CONTEXTS` before credential
+  initialization, and the service worker authorizes the sender's exact HTTP(S) origin before parsing
+  a request.
+
+### Still deferred
+
+- Real OAuth providers, Codex authentication research, login/logout UI, provider network calls,
+  extension publication, production origin configuration, and execution runtimes.
+
+## Phase 3
 
 ### Added
 
@@ -15,8 +45,8 @@ This project follows a lightweight milestone changelog while packages remain pri
 
 ### Still deferred
 
-- Production model providers, authentication, extension credential brokering, execution runtimes,
-  Git, terminal, search, package management, and persisted conversations.
+- Production model providers, real authentication providers, execution runtimes, Git, terminal,
+  search, package management, and persisted conversations.
 
 ## Phase 2
 

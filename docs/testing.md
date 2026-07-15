@@ -46,6 +46,11 @@ Tests must cover:
 - IndexedDB byte cloning, namespace isolation, deterministic listing, error mapping, and disposal;
 - File System Access path confinement, immediate listing, UTF-8 reads/writes, cancellation, and
   browser-error translation.
+- strict credential-protocol validation, immutable normalization, request/response correlation, and
+  provider-neutral error mapping;
+- exact sender-origin authorization, trusted-context storage initialization, credential rotation,
+  token expiry/skew handling, failure sanitization, and concurrent refresh deduplication;
+- external-message adaptation to the public Loom `AuthProvider` contract.
 
 Provider-neutral fakes should cover every capability category while importing only `@loom/types` and
 `@loom/plugin-api`. Compile-time fixtures verify public types and package-boundary failures.
@@ -53,7 +58,8 @@ Provider-neutral fakes should cover every capability category while importing on
 ## Coverage policy
 
 Across `@loom/types`, `@loom/plugin-api`, `@loom/core`, `@loom/tool-workspace`, and
-`@loom/agent-codex`, plus the Phase 3 browser plugin packages, V8 coverage must meet:
+`@loom/agent-codex`, plus the Phase 3 browser plugins and Phase 4 credential packages, V8 coverage
+must meet:
 
 | Metric     | Minimum |
 | ---------- | ------: |
@@ -83,6 +89,13 @@ window and dedicated Worker. It verifies copied byte storage, namespace listing/
 file mutation through the File System Access contract, session cancellation, connection closure, and
 runtime disposal. Interactive directory-picker behavior remains in the example application;
 automated tests inject an OPFS handle to avoid a permission prompt.
+
+Phase 4 loads the built Manifest V3 extension into a persistent Chromium context and communicates
+with its real service worker from a served page. Tests cover the public example, exact-origin
+rejection, concurrent refresh deduplication, an unknown provider, and a missing refresh credential
+without leaking stored state. This follows Playwright's
+[Chrome extension guidance](https://playwright.dev/docs/chrome-extensions) and Chrome's
+[end-to-end extension testing guidance](https://developer.chrome.com/docs/extensions/how-to/test/end-to-end-testing).
 
 ## CI
 

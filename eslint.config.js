@@ -243,6 +243,60 @@ export default tseslint.config(
     },
   },
   {
+    files: ['packages/credential-broker-api/src/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@loom/*', 'node:*'],
+              message: 'The credential broker protocol is dependency- and host-neutral.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ['packages/auth-extension/src/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: [
+                '@loom/*',
+                '!@loom/types',
+                '!@loom/plugin-api',
+                '!@loom/credential-broker-api',
+                'node:*',
+              ],
+              message: 'The extension auth adapter may depend only on public Loom contracts.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ['packages/extension/src/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@loom/*', '!@loom/credential-broker-api', 'node:*'],
+              message: 'The credential broker extension may depend only on its public protocol.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ['packages/examples/src/**/*.ts'],
     rules: {
       'no-restricted-imports': [

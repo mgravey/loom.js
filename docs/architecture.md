@@ -39,6 +39,13 @@ the packages below them retain their environment-neutral boundary. See
 [the browser-platform guide](./browser-platform.md) and
 [ADR-007](./adr/007-explicit-browser-hosts.md).
 
+Phase 4 adds a separate credential path. `@loom/credential-broker-api` owns the transport-neutral
+message protocol. Both the Manifest V3 `@loom/extension` and the application-side
+`@loom/auth-extension` depend on that protocol without depending on one another. The auth adapter
+registers the existing minimal `AuthProvider` contract; the extension never becomes a core service
+or runtime singleton. See [the credential-broker guide](./credential-broker.md) and
+[ADR-008](./adr/008-extension-credential-boundary.md).
+
 Core and portable plugin TypeScript projects compile with `lib: ["ES2022"]`. DOM and Node typings
 are not available to that production source. Browser-leaf packages add only the browser libraries
 they implement. This preserves portable ESM for a browser window, dedicated Web Worker, or a
@@ -133,8 +140,22 @@ in-memory adapter and scripted model in `@loom/examples` demonstrate composition
 defaults or production providers. See [the minimal-agent guide](./minimal-agent.md) and
 [ADR-006](./adr/006-agent-owned-protocol.md).
 
+## Extension credential boundary
+
+The application page is outside the credential trust boundary. It sends a versioned `getAccessToken`
+envelope to an explicitly identified extension. Chrome's `externally_connectable` manifest entry is
+a coarse routing gate; the service worker separately validates the sender's exact origin before
+parsing the message or looking up a provider.
+
+Refresh credentials belong only to the extension's trusted storage. The service worker may cache a
+short-lived access token in memory and returns only that token and its expiry. A Loom auth plugin
+adapts this response to `AuthProvider.getAccessToken()` without exposing extension APIs to core.
+Service-worker restart may discard the access-token cache, but the next authorized request can
+refresh from extension-owned state.
+
 ## Deferred architecture
 
-Phase 3 supplies browser storage and filesystem access without changing runtime lifecycle or
-registry semantics. Credential brokering, production model providers, additional agents, and
-execution environments remain future independent plugins.
+Phase 3 supplies browser storage and filesystem access, and Phase 4 supplies mock-backed extension
+credential brokering, without changing runtime lifecycle or registry semantics. Real OAuth/Codex
+authentication, production model providers, additional agents, and execution environments remain
+future independent plugins.

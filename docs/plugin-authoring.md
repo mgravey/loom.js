@@ -143,6 +143,18 @@ The Phase 3 IndexedDB and File System Access packages are concrete browser leave
 pickers stay in applications because they require user interaction; a workspace plugin receives the
 resulting directory handle and never broadens that authority.
 
+## Credential providers
+
+Keep authentication capabilities narrower than provider login flows. A Loom `AuthProvider` returns
+an access token; OAuth authorization, refresh rotation, credential revocation, and extension storage
+belong behind an injected broker or provider package. Never place a refresh credential in plugin
+configuration, session overlays, events, errors, logs, or a general Loom storage capability.
+
+An external transport is untrusted input. Validate the complete request/response envelope, match
+responses to request IDs, preserve provider-neutral error codes, and authorize the calling origin at
+the host boundary. The Phase 4 extension adapter receives its external-message runtime explicitly,
+while the Manifest V3 service worker owns Chrome globals and persistent refresh state.
+
 ## Checklist
 
 - [ ] Manifest ID and all capability IDs are namespaced.
@@ -154,3 +166,4 @@ resulting directory handle and never broadens that authority.
 - [ ] Configuration and event payloads are treated as immutable.
 - [ ] Imports respect package and environment boundaries.
 - [ ] Tests cover successful lifecycle and rollback behavior.
+- [ ] Credential plugins return only short-lived access tokens across application boundaries.

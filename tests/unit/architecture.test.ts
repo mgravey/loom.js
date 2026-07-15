@@ -14,6 +14,9 @@ const runtimePackages = [
   'platform-browser',
   'storage-indexeddb',
   'workspace-fsa',
+  'credential-broker-api',
+  'auth-extension',
+  'extension',
   'examples',
 ] as const;
 
@@ -28,6 +31,9 @@ const allowedInternalDependencies: Readonly<
   'platform-browser': ['@loom/plugin-api', '@loom/types'],
   'storage-indexeddb': ['@loom/plugin-api', '@loom/types'],
   'workspace-fsa': ['@loom/plugin-api', '@loom/tool-workspace', '@loom/types'],
+  'credential-broker-api': [],
+  'auth-extension': ['@loom/credential-broker-api', '@loom/plugin-api', '@loom/types'],
+  extension: ['@loom/credential-broker-api'],
   examples: ['@loom/agent-codex', '@loom/plugin-api', '@loom/tool-workspace', '@loom/types'],
 });
 
@@ -135,6 +141,20 @@ describe('package architecture', () => {
     expect(Object.keys(manifest.dependencies ?? {}).sort()).toEqual([...allowed].sort());
   });
 
+  it('keeps the credential broker example on explicit public package dependencies', async () => {
+    const allowed = ['@loom/auth-extension', '@loom/core'];
+    const imports = await packageImports('example-extension');
+    expect(imports.filter((value) => value.startsWith('node:'))).toEqual([]);
+    expect(
+      imports.filter((value) => value.startsWith('@loom/') && !allowed.includes(value)),
+    ).toEqual([]);
+
+    const manifest = JSON.parse(
+      await readFile(join(workspaceRoot, 'packages', 'example-extension', 'package.json'), 'utf8'),
+    ) as { readonly dependencies?: Readonly<Record<string, string>> };
+    expect(Object.keys(manifest.dependencies ?? {}).sort()).toEqual([...allowed].sort());
+  });
+
   it('keeps core source provider- and host-neutral', async () => {
     const forbiddenImports = [
       'openai',
@@ -232,6 +252,32 @@ describe('package architecture', () => {
     ];
 
     for (const packageName of ['platform-browser', 'storage-indexeddb', 'workspace-fsa'] as const) {
+      for (const file of await sourceFiles(packageName)) {
+        const source = await readFile(file, 'utf8');
+        for (const specifier of importsIn(source)) {
+          expect(
+            forbiddenImports.some(
+              (forbidden) => specifier === forbidden || specifier.startsWith(`${forbidden}/`),
+            ),
+            `${file} imports ${specifier}`,
+          ).toBe(false);
+        }
+      }
+    }
+  });
+
+  it('keeps Phase 4 broker packages isolated from core and concrete providers', async () => {
+    const forbiddenImports = [
+      '@loom/core',
+      '@loom/agent-codex',
+      'openai',
+      'anthropic',
+      '@google/generative-ai',
+      'node:fs',
+      'node:path',
+    ];
+
+    for (const packageName of ['credential-broker-api', 'auth-extension', 'extension'] as const) {
       for (const file of await sourceFiles(packageName)) {
         const source = await readFile(file, 'utf8');
         for (const specifier of importsIn(source)) {

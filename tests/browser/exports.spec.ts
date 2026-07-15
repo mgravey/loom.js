@@ -15,6 +15,9 @@ test('built packages publish declaration entry points', async () => {
     'platform-browser',
     'storage-indexeddb',
     'workspace-fsa',
+    'credential-broker-api',
+    'auth-extension',
+    'extension',
     'examples',
   ]) {
     const declaration = await readFile(
@@ -30,8 +33,27 @@ test('built packages publish declaration entry points', async () => {
   expect(declarations.get('platform-browser')).toContain('createBrowserPlatformPlugin');
   expect(declarations.get('storage-indexeddb')).toContain('createIndexedDbStoragePlugin');
   expect(declarations.get('workspace-fsa')).toContain('createFileSystemAccessWorkspacePlugin');
+  expect(declarations.get('credential-broker-api')).toContain('CredentialBroker');
+  expect(declarations.get('auth-extension')).toContain('createExtensionAuthPlugin');
+  expect(declarations.get('extension')).toContain('createCredentialBrokerMessageHandler');
   expect(declarations.get('examples')).toContain('createAllCapabilitiesPlugin');
   expect(declarations.get('examples')).toContain('createInMemoryTextWorkspace');
+});
+
+test('built extension assets are installable and self-contained', async () => {
+  const extensionDirectory = join(workspaceRoot, 'packages', 'extension', 'dist');
+  const manifest = JSON.parse(
+    await readFile(join(extensionDirectory, 'manifest.json'), 'utf8'),
+  ) as {
+    readonly manifest_version?: number;
+    readonly background?: { readonly service_worker?: string };
+  };
+  const serviceWorker = await readFile(join(extensionDirectory, 'service-worker.js'), 'utf8');
+
+  expect(manifest.manifest_version).toBe(3);
+  expect(manifest.background?.service_worker).toBe('service-worker.js');
+  expect(serviceWorker).not.toMatch(/\b(?:import|export)\b/u);
+  expect(serviceWorker).not.toContain('@loom/');
 });
 
 test('built ESM packages expose their public runtime APIs', async ({ page }) => {
@@ -47,6 +69,9 @@ test('built ESM packages expose their public runtime APIs', async ({ page }) => 
       browserPlatform,
       indexedDbStorage,
       fileSystemWorkspace,
+      credentialBrokerApi,
+      extensionAuth,
+      credentialBrokerExtension,
       examples,
     ] = await Promise.all([
       import(`${origin}/packages/types/dist/index.js`),
@@ -57,6 +82,9 @@ test('built ESM packages expose their public runtime APIs', async ({ page }) => 
       import(`${origin}/packages/platform-browser/dist/index.js`),
       import(`${origin}/packages/storage-indexeddb/dist/index.js`),
       import(`${origin}/packages/workspace-fsa/dist/index.js`),
+      import(`${origin}/packages/credential-broker-api/dist/index.js`),
+      import(`${origin}/packages/auth-extension/dist/index.js`),
+      import(`${origin}/packages/extension/dist/index.js`),
       import(`${origin}/packages/examples/dist/index.js`),
     ]);
     return {
@@ -68,6 +96,9 @@ test('built ESM packages expose their public runtime APIs', async ({ page }) => 
       browserPlatform: Object.keys(browserPlatform),
       indexedDbStorage: Object.keys(indexedDbStorage),
       fileSystemWorkspace: Object.keys(fileSystemWorkspace),
+      credentialBrokerApi: Object.keys(credentialBrokerApi),
+      extensionAuth: Object.keys(extensionAuth),
+      credentialBrokerExtension: Object.keys(credentialBrokerExtension),
       examples: Object.keys(examples),
     };
   }, browserOrigin);
@@ -128,6 +159,27 @@ test('built ESM packages expose their public runtime APIs', async ({ page }) => 
       'FSA_READ_FILE_TOOL_KEY',
       'FSA_WRITE_FILE_TOOL_KEY',
       'createFileSystemAccessWorkspacePlugin',
+    ]),
+  );
+  expect(exportsByPackage.credentialBrokerApi).toEqual(
+    expect.arrayContaining([
+      'CREDENTIAL_BROKER_PROTOCOL',
+      'createGetAccessTokenRequest',
+      'parseCredentialBrokerResponse',
+    ]),
+  );
+  expect(exportsByPackage.extensionAuth).toEqual(
+    expect.arrayContaining([
+      'EXTENSION_AUTH_KEY',
+      'createExtensionAuthPlugin',
+      'createExternalCredentialBroker',
+    ]),
+  );
+  expect(exportsByPackage.credentialBrokerExtension).toEqual(
+    expect.arrayContaining([
+      'createCredentialBrokerMessageHandler',
+      'createExtensionTokenService',
+      'createOriginAuthorizer',
     ]),
   );
   expect(exportsByPackage.examples).toEqual(

@@ -4,7 +4,7 @@ import { dirname, extname, join, normalize, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // Localhost is a potentially trustworthy origin, which enables OPFS in Chromium.
-export const browserOrigin = 'http://localhost';
+export const browserOrigin = 'http://localhost:4173';
 export const workspaceRoot = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 
 const packageEntries = Object.freeze({
@@ -16,6 +16,9 @@ const packageEntries = Object.freeze({
   '@loom/platform-browser': '/packages/platform-browser/dist/index.js',
   '@loom/storage-indexeddb': '/packages/storage-indexeddb/dist/index.js',
   '@loom/workspace-fsa': '/packages/workspace-fsa/dist/index.js',
+  '@loom/credential-broker-api': '/packages/credential-broker-api/dist/index.js',
+  '@loom/auth-extension': '/packages/auth-extension/dist/index.js',
+  '@loom/extension': '/packages/extension/dist/index.js',
   '@loom/examples': '/packages/examples/dist/index.js',
 });
 
@@ -46,6 +49,21 @@ function resolveBrowserExampleAsset(pathname: string): string | undefined {
         : undefined;
   if (relative === undefined) return undefined;
   const exampleRoot = join(workspaceRoot, 'packages', 'example-browser');
+  const absolute = join(exampleRoot, relative);
+  return absolute === join(exampleRoot, 'index.html') || absolute.startsWith(exampleRoot + sep)
+    ? absolute
+    : undefined;
+}
+
+function resolveExtensionExampleAsset(pathname: string): string | undefined {
+  const relative =
+    pathname === '/example-extension/' || pathname === '/example-extension/index.html'
+      ? 'index.html'
+      : pathname.startsWith('/example-extension/')
+        ? normalize(decodeURIComponent(pathname).slice('/example-extension/'.length))
+        : undefined;
+  if (relative === undefined) return undefined;
+  const exampleRoot = join(workspaceRoot, 'packages', 'example-extension');
   const absolute = join(exampleRoot, relative);
   return absolute === join(exampleRoot, 'index.html') || absolute.startsWith(exampleRoot + sep)
     ? absolute
@@ -332,7 +350,8 @@ async function routeBuiltAssets(route: Route): Promise<void> {
 
   const asset = resolveWorkspaceAsset(url.pathname);
   const exampleAsset = resolveBrowserExampleAsset(url.pathname);
-  const resolvedAsset = asset ?? exampleAsset;
+  const extensionExampleAsset = resolveExtensionExampleAsset(url.pathname);
+  const resolvedAsset = asset ?? exampleAsset ?? extensionExampleAsset;
   if (resolvedAsset === undefined) {
     await route.fulfill({ status: 404, body: 'Not found' });
     return;

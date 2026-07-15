@@ -12,7 +12,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: [
-        'packages/{types,plugin-api,core,tool-workspace,agent-codex,platform-browser,storage-indexeddb,workspace-fsa}/src/**/*.ts',
+        'packages/{types,plugin-api,core,tool-workspace,agent-codex,platform-browser,storage-indexeddb,workspace-fsa,credential-broker-api,auth-extension,extension}/src/**/*.ts',
       ],
       exclude: ['**/*.test.ts', '**/index.ts'],
       reporter: ['text', 'html', 'lcov'],

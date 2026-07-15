@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Loom.js credential broker example</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: system-ui, sans-serif;
+        line-height: 1.5;
+      }
+
+      body {
+        margin: 0;
+        padding: 2rem;
+      }
+
+      main {
+        max-width: 42rem;
+        margin: 0 auto;
+      }
+
+      label {
+        display: grid;
+        gap: 0.35rem;
+        margin-block: 1rem;
+        font-weight: 600;
+      }
+
+      input,
+      button {
+        padding: 0.65rem;
+        font: inherit;
+      }
+
+      button {
+        cursor: pointer;
+      }
+
+      #status {
+        min-height: 1.5rem;
+        font-weight: 600;
+      }
+
+      pre {
+        min-height: 4rem;
+        padding: 1rem;
+        overflow: auto;
+        border: 1px solid currentColor;
+        border-radius: 0.4rem;
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Loom.js credential broker</h1>
+      <p>
+        This page asks a separately installed extension for a short-lived mock token, then exposes
+        it through Loom’s provider-neutral <code>AuthProvider</code> capability.
+      </p>
+      <label>
+        Extension ID
+        <input id="extension-id" required autocomplete="off" spellcheck="false" />
+      </label>
+      <button id="request-token" type="button">Request access token</button>
+      <p id="status" role="status" aria-live="polite">Ready.</p>
+      <pre id="output" aria-label="Credential broker result" aria-live="polite"></pre>
+    </main>
+    <script type="module" src="./dist/main.js"></script>
+  </body>
+</html>

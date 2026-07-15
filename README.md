@@ -6,25 +6,30 @@ runtime validates and orders them, and consumers resolve capabilities through st
 contracts.
 
 Phase 1 established the architecture-only runtime. Phase 2 added a minimal Codex-style orchestration
-plugin and text-workspace tools. Phase 3 adds replaceable browser plugins for explicit host
-capabilities, IndexedDB storage, and File System Access workspaces. Core and the agent packages
-remain free of browser APIs. Loom still contains no model provider, authentication, extension, or
-execution runtime.
+plugin and text-workspace tools. Phase 3 added replaceable browser plugins for explicit host
+capabilities, IndexedDB storage, and File System Access workspaces. Phase 4 adds a provider-neutral
+Manifest V3 credential broker and a Loom authentication adapter. Core and the agent packages remain
+free of browser and extension APIs. Loom still contains no production model provider, real OAuth
+implementation, or execution runtime.
 
 ## Packages
 
-| Package                   | Responsibility                                                                      |
-| ------------------------- | ----------------------------------------------------------------------------------- |
-| `@loom/types`             | Dependency-free primitives shared across the ecosystem                              |
-| `@loom/plugin-api`        | Contracts used by plugin authors                                                    |
-| `@loom/core`              | Runtime composition, lifecycle, registries, DI, events, configuration, and sessions |
-| `@loom/tool-workspace`    | Normalized text-workspace paths and adapter-backed list/read/write tools            |
-| `@loom/agent-codex`       | Minimal streamed model/tool orchestration; no provider integration                  |
-| `@loom/platform-browser`  | Explicitly supplied browser host capability                                         |
-| `@loom/storage-indexeddb` | Namespaced byte storage implemented with IndexedDB                                  |
-| `@loom/workspace-fsa`     | File System Access implementation of the text-workspace tools                       |
-| `@loom/examples`          | Provider-neutral examples that use public package exports only                      |
-| `@loom/example-browser`   | Browser application demonstrating explicit Phase 3 composition                      |
+| Package                       | Responsibility                                                                      |
+| ----------------------------- | ----------------------------------------------------------------------------------- |
+| `@loom/types`                 | Dependency-free primitives shared across the ecosystem                              |
+| `@loom/plugin-api`            | Contracts used by plugin authors                                                    |
+| `@loom/core`                  | Runtime composition, lifecycle, registries, DI, events, configuration, and sessions |
+| `@loom/tool-workspace`        | Normalized text-workspace paths and adapter-backed list/read/write tools            |
+| `@loom/agent-codex`           | Minimal streamed model/tool orchestration; no provider integration                  |
+| `@loom/platform-browser`      | Explicitly supplied browser host capability                                         |
+| `@loom/storage-indexeddb`     | Namespaced byte storage implemented with IndexedDB                                  |
+| `@loom/workspace-fsa`         | File System Access implementation of the text-workspace tools                       |
+| `@loom/credential-broker-api` | Transport-neutral, validated access-token request/response protocol                 |
+| `@loom/auth-extension`        | External-message client and Loom `AuthProvider` adapter                             |
+| `@loom/extension`             | Manifest V3 credential broker with extension-owned refresh state                    |
+| `@loom/examples`              | Provider-neutral examples that use public package exports only                      |
+| `@loom/example-browser`       | Browser application demonstrating explicit Phase 3 composition                      |
+| `@loom/example-extension`     | Browser application demonstrating the Phase 4 extension boundary                    |
 
 Dependency direction is intentional:
 
@@ -33,6 +38,10 @@ Dependency direction is intentional:
              ^       ^
              |       +-- @loom/tool-workspace <- @loom/agent-codex
              +------------------------- browser plugins and examples
+
+@loom/credential-broker-api <- @loom/auth-extension <- @loom/example-extension
+             ^
+             +---------------- @loom/extension
 ```
 
 Plugins may use the public runtime composition API when acting as an application entry point, but
@@ -76,20 +85,26 @@ Useful commands:
 - Agent protocols stay in agent packages rather than becoming core wire formats.
 - Workspace tools depend on an injected adapter and cannot access a host filesystem directly.
 - Browser APIs are isolated in browser packages and supplied explicitly by applications.
+- Refresh credentials are owned by the extension and never enter a Loom page or runtime.
+- External token requests require an exact authorized origin and a validated versioned envelope.
 
 Start with [the documentation index](./DOCUMENTATION.md), then read
 [the architecture guide](./docs/architecture.md) and
 [the plugin-authoring guide](./docs/plugin-authoring.md). The
 [minimal-agent guide](./docs/minimal-agent.md) covers Phase 2 composition, and the
-[browser-platform guide](./docs/browser-platform.md) covers Phase 3. Architectural decisions are
-recorded in [`docs/adr`](./docs/adr/README.md).
+[browser-platform guide](./docs/browser-platform.md) covers Phase 3. The
+[credential-broker guide](./docs/credential-broker.md) covers the Phase 4 trust boundary and local
+extension workflow. Architectural decisions are recorded in [`docs/adr`](./docs/adr/README.md).
 
 The interactive [browser example](./packages/example-browser/README.md) composes the scripted agent
-with an application-selected directory using the Phase 3 plugins.
+with an application-selected directory using the Phase 3 plugins. The
+[credential-broker example](./packages/example-extension/README.md) requests a short-lived mock
+token from the separately loaded extension and resolves it through Loom's public `AuthProvider`
+capability.
 
 ## Project status
 
-Loom.js packages remain private at `0.1.0` while Phase 3 is developed. Publishing, license
-selection, Changesets, public namespace ownership, hot plugin mutation, version-range negotiation,
-and multi-browser CI are intentionally deferred. See [CHANGES.md](./CHANGES.md) for milestone
-history.
+Loom.js packages remain private at `0.1.0`. The Phase 4 extension is development-only and ships a
+mock credential provider, not a real authentication flow. Publishing, license selection, Changesets,
+public namespace ownership, hot plugin mutation, version-range negotiation, and multi-browser CI are
+intentionally deferred. See [CHANGES.md](./CHANGES.md) for milestone history.

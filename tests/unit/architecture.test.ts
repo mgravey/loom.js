@@ -15,8 +15,11 @@ const runtimePackages = [
   'storage-indexeddb',
   'workspace-fsa',
   'credential-broker-api',
+  'credential-provider-api',
   'auth-extension',
   'extension',
+  'auth-codex-experimental',
+  'extension-codex-experimental',
   'examples',
 ] as const;
 
@@ -32,8 +35,15 @@ const allowedInternalDependencies: Readonly<
   'storage-indexeddb': ['@loom/plugin-api', '@loom/types'],
   'workspace-fsa': ['@loom/plugin-api', '@loom/tool-workspace', '@loom/types'],
   'credential-broker-api': [],
+  'credential-provider-api': [],
   'auth-extension': ['@loom/credential-broker-api', '@loom/plugin-api', '@loom/types'],
-  extension: ['@loom/credential-broker-api'],
+  extension: ['@loom/credential-broker-api', '@loom/credential-provider-api'],
+  'auth-codex-experimental': ['@loom/credential-provider-api'],
+  'extension-codex-experimental': [
+    '@loom/auth-codex-experimental',
+    '@loom/credential-provider-api',
+    '@loom/extension',
+  ],
   examples: ['@loom/agent-codex', '@loom/plugin-api', '@loom/tool-workspace', '@loom/types'],
 });
 
@@ -277,7 +287,12 @@ describe('package architecture', () => {
       'node:path',
     ];
 
-    for (const packageName of ['credential-broker-api', 'auth-extension', 'extension'] as const) {
+    for (const packageName of [
+      'credential-broker-api',
+      'credential-provider-api',
+      'auth-extension',
+      'extension',
+    ] as const) {
       for (const file of await sourceFiles(packageName)) {
         const source = await readFile(file, 'utf8');
         for (const specifier of importsIn(source)) {
@@ -289,6 +304,30 @@ describe('package architecture', () => {
           ).toBe(false);
         }
       }
+    }
+  });
+
+  it('isolates the Phase 5 provider in leaf packages', async () => {
+    for (const packageName of [
+      'auth-codex-experimental',
+      'extension-codex-experimental',
+    ] as const) {
+      const imports = await packageImports(packageName);
+      expect(imports).not.toContain('@loom/core');
+      expect(imports).not.toContain('@loom/plugin-api');
+      expect(imports).not.toContain('@loom/types');
+      expect(imports.filter((value) => value.startsWith('node:'))).toEqual([]);
+    }
+
+    for (const packageName of [
+      'credential-broker-api',
+      'credential-provider-api',
+      'extension',
+    ] as const) {
+      const source = await Promise.all(
+        (await sourceFiles(packageName)).map((file) => readFile(file, 'utf8')),
+      );
+      expect(source.join('\n')).not.toMatch(/\b(?:OpenAI|Codex)\b/u);
     }
   });
 });

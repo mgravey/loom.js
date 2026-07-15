@@ -22,7 +22,8 @@
     "test": "vitest run --root ../.. packages/extension/test"
   },
   "dependencies": {
-    "@loom/credential-broker-api": "workspace:*"
+    "@loom/credential-broker-api": "workspace:*",
+    "@loom/credential-provider-api": "workspace:*"
   },
   "devDependencies": {
     "tsup": "^8.5.0",

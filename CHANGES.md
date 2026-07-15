@@ -2,7 +2,36 @@
 
 This project follows a lightweight milestone changelog while packages remain private.
 
-## Unreleased — Phase 4
+## Unreleased — Phase 5
+
+### Added
+
+- `@loom/credential-provider-api`, extracting host-neutral refresh, interactive authorization,
+  token-result, and sanitized provider-error contracts from the extension implementation.
+- `@loom/auth-codex-experimental`, reproducing the audited Codex CLI refresh, device-code, and
+  direct authorization-code/PKCE request shapes behind injected clock, network, digest, randomness,
+  redirect, polling, and transaction interfaces.
+- A separate experimental Manifest V3 composition with an extension-owned, disabled-by-default
+  authorization surface; the shared credential broker remains provider-neutral.
+- Deterministic tests for PKCE, state consumption, device polling, response validation, refresh
+  rotation, permanent rejection, and secret-safe error handling.
+- Phase 5 feasibility report, threat model, source-pinned re-audit policy, and ADR-009.
+
+### Security
+
+- Direct `chrome.identity` authorization cannot run unless redirect registration is explicitly
+  approved; the audited Codex CLI client documents only localhost callbacks.
+- Device authorization is a manual, unsupported experiment and never activates as a silent fallback.
+  Automated tests never contact OpenAI.
+- Refresh credentials are persisted before related access tokens are cached or returned. Permanent
+  refresh rejection deletes the stored credential and requires reauthorization.
+
+### Still deferred
+
+- Supported OpenAI extension-client registration, production Codex authentication, extension-store
+  publication, OS-keyring-grade credential protection, model providers, and execution runtimes.
+
+## Phase 4
 
 ### Added
 
@@ -27,7 +56,7 @@ This project follows a lightweight milestone changelog while packages remain pri
   initialization, and the service worker authorizes the sender's exact HTTP(S) origin before parsing
   a request.
 
-### Still deferred
+### Deferred at completion
 
 - Real OAuth providers, Codex authentication research, login/logout UI, provider network calls,
   extension publication, production origin configuration, and execution runtimes.

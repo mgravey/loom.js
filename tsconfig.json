@@ -11,8 +11,11 @@
     { "path": "./packages/storage-indexeddb" },
     { "path": "./packages/workspace-fsa" },
     { "path": "./packages/credential-broker-api" },
+    { "path": "./packages/credential-provider-api" },
     { "path": "./packages/auth-extension" },
     { "path": "./packages/extension" },
+    { "path": "./packages/auth-codex-experimental" },
+    { "path": "./packages/extension-codex-experimental" },
     { "path": "./packages/examples" },
     { "path": "./packages/example-browser" },
     { "path": "./packages/example-extension" }

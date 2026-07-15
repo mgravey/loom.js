@@ -8,5 +8,5 @@
     "lib": ["ES2022", "DOM"]
   },
   "include": ["src/**/*.ts"],
-  "references": [{ "path": "../credential-broker-api" }]
+  "references": [{ "path": "../credential-broker-api" }, { "path": "../credential-provider-api" }]
 }

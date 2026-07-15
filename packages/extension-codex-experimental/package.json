@@ -1,0 +1,36 @@
+{
+  "name": "@loom/extension-codex-experimental",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": [
+    "./dist/service-worker.js",
+    "./dist/options.js"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "manifest.json",
+    "options.html"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --clean --tsconfig tsconfig.build.json && tsup --config tsup.extension.config.ts && cp manifest.json options.html dist/",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --root ../.. packages/extension-codex-experimental/test"
+  },
+  "dependencies": {
+    "@loom/auth-codex-experimental": "workspace:*",
+    "@loom/credential-provider-api": "workspace:*",
+    "@loom/extension": "workspace:*"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}

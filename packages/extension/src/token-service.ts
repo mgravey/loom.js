@@ -1,4 +1,7 @@
+import { isCredentialProviderError } from '@loom/credential-provider-api';
+
 import type {
+  AccessTokenResult,
   BrokerClock,
   CachedAccessToken,
   ExtensionCredentialProvider,
@@ -15,6 +18,10 @@ export interface CreateExtensionTokenServiceOptions {
 
 export interface ExtensionTokenService {
   getAccessToken(providerId: string): Promise<CachedAccessToken>;
+  acceptAuthorizationResult(
+    providerId: string,
+    result: AccessTokenResult,
+  ): Promise<CachedAccessToken>;
   clearCachedAccessToken(providerId: string): void;
 }
 
@@ -50,6 +57,51 @@ export function createExtensionTokenService(
   const cache = new Map<string, CachedAccessToken>();
   const pending = new Map<string, Promise<CachedAccessToken>>();
 
+  async function persistAndCache(
+    providerId: string,
+    untrustedResult: unknown,
+  ): Promise<CachedAccessToken> {
+    if (typeof untrustedResult !== 'object' || untrustedResult === null) {
+      throw new ExtensionBrokerError(
+        'REFRESH_FAILED',
+        `Provider "${providerId}" returned an invalid access token.`,
+      );
+    }
+    const result = untrustedResult as Partial<AccessTokenResult>;
+    if (
+      typeof result.accessToken !== 'string' ||
+      result.accessToken.length === 0 ||
+      typeof result.expiresAt !== 'number' ||
+      !Number.isFinite(result.expiresAt) ||
+      result.expiresAt <= clock.now()
+    ) {
+      throw new ExtensionBrokerError(
+        'REFRESH_FAILED',
+        `Provider "${providerId}" returned an invalid access token.`,
+      );
+    }
+    if (
+      result.nextRefreshCredential !== undefined &&
+      (typeof result.nextRefreshCredential.value !== 'string' ||
+        result.nextRefreshCredential.value.length === 0)
+    ) {
+      throw new ExtensionBrokerError(
+        'REFRESH_FAILED',
+        `Provider "${providerId}" returned an invalid refresh credential.`,
+      );
+    }
+
+    if (result.nextRefreshCredential !== undefined) {
+      await options.credentialStore.set(providerId, result.nextRefreshCredential);
+    }
+    const token = Object.freeze({
+      accessToken: result.accessToken,
+      expiresAt: result.expiresAt,
+    });
+    cache.set(providerId, token);
+    return token;
+  }
+
   async function refresh(provider: ExtensionCredentialProvider): Promise<CachedAccessToken> {
     const credential = await options.credentialStore.get(provider.id);
     if (credential === undefined) {
@@ -59,36 +111,34 @@ export function createExtensionTokenService(
       );
     }
 
-    let result;
+    let result: AccessTokenResult;
     try {
       result = await provider.refresh(credential);
     } catch (cause) {
+      if (isCredentialProviderError(cause) && cause.code === 'CREDENTIAL_REJECTED') {
+        cache.delete(provider.id);
+        try {
+          await options.credentialStore.delete(provider.id);
+        } catch (deleteCause) {
+          throw new ExtensionBrokerError(
+            'INTERNAL_ERROR',
+            `Rejected credential cleanup failed for provider "${provider.id}".`,
+            { cause: deleteCause },
+          );
+        }
+        throw new ExtensionBrokerError(
+          'MISSING_CREDENTIAL',
+          `The stored credential was rejected for provider "${provider.id}".`,
+          { cause },
+        );
+      }
       throw new ExtensionBrokerError(
         'REFRESH_FAILED',
         `Access-token refresh failed for provider "${provider.id}".`,
         { cause },
       );
     }
-    if (
-      result.accessToken.length === 0 ||
-      !Number.isFinite(result.expiresAt) ||
-      result.expiresAt <= clock.now()
-    ) {
-      throw new ExtensionBrokerError(
-        'REFRESH_FAILED',
-        `Provider "${provider.id}" returned an invalid access token.`,
-      );
-    }
-
-    if (result.nextRefreshCredential !== undefined) {
-      await options.credentialStore.set(provider.id, result.nextRefreshCredential);
-    }
-    const token = Object.freeze({
-      accessToken: result.accessToken,
-      expiresAt: result.expiresAt,
-    });
-    cache.set(provider.id, token);
-    return token;
+    return persistAndCache(provider.id, result);
   }
 
   return Object.freeze({
@@ -110,6 +160,31 @@ export function createExtensionTokenService(
       if (existing !== undefined) return existing;
 
       const operation = refresh(provider);
+      pending.set(providerId, operation);
+      try {
+        return await operation;
+      } finally {
+        if (pending.get(providerId) === operation) pending.delete(providerId);
+      }
+    },
+    async acceptAuthorizationResult(providerId: string, result: AccessTokenResult) {
+      if (!providers.has(providerId)) {
+        throw new ExtensionBrokerError(
+          'UNKNOWN_PROVIDER',
+          `Unknown credential provider "${providerId}".`,
+        );
+      }
+
+      const existing = pending.get(providerId);
+      if (existing !== undefined) {
+        try {
+          await existing;
+        } catch {
+          // A newly authorized credential supersedes an in-flight refresh failure.
+        }
+      }
+
+      const operation = persistAndCache(providerId, result);
       pending.set(providerId, operation);
       try {
         return await operation;

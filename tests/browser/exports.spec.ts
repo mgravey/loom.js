@@ -16,8 +16,11 @@ test('built packages publish declaration entry points', async () => {
     'storage-indexeddb',
     'workspace-fsa',
     'credential-broker-api',
+    'credential-provider-api',
     'auth-extension',
     'extension',
+    'auth-codex-experimental',
+    'extension-codex-experimental',
     'examples',
   ]) {
     const declaration = await readFile(
@@ -34,8 +37,15 @@ test('built packages publish declaration entry points', async () => {
   expect(declarations.get('storage-indexeddb')).toContain('createIndexedDbStoragePlugin');
   expect(declarations.get('workspace-fsa')).toContain('createFileSystemAccessWorkspacePlugin');
   expect(declarations.get('credential-broker-api')).toContain('CredentialBroker');
+  expect(declarations.get('credential-provider-api')).toContain('CredentialProvider');
   expect(declarations.get('auth-extension')).toContain('createExtensionAuthPlugin');
   expect(declarations.get('extension')).toContain('createCredentialBrokerMessageHandler');
+  expect(declarations.get('auth-codex-experimental')).toContain(
+    'createCodexExperimentalDeviceAuthorization',
+  );
+  expect(declarations.get('extension-codex-experimental')).toContain(
+    'createCodexExperimentalExtension',
+  );
   expect(declarations.get('examples')).toContain('createAllCapabilitiesPlugin');
   expect(declarations.get('examples')).toContain('createInMemoryTextWorkspace');
 });
@@ -56,6 +66,40 @@ test('built extension assets are installable and self-contained', async () => {
   expect(serviceWorker).not.toContain('@loom/');
 });
 
+test('built experimental extension is isolated, installable, and self-contained', async () => {
+  const extensionDirectory = join(
+    workspaceRoot,
+    'packages',
+    'extension-codex-experimental',
+    'dist',
+  );
+  const manifest = JSON.parse(
+    await readFile(join(extensionDirectory, 'manifest.json'), 'utf8'),
+  ) as {
+    readonly manifest_version?: number;
+    readonly permissions?: readonly string[];
+    readonly host_permissions?: readonly string[];
+    readonly incognito?: string;
+    readonly background?: { readonly service_worker?: string };
+    readonly options_ui?: { readonly page?: string };
+  };
+  const serviceWorker = await readFile(join(extensionDirectory, 'service-worker.js'), 'utf8');
+  const optionsScript = await readFile(join(extensionDirectory, 'options.js'), 'utf8');
+
+  expect(manifest).toMatchObject({
+    manifest_version: 3,
+    permissions: ['identity', 'storage'],
+    host_permissions: ['https://auth.openai.com/*'],
+    incognito: 'not_allowed',
+    background: { service_worker: 'service-worker.js' },
+    options_ui: { page: 'options.html' },
+  });
+  for (const bundle of [serviceWorker, optionsScript]) {
+    expect(bundle).not.toMatch(/\b(?:import|export)\b/u);
+    expect(bundle).not.toContain('@loom/');
+  }
+});
+
 test('built ESM packages expose their public runtime APIs', async ({ page }) => {
   await openBuiltEsmHarness(page);
 
@@ -70,8 +114,11 @@ test('built ESM packages expose their public runtime APIs', async ({ page }) => 
       indexedDbStorage,
       fileSystemWorkspace,
       credentialBrokerApi,
+      credentialProviderApi,
       extensionAuth,
       credentialBrokerExtension,
+      experimentalCodexAuth,
+      experimentalCodexExtension,
       examples,
     ] = await Promise.all([
       import(`${origin}/packages/types/dist/index.js`),
@@ -83,8 +130,11 @@ test('built ESM packages expose their public runtime APIs', async ({ page }) => 
       import(`${origin}/packages/storage-indexeddb/dist/index.js`),
       import(`${origin}/packages/workspace-fsa/dist/index.js`),
       import(`${origin}/packages/credential-broker-api/dist/index.js`),
+      import(`${origin}/packages/credential-provider-api/dist/index.js`),
       import(`${origin}/packages/auth-extension/dist/index.js`),
       import(`${origin}/packages/extension/dist/index.js`),
+      import(`${origin}/packages/auth-codex-experimental/dist/index.js`),
+      import(`${origin}/packages/extension-codex-experimental/dist/index.js`),
       import(`${origin}/packages/examples/dist/index.js`),
     ]);
     return {
@@ -97,8 +147,11 @@ test('built ESM packages expose their public runtime APIs', async ({ page }) => 
       indexedDbStorage: Object.keys(indexedDbStorage),
       fileSystemWorkspace: Object.keys(fileSystemWorkspace),
       credentialBrokerApi: Object.keys(credentialBrokerApi),
+      credentialProviderApi: Object.keys(credentialProviderApi),
       extensionAuth: Object.keys(extensionAuth),
       credentialBrokerExtension: Object.keys(credentialBrokerExtension),
+      experimentalCodexAuth: Object.keys(experimentalCodexAuth),
+      experimentalCodexExtension: Object.keys(experimentalCodexExtension),
       examples: Object.keys(examples),
     };
   }, browserOrigin);
@@ -168,6 +221,9 @@ test('built ESM packages expose their public runtime APIs', async ({ page }) => 
       'parseCredentialBrokerResponse',
     ]),
   );
+  expect(exportsByPackage.credentialProviderApi).toEqual(
+    expect.arrayContaining(['CredentialProviderError', 'isCredentialProviderError']),
+  );
   expect(exportsByPackage.extensionAuth).toEqual(
     expect.arrayContaining([
       'EXTENSION_AUTH_KEY',
@@ -180,6 +236,21 @@ test('built ESM packages expose their public runtime APIs', async ({ page }) => 
       'createCredentialBrokerMessageHandler',
       'createExtensionTokenService',
       'createOriginAuthorizer',
+    ]),
+  );
+  expect(exportsByPackage.experimentalCodexAuth).toEqual(
+    expect.arrayContaining([
+      'CODEX_CLI_OAUTH_AUDIT_SNAPSHOT',
+      'createCodexExperimentalCredentialProvider',
+      'createCodexExperimentalDeviceAuthorization',
+      'createCodexExperimentalRedirectAuthorization',
+    ]),
+  );
+  expect(exportsByPackage.experimentalCodexExtension).toEqual(
+    expect.arrayContaining([
+      'createChromeIdentityRedirect',
+      'createCodexExperimentalExtension',
+      'runManualDeviceAuthorization',
     ]),
   );
   expect(exportsByPackage.examples).toEqual(

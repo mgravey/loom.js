@@ -259,6 +259,22 @@ export default tseslint.config(
     },
   },
   {
+    files: ['packages/credential-provider-api/src/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@loom/*', 'node:*'],
+              message: 'The credential provider SPI is dependency- and host-neutral.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ['packages/auth-extension/src/**/*.ts'],
     rules: {
       'no-restricted-imports': [
@@ -288,8 +304,51 @@ export default tseslint.config(
         {
           patterns: [
             {
-              group: ['@loom/*', '!@loom/credential-broker-api', 'node:*'],
-              message: 'The credential broker extension may depend only on its public protocol.',
+              group: [
+                '@loom/*',
+                '!@loom/credential-broker-api',
+                '!@loom/credential-provider-api',
+                'node:*',
+              ],
+              message: 'The credential broker extension may depend only on public credential APIs.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ['packages/auth-codex-experimental/src/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@loom/*', '!@loom/credential-provider-api', 'node:*'],
+              message: 'The Codex auth experiment may depend only on the provider SPI.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ['packages/extension-codex-experimental/src/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: [
+                '@loom/*',
+                '!@loom/auth-codex-experimental',
+                '!@loom/credential-provider-api',
+                '!@loom/extension',
+                'node:*',
+              ],
+              message: 'The experimental extension is a leaf composition over public APIs.',
             },
           ],
         },

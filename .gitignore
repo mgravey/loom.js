@@ -7,8 +7,8 @@ coverage/
 playwright-report/
 test-results/
 output/
-packages/extension/*.crx
-packages/extension/*.pem
+packages/*/*.crx
+packages/*/*.pem
 *.tsbuildinfo
 *.log
 .DS_Store

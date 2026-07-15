@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "Loom Codex Authentication Experiment",
+  "version": "0.1.0",
+  "minimum_chrome_version": "116",
+  "description": "Disabled-by-default experimental Codex credential provider for the Loom broker.",
+  "incognito": "not_allowed",
+  "permissions": ["identity", "storage"],
+  "host_permissions": ["https://auth.openai.com/*"],
+  "background": {
+    "service_worker": "service-worker.js",
+    "type": "module"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "externally_connectable": {
+    "matches": ["http://localhost/*", "http://127.0.0.1/*"]
+  }
+}

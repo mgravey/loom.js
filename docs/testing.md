@@ -51,6 +51,11 @@ Tests must cover:
 - exact sender-origin authorization, trusted-context storage initialization, credential rotation,
   token expiry/skew handling, failure sanitization, and concurrent refresh deduplication;
 - external-message adaptation to the public Loom `AuthProvider` contract.
+- host-neutral credential-provider errors, authorization-result persistence ordering, permanent
+  refresh rejection cleanup, and preservation of non-rotated refresh credentials;
+- audited Codex refresh request shape, device-code issuance/polling/timeout, server-supplied PKCE
+  validation, direct S256/state/callback handling, response sanitization, and explicit experiment
+  gates.
 
 Provider-neutral fakes should cover every capability category while importing only `@loom/types` and
 `@loom/plugin-api`. Compile-time fixtures verify public types and package-boundary failures.
@@ -58,8 +63,8 @@ Provider-neutral fakes should cover every capability category while importing on
 ## Coverage policy
 
 Across `@loom/types`, `@loom/plugin-api`, `@loom/core`, `@loom/tool-workspace`, and
-`@loom/agent-codex`, plus the Phase 3 browser plugins and Phase 4 credential packages, V8 coverage
-must meet:
+`@loom/agent-codex`, plus the Phase 3 browser plugins, Phase 4 credential packages, and Phase 5
+experimental authentication packages, V8 coverage must meet:
 
 | Metric     | Minimum |
 | ---------- | ------: |
@@ -96,6 +101,13 @@ rejection, concurrent refresh deduplication, an unknown provider, and a missing 
 without leaking stored state. This follows Playwright's
 [Chrome extension guidance](https://playwright.dev/docs/chrome-extensions) and Chrome's
 [end-to-end extension testing guidance](https://developer.chrome.com/docs/extensions/how-to/test/end-to-end-testing).
+
+Phase 5 tests provider behavior against deterministic in-process fakes and a local OAuth fixture. CI
+must never contact the real OpenAI authorization or token endpoints. Chromium loads only the
+separate experimental extension and verifies that authorization is off by default, can be initiated
+only from trusted extension UI, and never returns refresh credentials through the external broker.
+Any live compatibility check is manual, opt-in, unsupported, and must follow the re-audit gate in
+the [experiment guide](./codex-auth-experiment.md).
 
 ## CI
 

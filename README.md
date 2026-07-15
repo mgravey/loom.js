@@ -7,29 +7,33 @@ contracts.
 
 Phase 1 established the architecture-only runtime. Phase 2 added a minimal Codex-style orchestration
 plugin and text-workspace tools. Phase 3 added replaceable browser plugins for explicit host
-capabilities, IndexedDB storage, and File System Access workspaces. Phase 4 adds a provider-neutral
-Manifest V3 credential broker and a Loom authentication adapter. Core and the agent packages remain
-free of browser and extension APIs. Loom still contains no production model provider, real OAuth
-implementation, or execution runtime.
+capabilities, IndexedDB storage, and File System Access workspaces. Phase 4 added a provider-neutral
+Manifest V3 credential broker and a Loom authentication adapter. Phase 5 adds an isolated,
+disabled-by-default Codex authentication experiment based on an audited open-source CLI revision.
+Core and the agent packages remain free of provider, browser, and extension APIs. Loom still
+contains no production model provider, supported OAuth product, or execution runtime.
 
 ## Packages
 
-| Package                       | Responsibility                                                                      |
-| ----------------------------- | ----------------------------------------------------------------------------------- |
-| `@loom/types`                 | Dependency-free primitives shared across the ecosystem                              |
-| `@loom/plugin-api`            | Contracts used by plugin authors                                                    |
-| `@loom/core`                  | Runtime composition, lifecycle, registries, DI, events, configuration, and sessions |
-| `@loom/tool-workspace`        | Normalized text-workspace paths and adapter-backed list/read/write tools            |
-| `@loom/agent-codex`           | Minimal streamed model/tool orchestration; no provider integration                  |
-| `@loom/platform-browser`      | Explicitly supplied browser host capability                                         |
-| `@loom/storage-indexeddb`     | Namespaced byte storage implemented with IndexedDB                                  |
-| `@loom/workspace-fsa`         | File System Access implementation of the text-workspace tools                       |
-| `@loom/credential-broker-api` | Transport-neutral, validated access-token request/response protocol                 |
-| `@loom/auth-extension`        | External-message client and Loom `AuthProvider` adapter                             |
-| `@loom/extension`             | Manifest V3 credential broker with extension-owned refresh state                    |
-| `@loom/examples`              | Provider-neutral examples that use public package exports only                      |
-| `@loom/example-browser`       | Browser application demonstrating explicit Phase 3 composition                      |
-| `@loom/example-extension`     | Browser application demonstrating the Phase 4 extension boundary                    |
+| Package                              | Responsibility                                                                      |
+| ------------------------------------ | ----------------------------------------------------------------------------------- |
+| `@loom/types`                        | Dependency-free primitives shared across the ecosystem                              |
+| `@loom/plugin-api`                   | Contracts used by plugin authors                                                    |
+| `@loom/core`                         | Runtime composition, lifecycle, registries, DI, events, configuration, and sessions |
+| `@loom/tool-workspace`               | Normalized text-workspace paths and adapter-backed list/read/write tools            |
+| `@loom/agent-codex`                  | Minimal streamed model/tool orchestration; no provider integration                  |
+| `@loom/platform-browser`             | Explicitly supplied browser host capability                                         |
+| `@loom/storage-indexeddb`            | Namespaced byte storage implemented with IndexedDB                                  |
+| `@loom/workspace-fsa`                | File System Access implementation of the text-workspace tools                       |
+| `@loom/credential-broker-api`        | Transport-neutral, validated access-token request/response protocol                 |
+| `@loom/credential-provider-api`      | Host-neutral provider, refresh, and interactive-authorization contracts             |
+| `@loom/auth-extension`               | External-message client and Loom `AuthProvider` adapter                             |
+| `@loom/extension`                    | Manifest V3 credential broker with extension-owned refresh state                    |
+| `@loom/auth-codex-experimental`      | Audited Codex PKCE/device-auth experiment with injected host services               |
+| `@loom/extension-codex-experimental` | Separate disabled-by-default Manifest V3 experiment composition                     |
+| `@loom/examples`                     | Provider-neutral examples that use public package exports only                      |
+| `@loom/example-browser`              | Browser application demonstrating explicit Phase 3 composition                      |
+| `@loom/example-extension`            | Browser application demonstrating the Phase 4 extension boundary                    |
 
 Dependency direction is intentional:
 
@@ -41,7 +45,11 @@ Dependency direction is intentional:
 
 @loom/credential-broker-api <- @loom/auth-extension <- @loom/example-extension
              ^
-             +---------------- @loom/extension
+             +-- @loom/extension <- @loom/extension-codex-experimental
+
+@loom/credential-provider-api <- @loom/extension
+             ^
+             +-- @loom/auth-codex-experimental <- @loom/extension-codex-experimental
 ```
 
 Plugins may use the public runtime composition API when acting as an application entry point, but
@@ -87,6 +95,8 @@ Useful commands:
 - Browser APIs are isolated in browser packages and supplied explicitly by applications.
 - Refresh credentials are owned by the extension and never enter a Loom page or runtime.
 - External token requests require an exact authorized origin and a validated versioned envelope.
+- Experimental provider failures remain sanitized and refresh rotation is persisted before an access
+  token is exposed.
 
 Start with [the documentation index](./DOCUMENTATION.md), then read
 [the architecture guide](./docs/architecture.md) and
@@ -94,7 +104,9 @@ Start with [the documentation index](./DOCUMENTATION.md), then read
 [minimal-agent guide](./docs/minimal-agent.md) covers Phase 2 composition, and the
 [browser-platform guide](./docs/browser-platform.md) covers Phase 3. The
 [credential-broker guide](./docs/credential-broker.md) covers the Phase 4 trust boundary and local
-extension workflow. Architectural decisions are recorded in [`docs/adr`](./docs/adr/README.md).
+extension workflow. The [Codex authentication experiment](./docs/codex-auth-experiment.md) records
+the Phase 5 source audit, threat model, test policy, and current feasibility blockers. Architectural
+decisions are recorded in [`docs/adr`](./docs/adr/README.md).
 
 The interactive [browser example](./packages/example-browser/README.md) composes the scripted agent
 with an application-selected directory using the Phase 3 plugins. The
@@ -104,7 +116,10 @@ capability.
 
 ## Project status
 
-Loom.js packages remain private at `0.1.0`. The Phase 4 extension is development-only and ships a
-mock credential provider, not a real authentication flow. Publishing, license selection, Changesets,
-public namespace ownership, hot plugin mutation, version-range negotiation, and multi-browser CI are
-intentionally deferred. See [CHANGES.md](./CHANGES.md) for milestone history.
+Loom.js packages remain private at `0.1.0`. The generic Phase 4 extension remains development-only
+and ships a mock provider. The separate Phase 5 provider is unsupported, disabled by default, and
+must not be described as production ChatGPT/Codex authentication: the direct Chrome redirect is not
+registered for the audited CLI client, while device authorization can be server-disabled and is not
+a documented third-party contract. Publishing, license selection, Changesets, public namespace
+ownership, hot plugin mutation, version-range negotiation, and multi-browser CI are intentionally
+deferred. See [CHANGES.md](./CHANGES.md) for milestone history.

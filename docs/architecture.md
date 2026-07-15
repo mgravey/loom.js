@@ -46,6 +46,14 @@ registers the existing minimal `AuthProvider` contract; the extension never beco
 or runtime singleton. See [the credential-broker guide](./credential-broker.md) and
 [ADR-008](./adr/008-extension-credential-boundary.md).
 
+Phase 5 extracts `@loom/credential-provider-api` as a host-neutral provider SPI above the broker
+protocol. The generic extension consumes that SPI without knowing concrete providers.
+`@loom/auth-codex-experimental` implements the source-audited OAuth request shapes using injected
+host services, while `@loom/extension-codex-experimental` is the only Chrome/Codex composition root.
+Both are removable leaves: they do not change Core, plugin contracts, or the external broker
+protocol. See [the experiment guide](./codex-auth-experiment.md) and
+[ADR-009](./adr/009-codex-auth-experiment-boundary.md).
+
 Core and portable plugin TypeScript projects compile with `lib: ["ES2022"]`. DOM and Node typings
 are not available to that production source. Browser-leaf packages add only the browser libraries
 they implement. This preserves portable ESM for a browser window, dedicated Web Worker, or a
@@ -156,6 +164,7 @@ refresh from extension-owned state.
 ## Deferred architecture
 
 Phase 3 supplies browser storage and filesystem access, and Phase 4 supplies mock-backed extension
-credential brokering, without changing runtime lifecycle or registry semantics. Real OAuth/Codex
-authentication, production model providers, additional agents, and execution environments remain
-future independent plugins.
+credential brokering, without changing runtime lifecycle or registry semantics. Phase 5 supplies an
+unsupported, disabled-by-default Codex authentication experiment as a separate leaf. Supported
+OAuth/Codex authentication, production model providers, additional agents, and execution
+environments remain future independent plugins.

@@ -17,8 +17,11 @@ const packageEntries = Object.freeze({
   '@loom/storage-indexeddb': '/packages/storage-indexeddb/dist/index.js',
   '@loom/workspace-fsa': '/packages/workspace-fsa/dist/index.js',
   '@loom/credential-broker-api': '/packages/credential-broker-api/dist/index.js',
+  '@loom/credential-provider-api': '/packages/credential-provider-api/dist/index.js',
   '@loom/auth-extension': '/packages/auth-extension/dist/index.js',
   '@loom/extension': '/packages/extension/dist/index.js',
+  '@loom/auth-codex-experimental': '/packages/auth-codex-experimental/dist/index.js',
+  '@loom/extension-codex-experimental': '/packages/extension-codex-experimental/dist/index.js',
   '@loom/examples': '/packages/examples/dist/index.js',
 });
 

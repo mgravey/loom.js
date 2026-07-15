@@ -1,6 +1,13 @@
-export interface StoredRefreshCredential {
-  readonly value: string;
-}
+import type { CredentialProvider, StoredRefreshCredential } from '@loom/credential-provider-api';
+
+export { CredentialProviderError, isCredentialProviderError } from '@loom/credential-provider-api';
+export type {
+  AccessTokenResult,
+  CredentialProvider,
+  CredentialProviderErrorCode,
+  InteractiveCredentialAuthorization,
+  StoredRefreshCredential,
+} from '@loom/credential-provider-api';
 
 export interface RefreshCredentialStore {
   get(providerId: string): Promise<StoredRefreshCredential | undefined>;
@@ -8,16 +15,8 @@ export interface RefreshCredentialStore {
   delete(providerId: string): Promise<void>;
 }
 
-export interface AccessTokenResult {
-  readonly accessToken: string;
-  readonly expiresAt: number;
-  readonly nextRefreshCredential?: StoredRefreshCredential;
-}
-
-export interface ExtensionCredentialProvider {
-  readonly id: string;
-  refresh(credential: StoredRefreshCredential): Promise<AccessTokenResult>;
-}
+/** Compatibility name retained for existing Phase 4 provider implementations. */
+export type ExtensionCredentialProvider = CredentialProvider;
 
 export interface BrokerClock {
   now(): number;

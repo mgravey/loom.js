@@ -1,0 +1,30 @@
+export type CodexAgentErrorCode =
+  | 'INVALID_REQUEST'
+  | 'INVALID_CONFIGURATION'
+  | 'INVALID_DEPENDENCIES'
+  | 'MALFORMED_MODEL_EVENT'
+  | 'UNKNOWN_MODEL_EVENT'
+  | 'MALFORMED_TOOL_CALL'
+  | 'UNKNOWN_TOOL_OPERATION'
+  | 'MODEL_FAILURE'
+  | 'TOOL_FAILURE'
+  | 'MAX_TURNS_EXCEEDED';
+
+export class CodexAgentError extends Error {
+  public readonly code: CodexAgentErrorCode;
+  public readonly details: Readonly<Record<string, unknown>>;
+
+  public constructor(
+    code: CodexAgentErrorCode,
+    message: string,
+    options: {
+      readonly cause?: unknown;
+      readonly details?: Readonly<Record<string, unknown>>;
+    } = {},
+  ) {
+    super(message, { cause: options.cause });
+    this.name = 'CodexAgentError';
+    this.code = code;
+    this.details = Object.freeze({ ...(options.details ?? {}) });
+  }
+}

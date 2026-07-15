@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "noEmit": true,
+    "lib": ["ES2022", "DOM", "WebWorker"],
+    "types": ["vitest/globals", "@playwright/test", "node"]
+  },
+  "include": ["packages/**/*.test.ts", "packages/**/*.spec.ts", "tests/**/*.ts"]
+}

@@ -1,0 +1,15 @@
+packages:
+  - packages/*
+
+autoInstallPeers: false
+engineStrict: true
+linkWorkspacePackages: true
+preferWorkspacePackages: true
+strictPeerDependencies: true
+
+allowBuilds:
+  esbuild: true
+  unrs-resolver: true
+
+verifyDepsBeforeRun: warn
+enableGlobalVirtualStore: false

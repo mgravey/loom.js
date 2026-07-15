@@ -1,0 +1,37 @@
+{
+  "name": "loom-js",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.7.0",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "build": "pnpm -r --if-present build",
+    "clean": "tsc --build --clean && pnpm -r --if-present clean",
+    "typecheck": "tsc --build --force --pretty false && tsc -p tsconfig.test.json --pretty false",
+    "lint": "eslint .",
+    "test": "pnpm test:unit && pnpm build && pnpm test:browser",
+    "test:unit": "vitest run",
+    "test:browser": "playwright test",
+    "test:coverage": "vitest run --coverage",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test:coverage && pnpm build && pnpm test:browser"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.31.0",
+    "@playwright/test": "^1.54.1",
+    "@types/node": "^22.17.0",
+    "@vitest/coverage-v8": "^3.2.4",
+    "eslint": "^9.31.0",
+    "eslint-plugin-import-x": "^4.16.1",
+    "globals": "^16.3.0",
+    "prettier": "^3.6.2",
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.38.0",
+    "vitest": "^3.2.4"
+  }
+}

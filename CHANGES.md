@@ -2,7 +2,23 @@
 
 This project follows a lightweight milestone changelog while packages remain private.
 
-## Unreleased — Phase 2
+## Unreleased — Phase 3
+
+### Added
+
+- Explicit browser-platform capability plugin for window and dedicated-worker composition.
+- IndexedDB implementation of Loom's namespaced byte-oriented storage contract.
+- File System Access implementation of the list/read/write text-workspace tools.
+- Browser example with application-owned directory selection and deterministic model orchestration.
+- Real Chromium window and worker coverage using IndexedDB and OPFS directory handles.
+- Browser-platform guide and ADR-007 for explicit host injection.
+
+### Still deferred
+
+- Production model providers, authentication, extension credential brokering, execution runtimes,
+  Git, terminal, search, package management, and persisted conversations.
+
+## Phase 2
 
 ### Added
 

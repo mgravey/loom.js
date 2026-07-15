@@ -33,10 +33,16 @@ Phase 2 adds `@loom/tool-workspace` above the plugin API and `@loom/agent-codex`
 are ordinary plugins, not new core layers. The agent protocol and workspace semantics cannot flow
 back into `@loom/core`.
 
-Runtime package TypeScript projects compile with `lib: ["ES2022"]`. DOM and Node typings are not
-available to production source. This is stricter than merely avoiding browser globals: it ensures
-the same ESM can be evaluated in a browser window, a dedicated Web Worker, or a compatible
-non-browser host.
+Phase 3 adds `@loom/platform-browser`, `@loom/storage-indexeddb`, and `@loom/workspace-fsa` as
+host-specific leaves. They compile with browser typings and receive host objects explicitly, while
+the packages below them retain their environment-neutral boundary. See
+[the browser-platform guide](./browser-platform.md) and
+[ADR-007](./adr/007-explicit-browser-hosts.md).
+
+Core and portable plugin TypeScript projects compile with `lib: ["ES2022"]`. DOM and Node typings
+are not available to that production source. Browser-leaf packages add only the browser libraries
+they implement. This preserves portable ESM for a browser window, dedicated Web Worker, or a
+compatible non-browser host while isolating host APIs.
 
 See [ADR-005](./adr/005-package-boundaries.md).
 
@@ -129,6 +135,6 @@ defaults or production providers. See [the minimal-agent guide](./minimal-agent.
 
 ## Deferred architecture
 
-Later work may add browser storage and filesystem access, credential brokering, model providers,
-additional agents, and execution environments as plugins. Such work must not require changes to
-runtime lifecycle or registry semantics.
+Phase 3 supplies browser storage and filesystem access without changing runtime lifecycle or
+registry semantics. Credential brokering, production model providers, additional agents, and
+execution environments remain future independent plugins.

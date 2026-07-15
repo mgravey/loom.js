@@ -1,0 +1,24 @@
+{
+  "name": "@loom/example-browser",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup --config tsup.config.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@loom/agent-codex": "workspace:*",
+    "@loom/core": "workspace:*",
+    "@loom/examples": "workspace:*",
+    "@loom/platform-browser": "workspace:*",
+    "@loom/storage-indexeddb": "workspace:*",
+    "@loom/types": "workspace:*",
+    "@loom/workspace-fsa": "workspace:*"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.2"
+  }
+}

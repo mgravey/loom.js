@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Loom.js browser workspace example</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: system-ui, sans-serif;
+        line-height: 1.5;
+      }
+
+      body {
+        margin: 0;
+        padding: 2rem;
+      }
+
+      main {
+        max-width: 48rem;
+        margin: 0 auto;
+      }
+
+      button {
+        padding: 0.65rem 1rem;
+        font: inherit;
+        cursor: pointer;
+      }
+
+      button:disabled {
+        cursor: progress;
+      }
+
+      #status {
+        min-height: 1.5rem;
+        margin-block: 1rem;
+        font-weight: 600;
+      }
+
+      pre {
+        min-height: 10rem;
+        padding: 1rem;
+        overflow: auto;
+        border: 1px solid currentColor;
+        border-radius: 0.4rem;
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Loom.js browser workspace example</h1>
+      <p id="requirements">
+        Choose a directory containing a UTF-8 file named <code>source.txt</code>. Loom will read it
+        and create or replace <code>result.txt</code> in the same directory.
+      </p>
+      <button id="run" type="button" aria-describedby="requirements">
+        Choose directory and run
+      </button>
+      <p id="status" role="status" aria-live="polite">Ready.</p>
+      <pre
+        id="log"
+        role="log"
+        aria-label="Agent event log"
+        aria-live="polite"
+        aria-relevant="additions text"
+      ></pre>
+    </main>
+    <script type="module" src="./dist/main.js"></script>
+  </body>
+</html>

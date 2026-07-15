@@ -130,12 +130,18 @@ Published source in Phase 1 is environment-neutral:
 - emit ESM and declarations through explicit package exports;
 - use only public Loom exports—never `src` or other internal paths.
 
-Environment-specific plugins introduced later may depend on their target environment, but Loom Core
-must remain portable.
+Environment-specific plugins may compile against their target environment, but Loom Core must remain
+portable. Accept host primitives explicitly rather than reading ambient globals as defaults. This
+keeps capability installation deliberate and makes window, worker, and test composition
+deterministic.
 
 The Phase 2 workspace plugin is still environment-neutral: it accepts a `TextWorkspace` adapter and
 does not call a host filesystem API. Agent plugins should likewise receive models, tools, optional
 memory, and immutable configuration rather than resolving provider implementations internally.
+
+The Phase 3 IndexedDB and File System Access packages are concrete browser leaves. Permission
+pickers stay in applications because they require user interaction; a workspace plugin receives the
+resulting directory handle and never broadens that authority.
 
 ## Checklist
 

@@ -11,6 +11,9 @@ const runtimePackages = [
   'core',
   'tool-workspace',
   'agent-codex',
+  'platform-browser',
+  'storage-indexeddb',
+  'workspace-fsa',
   'examples',
 ] as const;
 
@@ -22,6 +25,9 @@ const allowedInternalDependencies: Readonly<
   core: ['@loom/plugin-api', '@loom/types'],
   'tool-workspace': ['@loom/plugin-api', '@loom/types'],
   'agent-codex': ['@loom/plugin-api', '@loom/tool-workspace', '@loom/types'],
+  'platform-browser': ['@loom/plugin-api', '@loom/types'],
+  'storage-indexeddb': ['@loom/plugin-api', '@loom/types'],
+  'workspace-fsa': ['@loom/plugin-api', '@loom/tool-workspace', '@loom/types'],
   examples: ['@loom/agent-codex', '@loom/plugin-api', '@loom/tool-workspace', '@loom/types'],
 });
 
@@ -107,6 +113,28 @@ describe('package architecture', () => {
     expect(imports).not.toContain('@loom/core');
   });
 
+  it('keeps the browser example on explicit public package dependencies', async () => {
+    const allowed = [
+      '@loom/agent-codex',
+      '@loom/core',
+      '@loom/examples',
+      '@loom/platform-browser',
+      '@loom/storage-indexeddb',
+      '@loom/types',
+      '@loom/workspace-fsa',
+    ];
+    const imports = await packageImports('example-browser');
+    expect(imports.filter((value) => value.startsWith('node:'))).toEqual([]);
+    expect(
+      imports.filter((value) => value.startsWith('@loom/') && !allowed.includes(value)),
+    ).toEqual([]);
+
+    const manifest = JSON.parse(
+      await readFile(join(workspaceRoot, 'packages', 'example-browser', 'package.json'), 'utf8'),
+    ) as { readonly dependencies?: Readonly<Record<string, string>> };
+    expect(Object.keys(manifest.dependencies ?? {}).sort()).toEqual([...allowed].sort());
+  });
+
   it('keeps core source provider- and host-neutral', async () => {
     const forbiddenImports = [
       'openai',
@@ -186,6 +214,32 @@ describe('package architecture', () => {
           expect(
             new RegExp(`\\b${identifier}\\b`, 'u').test(source),
             `${file} uses ${identifier}`,
+          ).toBe(false);
+        }
+      }
+    }
+  });
+
+  it('keeps Phase 3 browser plugins isolated from core and provider implementations', async () => {
+    const forbiddenImports = [
+      '@loom/core',
+      '@loom/agent-codex',
+      'openai',
+      'anthropic',
+      '@google/generative-ai',
+      'node:fs',
+      'node:path',
+    ];
+
+    for (const packageName of ['platform-browser', 'storage-indexeddb', 'workspace-fsa'] as const) {
+      for (const file of await sourceFiles(packageName)) {
+        const source = await readFile(file, 'utf8');
+        for (const specifier of importsIn(source)) {
+          expect(
+            forbiddenImports.some(
+              (forbidden) => specifier === forbidden || specifier.startsWith(`${forbidden}/`),
+            ),
+            `${file} imports ${specifier}`,
           ).toBe(false);
         }
       }

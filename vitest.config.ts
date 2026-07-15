@@ -11,7 +11,9 @@ export default defineConfig({
     exclude: ['tests/browser/**', '**/dist/**'],
     coverage: {
       provider: 'v8',
-      include: ['packages/{types,plugin-api,core,tool-workspace,agent-codex}/src/**/*.ts'],
+      include: [
+        'packages/{types,plugin-api,core,tool-workspace,agent-codex,platform-browser,storage-indexeddb,workspace-fsa}/src/**/*.ts',
+      ],
       exclude: ['**/*.test.ts', '**/index.ts'],
       reporter: ['text', 'html', 'lcov'],
       thresholds: {

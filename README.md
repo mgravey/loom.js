@@ -5,22 +5,26 @@ environments. Its core behaves like a small operating system: plugins declare wh
 runtime validates and orders them, and consumers resolve capabilities through stable public
 contracts.
 
-Phase 1 established the architecture-only runtime. Phase 2 adds a minimal Codex-style orchestration
-plugin and adapter-backed text-workspace tools for listing, reading, and writing files. It still
-contains no model provider, authentication, host filesystem integration, execution runtime, browser
-platform, or UI implementation. Published runtime and plugin ESM artifacts do not rely on DOM or
-Node.js APIs.
+Phase 1 established the architecture-only runtime. Phase 2 added a minimal Codex-style orchestration
+plugin and text-workspace tools. Phase 3 adds replaceable browser plugins for explicit host
+capabilities, IndexedDB storage, and File System Access workspaces. Core and the agent packages
+remain free of browser APIs. Loom still contains no model provider, authentication, extension, or
+execution runtime.
 
 ## Packages
 
-| Package                | Responsibility                                                                      |
-| ---------------------- | ----------------------------------------------------------------------------------- |
-| `@loom/types`          | Dependency-free primitives shared across the ecosystem                              |
-| `@loom/plugin-api`     | Contracts used by plugin authors                                                    |
-| `@loom/core`           | Runtime composition, lifecycle, registries, DI, events, configuration, and sessions |
-| `@loom/tool-workspace` | Normalized text-workspace paths and adapter-backed list/read/write tools            |
-| `@loom/agent-codex`    | Minimal streamed model/tool orchestration; no provider integration                  |
-| `@loom/examples`       | Provider-neutral examples that use public package exports only                      |
+| Package                   | Responsibility                                                                      |
+| ------------------------- | ----------------------------------------------------------------------------------- |
+| `@loom/types`             | Dependency-free primitives shared across the ecosystem                              |
+| `@loom/plugin-api`        | Contracts used by plugin authors                                                    |
+| `@loom/core`              | Runtime composition, lifecycle, registries, DI, events, configuration, and sessions |
+| `@loom/tool-workspace`    | Normalized text-workspace paths and adapter-backed list/read/write tools            |
+| `@loom/agent-codex`       | Minimal streamed model/tool orchestration; no provider integration                  |
+| `@loom/platform-browser`  | Explicitly supplied browser host capability                                         |
+| `@loom/storage-indexeddb` | Namespaced byte storage implemented with IndexedDB                                  |
+| `@loom/workspace-fsa`     | File System Access implementation of the text-workspace tools                       |
+| `@loom/examples`          | Provider-neutral examples that use public package exports only                      |
+| `@loom/example-browser`   | Browser application demonstrating explicit Phase 3 composition                      |
 
 Dependency direction is intentional:
 
@@ -28,7 +32,7 @@ Dependency direction is intentional:
 @loom/types <- @loom/plugin-api <- @loom/core
              ^       ^
              |       +-- @loom/tool-workspace <- @loom/agent-codex
-             +------------------------- plugins and examples
+             +------------------------- browser plugins and examples
 ```
 
 Plugins may use the public runtime composition API when acting as an application entry point, but
@@ -71,16 +75,21 @@ Useful commands:
 - Multiple runtimes do not share mutable state.
 - Agent protocols stay in agent packages rather than becoming core wire formats.
 - Workspace tools depend on an injected adapter and cannot access a host filesystem directly.
+- Browser APIs are isolated in browser packages and supplied explicitly by applications.
 
 Start with [the documentation index](./DOCUMENTATION.md), then read
 [the architecture guide](./docs/architecture.md) and
 [the plugin-authoring guide](./docs/plugin-authoring.md). The
-[minimal-agent guide](./docs/minimal-agent.md) covers Phase 2 composition. Architectural decisions
-are recorded in [`docs/adr`](./docs/adr/README.md).
+[minimal-agent guide](./docs/minimal-agent.md) covers Phase 2 composition, and the
+[browser-platform guide](./docs/browser-platform.md) covers Phase 3. Architectural decisions are
+recorded in [`docs/adr`](./docs/adr/README.md).
+
+The interactive [browser example](./packages/example-browser/README.md) composes the scripted agent
+with an application-selected directory using the Phase 3 plugins.
 
 ## Project status
 
-Loom.js packages remain private at `0.1.0` while Phase 2 is developed. Publishing, license
+Loom.js packages remain private at `0.1.0` while Phase 3 is developed. Publishing, license
 selection, Changesets, public namespace ownership, hot plugin mutation, version-range negotiation,
 and multi-browser CI are intentionally deferred. See [CHANGES.md](./CHANGES.md) for milestone
 history.

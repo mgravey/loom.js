@@ -1,4 +1,4 @@
-import { type CodexModel, type CodexModelEvent, type CodexModelRequest } from '@loom/agent-codex';
+import type { CodexModel, CodexModelEvent, CodexModelRequest } from '@loom/agent-codex';
 import {
   PLUGIN_API_VERSION,
   definePlugin,

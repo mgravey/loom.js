@@ -12,6 +12,9 @@ test('built packages publish declaration entry points', async () => {
     'core',
     'tool-workspace',
     'agent-codex',
+    'platform-browser',
+    'storage-indexeddb',
+    'workspace-fsa',
     'examples',
   ]) {
     const declaration = await readFile(
@@ -24,6 +27,9 @@ test('built packages publish declaration entry points', async () => {
   expect(declarations.get('core')).toContain('createLoomRuntime');
   expect(declarations.get('tool-workspace')).toContain('createWorkspaceToolsPlugin');
   expect(declarations.get('agent-codex')).toContain('createCodexAgentPlugin');
+  expect(declarations.get('platform-browser')).toContain('createBrowserPlatformPlugin');
+  expect(declarations.get('storage-indexeddb')).toContain('createIndexedDbStoragePlugin');
+  expect(declarations.get('workspace-fsa')).toContain('createFileSystemAccessWorkspacePlugin');
   expect(declarations.get('examples')).toContain('createAllCapabilitiesPlugin');
   expect(declarations.get('examples')).toContain('createInMemoryTextWorkspace');
 });
@@ -32,12 +38,25 @@ test('built ESM packages expose their public runtime APIs', async ({ page }) => 
   await openBuiltEsmHarness(page);
 
   const exportsByPackage = await page.evaluate(async (origin) => {
-    const [types, pluginApi, core, workspace, agent, examples] = await Promise.all([
+    const [
+      types,
+      pluginApi,
+      core,
+      workspace,
+      agent,
+      browserPlatform,
+      indexedDbStorage,
+      fileSystemWorkspace,
+      examples,
+    ] = await Promise.all([
       import(`${origin}/packages/types/dist/index.js`),
       import(`${origin}/packages/plugin-api/dist/index.js`),
       import(`${origin}/packages/core/dist/index.js`),
       import(`${origin}/packages/tool-workspace/dist/index.js`),
       import(`${origin}/packages/agent-codex/dist/index.js`),
+      import(`${origin}/packages/platform-browser/dist/index.js`),
+      import(`${origin}/packages/storage-indexeddb/dist/index.js`),
+      import(`${origin}/packages/workspace-fsa/dist/index.js`),
       import(`${origin}/packages/examples/dist/index.js`),
     ]);
     return {
@@ -46,6 +65,9 @@ test('built ESM packages expose their public runtime APIs', async ({ page }) => 
       core: Object.keys(core),
       workspace: Object.keys(workspace),
       agent: Object.keys(agent),
+      browserPlatform: Object.keys(browserPlatform),
+      indexedDbStorage: Object.keys(indexedDbStorage),
+      fileSystemWorkspace: Object.keys(fileSystemWorkspace),
       examples: Object.keys(examples),
     };
   }, browserOrigin);
@@ -92,6 +114,20 @@ test('built ESM packages expose their public runtime APIs', async ({ page }) => 
       'CODEX_AGENT_KEY',
       'createCodexAgentFactory',
       'createCodexAgentPlugin',
+    ]),
+  );
+  expect(exportsByPackage.browserPlatform).toEqual(
+    expect.arrayContaining(['BROWSER_PLATFORM_KEY', 'createBrowserPlatformPlugin']),
+  );
+  expect(exportsByPackage.indexedDbStorage).toEqual(
+    expect.arrayContaining(['INDEXEDDB_STORAGE_KEY', 'createIndexedDbStoragePlugin']),
+  );
+  expect(exportsByPackage.fileSystemWorkspace).toEqual(
+    expect.arrayContaining([
+      'FSA_LIST_FILES_TOOL_KEY',
+      'FSA_READ_FILE_TOOL_KEY',
+      'FSA_WRITE_FILE_TOOL_KEY',
+      'createFileSystemAccessWorkspacePlugin',
     ]),
   );
   expect(exportsByPackage.examples).toEqual(

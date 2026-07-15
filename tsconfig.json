@@ -7,6 +7,10 @@
     { "path": "./packages/core" },
     { "path": "./packages/tool-workspace" },
     { "path": "./packages/agent-codex" },
-    { "path": "./packages/examples" }
+    { "path": "./packages/platform-browser" },
+    { "path": "./packages/storage-indexeddb" },
+    { "path": "./packages/workspace-fsa" },
+    { "path": "./packages/examples" },
+    { "path": "./packages/example-browser" }
   ]
 }

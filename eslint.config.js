@@ -189,6 +189,60 @@ export default tseslint.config(
     },
   },
   {
+    files: ['packages/platform-browser/src/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@loom/*', '!@loom/types', '!@loom/plugin-api', 'node:*'],
+              message: '@loom/platform-browser may depend only on Loom public contracts.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ['packages/storage-indexeddb/src/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@loom/*', '!@loom/types', '!@loom/plugin-api', 'node:*'],
+              message: '@loom/storage-indexeddb may depend only on Loom public contracts.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ['packages/workspace-fsa/src/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: [
+                '@loom/*',
+                '!@loom/types',
+                '!@loom/plugin-api',
+                '!@loom/tool-workspace',
+                'node:*',
+              ],
+              message: '@loom/workspace-fsa may depend only on Loom workspace contracts.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ['packages/examples/src/**/*.ts'],
     rules: {
       'no-restricted-imports': [

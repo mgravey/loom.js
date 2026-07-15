@@ -42,6 +42,10 @@ Tests must cover:
 - minimal-agent event ordering, tool-result feedback, cancellation propagation, malformed model
   output, failure wrapping, and bounded-turn behavior;
 - public-only composition of an explicitly selected model, agent, and tool set.
+- explicit browser-platform registration without ambient-global fallback;
+- IndexedDB byte cloning, namespace isolation, deterministic listing, error mapping, and disposal;
+- File System Access path confinement, immediate listing, UTF-8 reads/writes, cancellation, and
+  browser-error translation.
 
 Provider-neutral fakes should cover every capability category while importing only `@loom/types` and
 `@loom/plugin-api`. Compile-time fixtures verify public types and package-boundary failures.
@@ -49,7 +53,7 @@ Provider-neutral fakes should cover every capability category while importing on
 ## Coverage policy
 
 Across `@loom/types`, `@loom/plugin-api`, `@loom/core`, `@loom/tool-workspace`, and
-`@loom/agent-codex`, V8 coverage must meet:
+`@loom/agent-codex`, plus the Phase 3 browser plugin packages, V8 coverage must meet:
 
 | Metric     | Minimum |
 | ---------- | ------: |
@@ -73,6 +77,12 @@ browser-only test harness files live outside package source.
 Phase 2 repeats the window and worker smoke path with the built agent package, scripted model, and
 in-memory workspace. The scenario must perform list, read, and write operations, verify the written
 text, close its session, and dispose the runtime.
+
+Phase 3 repeats that composition with real IndexedDB and OPFS directory handles in both a Chromium
+window and dedicated Worker. It verifies copied byte storage, namespace listing/deletion, actual
+file mutation through the File System Access contract, session cancellation, connection closure, and
+runtime disposal. Interactive directory-picker behavior remains in the example application;
+automated tests inject an OPFS handle to avoid a permission prompt.
 
 ## CI
 

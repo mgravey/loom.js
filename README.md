@@ -128,7 +128,8 @@ decisions are recorded in [`docs/adr`](./docs/adr/README.md).
 
 The [Phase 5.5 vertical-slice guide](./docs/phase-5-5-vertical-slice.md) explains how to build, load
 the unpacked extension, serve the browser application, authenticate from trusted extension UI, run
-an agent, log out, and perform the fully local acceptance test.
+an agent, inspect secret-safe diagnostics on both sides of the extension boundary, log out, and
+perform the fully local acceptance test.
 
 The interactive [browser example](./packages/example-browser/README.md) composes the scripted agent
 with an application-selected directory using the Phase 3 plugins. The

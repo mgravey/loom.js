@@ -100,6 +100,9 @@ experimental authentication and model packages, V8 coverage must meet:
 | Functions  |     90% |
 | Branches   |     85% |
 
+Browser-only service-worker composition entrypoints are excluded from Node V8 instrumentation and
+remain required coverage in the real Chromium extension suites.
+
 Barrel-only `index.ts` files and test files are excluded. A threshold change requires an explicit
 architecture or testing decision, not a silent configuration edit.
 

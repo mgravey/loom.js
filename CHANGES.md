@@ -19,6 +19,8 @@ This project follows a lightweight milestone changelog while packages remain pri
 - A real Chromium vertical-slice test using the unpacked extension, local auth and model fixtures,
   an OPFS directory handle, a workspace tool turn, response streaming, and logout.
 - Current Codex inference protocol re-audit, a Phase 5.5 guide, and ADR-010.
+- Secret-safe page and extension-service-worker diagnostics for every model transport stage,
+  including explicit pre-fetch failure codes and streamed byte-count metadata.
 
 ### Security
 

@@ -89,6 +89,21 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function pageDiagnostic(
+  event: string,
+  details: Readonly<Record<string, string | number | boolean>> = {},
+): void {
+  globalThis.console.info('[loom:page-extension]', Object.freeze({ event, ...details }));
+}
+
+function diagnosticCode(value: unknown, fallback: string): string {
+  return typeof value === 'string' && /^[A-Z_]{1,64}$/u.test(value) ? value : fallback;
+}
+
+function diagnosticStage(value: unknown): string {
+  return typeof value === 'string' && /^[a-z-]{1,32}$/u.test(value) ? value : 'unknown';
+}
+
 function extensionRuntime(): CodexExternalRuntime {
   const runtime = (
     globalThis as typeof globalThis & {
@@ -173,6 +188,7 @@ function createExtensionModelTransport(
     send(request: CodexResponsesRequest): Promise<CodexResponsesHttpResponse> {
       nextRequest += 1;
       const requestId = `loom-model-${String(nextRequest)}`;
+      pageDiagnostic('model.port.connect', { requestId });
       const port = runtime.connect(extensionId, { name: MODEL_PORT_NAME });
       const stream = createChunkStream();
       let started = false;
@@ -191,27 +207,41 @@ function createExtensionModelTransport(
         port.onMessage.addListener((message) => {
           if (!isRecord(message) || message.requestId !== requestId) return;
           if (message.type === 'start' && typeof message.status === 'number' && !started) {
+            pageDiagnostic('model.response.start', { requestId, status: message.status });
+            if (message.status < 200 || message.status >= 300) {
+              appendLog(`Extension provider HTTP status: ${String(message.status)}.`);
+            }
             started = true;
             settled = true;
             resolve(Object.freeze({ status: message.status, body: stream.body }));
             return;
           }
           if (message.type === 'chunk' && typeof message.chunk === 'string' && started) {
+            pageDiagnostic('model.response.chunk', {
+              requestId,
+              characters: message.chunk.length,
+            });
             stream.push(message.chunk);
             return;
           }
           if (message.type === 'end') {
+            pageDiagnostic('model.response.end', { requestId });
             ended = true;
             unsubscribe();
             stream.finish();
             return;
           }
           if (message.type === 'error') {
+            const code = diagnosticCode(message.code, 'UNKNOWN_EXTENSION_ERROR');
+            const stage = diagnosticStage(message.stage);
+            pageDiagnostic('model.response.error', { requestId, code, stage });
+            appendLog(`Extension transport error: ${code} at ${stage}.`);
             unsubscribe();
             rejectOnce(new Error('Experimental extension model request failed.'));
           }
         });
         port.onDisconnect.addListener(() => {
+          pageDiagnostic('model.port.disconnect', { requestId, ended });
           unsubscribe();
           if (!ended) rejectOnce(new Error('Experimental extension model port disconnected.'));
         });
@@ -221,6 +251,11 @@ function createExtensionModelTransport(
             port.disconnect();
           });
         }
+        pageDiagnostic('model.request.send', {
+          requestId,
+          characters: request.body.length,
+          cancellable: request.signal !== undefined,
+        });
         port.postMessage({
           protocol: MODEL_PROTOCOL,
           version: MODEL_PROTOCOL_VERSION,
@@ -244,7 +279,9 @@ function authProvider() {
 }
 
 async function refreshAuthenticationStatus(updateStatus = true): Promise<boolean> {
+  pageDiagnostic('auth.status.request');
   const authenticated = await authProvider().isAuthenticated();
+  pageDiagnostic('auth.status.response', { authenticated });
   runButton.disabled = !authenticated;
   logoutButton.disabled = !authenticated;
   if (updateStatus) {
@@ -347,9 +384,13 @@ checkAuthButton.addEventListener('click', () => {
 
 logoutButton.addEventListener('click', () => {
   logoutButton.disabled = true;
+  pageDiagnostic('auth.logout.request');
   void authProvider()
     .logout()
-    .then(() => refreshAuthenticationStatus())
+    .then(() => {
+      pageDiagnostic('auth.logout.response', { succeeded: true });
+      return refreshAuthenticationStatus();
+    })
     .catch((error: unknown) => setStatus(`Logout failed: ${errorMessage(error)}`));
 });
 

@@ -1,5 +1,6 @@
 import {
   createOriginAuthorizer,
+  ExtensionBrokerError,
   type ExtensionTokenService,
   type OriginAuthorizer,
 } from '@loom/extension';
@@ -31,6 +32,56 @@ export interface CreateCodexModelPortListenerOptions {
   readonly accountRoutingStore: CodexAccountRoutingStore;
   readonly fetchRequest: CodexModelFetch;
   readonly authorizer?: OriginAuthorizer;
+  readonly diagnosticSink?: CodexModelDiagnosticSink;
+}
+
+export type CodexModelDiagnosticStage =
+  'port' | 'authorization' | 'validation' | 'routing' | 'authentication' | 'provider' | 'stream';
+
+export type CodexModelTransportFailureCode =
+  | 'CANCELLED'
+  | 'UNAUTHORIZED_ORIGIN'
+  | 'INVALID_REQUEST'
+  | 'ACCOUNT_ROUTING_UNAVAILABLE'
+  | 'AUTHENTICATION_FAILED'
+  | 'PROVIDER_FETCH_FAILED'
+  | 'PROVIDER_STREAM_FAILED';
+
+export interface CodexModelDiagnosticEvent {
+  readonly event: string;
+  readonly stage: CodexModelDiagnosticStage;
+  readonly requestId?: string;
+  readonly code?: CodexModelTransportFailureCode;
+  readonly brokerCode?: string;
+  readonly status?: number;
+  readonly characters?: number;
+  readonly chunks?: number;
+}
+
+export type CodexModelDiagnosticSink = (event: CodexModelDiagnosticEvent) => void;
+
+function report(
+  sink: CodexModelDiagnosticSink | undefined,
+  event: CodexModelDiagnosticEvent,
+): void {
+  try {
+    sink?.(Object.freeze(event));
+  } catch {
+    // Diagnostics must never alter authentication, transport, or cleanup behavior.
+  }
+}
+
+function failureCode(
+  stage: CodexModelDiagnosticStage,
+  aborted: boolean,
+): CodexModelTransportFailureCode {
+  if (aborted) return 'CANCELLED';
+  if (stage === 'authorization') return 'UNAUTHORIZED_ORIGIN';
+  if (stage === 'validation' || stage === 'port') return 'INVALID_REQUEST';
+  if (stage === 'routing') return 'ACCOUNT_ROUTING_UNAVAILABLE';
+  if (stage === 'authentication') return 'AUTHENTICATION_FAILED';
+  if (stage === 'stream') return 'PROVIDER_STREAM_FAILED';
+  return 'PROVIDER_FETCH_FAILED';
 }
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
@@ -151,23 +202,49 @@ export function createCodexModelPortListener(
   const authorizer = options.authorizer ?? createOriginAuthorizer(DEVELOPMENT_ALLOWED_ORIGINS);
   return (port) => {
     if (port.name !== CODEX_MODEL_PORT_NAME) return;
+    report(options.diagnosticSink, { event: 'port.connected', stage: 'port' });
     const abortController = new AbortController();
     let started = false;
-    port.onDisconnect.addListener(() => abortController.abort());
+    port.onDisconnect.addListener(() => {
+      report(options.diagnosticSink, { event: 'port.disconnected', stage: 'port' });
+      abortController.abort();
+    });
     port.onMessage.addListener((untrustedMessage) => {
       if (started) return;
       started = true;
       void (async () => {
         let requestId = 'invalid-request';
+        let stage: CodexModelDiagnosticStage = 'authorization';
         try {
+          report(options.diagnosticSink, { event: 'request.received', stage });
           authorizer.assertAuthorized(port.sender ?? {});
+          report(options.diagnosticSink, { event: 'origin.authorized', stage });
+          stage = 'validation';
           const request = parseGenerateRequest(untrustedMessage);
           requestId = request.requestId;
+          report(options.diagnosticSink, {
+            event: 'request.validated',
+            stage,
+            requestId,
+            characters: request.body.length,
+          });
+          stage = 'routing';
           const accountId = await options.accountRoutingStore.get();
           if (accountId === undefined) {
             throw new Error('ChatGPT account routing is unavailable.');
           }
+          report(options.diagnosticSink, { event: 'routing.available', stage, requestId });
+          stage = 'authentication';
+          report(options.diagnosticSink, { event: 'access-token.requested', stage, requestId });
           const token = await options.tokenService.getAccessToken(options.providerId);
+          report(options.diagnosticSink, { event: 'access-token.available', stage, requestId });
+          stage = 'provider';
+          report(options.diagnosticSink, {
+            event: 'provider.request.started',
+            stage,
+            requestId,
+            characters: request.body.length,
+          });
           const response = await options.fetchRequest(CODEX_RESPONSES_ENDPOINT, {
             method: 'POST',
             headers: Object.freeze({
@@ -187,13 +264,31 @@ export function createCodexModelPortListener(
             redirect: 'error',
             signal: abortController.signal,
           });
+          report(options.diagnosticSink, {
+            event: 'provider.response.started',
+            stage,
+            requestId,
+            status: response.status,
+          });
           if (!post(port, { type: 'start', requestId, status: response.status })) return;
           if (response.status < 200 || response.status >= 300) {
             post(port, { type: 'end', requestId });
             return;
           }
+          stage = 'stream';
           if (response.body === null) throw new Error('Provider response body is unavailable.');
+          let chunks = 0;
+          let characters = 0;
           for await (const chunk of decodedBody(response.body)) {
+            chunks += 1;
+            characters += chunk.length;
+            report(options.diagnosticSink, {
+              event: 'provider.response.chunk',
+              stage,
+              requestId,
+              chunks,
+              characters: chunk.length,
+            });
             if (
               abortController.signal.aborted ||
               !post(port, { type: 'chunk', requestId, chunk })
@@ -201,12 +296,28 @@ export function createCodexModelPortListener(
               return;
             }
           }
+          report(options.diagnosticSink, {
+            event: 'provider.response.completed',
+            stage,
+            requestId,
+            chunks,
+            characters,
+          });
           post(port, { type: 'end', requestId });
-        } catch {
+        } catch (error) {
+          const code = failureCode(stage, abortController.signal.aborted);
+          report(options.diagnosticSink, {
+            event: 'request.failed',
+            stage,
+            requestId,
+            code,
+            ...(error instanceof ExtensionBrokerError ? { brokerCode: error.code } : {}),
+          });
           post(port, {
             type: 'error',
             requestId,
-            code: abortController.signal.aborted ? 'CANCELLED' : 'MODEL_REQUEST_FAILED',
+            code,
+            stage,
             message: abortController.signal.aborted
               ? 'Experimental Codex request was cancelled.'
               : 'Experimental Codex model transport failed.',

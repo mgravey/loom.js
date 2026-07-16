@@ -17,6 +17,7 @@ export default defineConfig({
       exclude: [
         '**/*.test.ts',
         '**/index.ts',
+        'packages/*/src/service-worker.ts',
         'packages/model-codex-experimental/src/contracts.ts',
       ],
       reporter: ['text', 'html', 'lcov'],

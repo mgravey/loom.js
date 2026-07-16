@@ -71,6 +71,39 @@ Open <http://localhost:4173/example-codex-experimental/> in the same Chrome prof
 The extension authorizes only `http://localhost:4173` and `http://127.0.0.1:4173` in development.
 Serving the page from another origin or port is expected to fail.
 
+## Diagnose a failed run
+
+The provider request is owned by the extension service worker. It therefore does not appear in the
+localhost page's **Network** panel. Open both diagnostic consoles before retrying:
+
+1. On the localhost application, open **Developer tools → Console** and filter for
+   `[loom:page-extension]`.
+2. Open `chrome://extensions`, select the Loom Codex experiment, then select the **service worker**
+   inspection link. Filter that console for `[loom:extension-model]`.
+3. Retry **Choose directory and run**. Keep the service-worker inspector open so Chrome does not
+   suspend it between diagnostic events.
+
+The page logs credential-status messages plus Port request/start/chunk/end/error metadata. The
+extension logs origin authorization, envelope validation, account-routing lookup, token refresh,
+provider-fetch start, HTTP status, and stream totals. A failure returned to the page includes one
+safe code and stage:
+
+| Code                          | Meaning before provider inference                                      |
+| ----------------------------- | ---------------------------------------------------------------------- |
+| `UNAUTHORIZED_ORIGIN`         | The page origin is not in the exact extension allowlist                |
+| `INVALID_REQUEST`             | The external Port envelope or provider request shape failed validation |
+| `ACCOUNT_ROUTING_UNAVAILABLE` | The sign-in did not leave usable ChatGPT account-routing metadata      |
+| `AUTHENTICATION_FAILED`       | The extension could not obtain/refresh a short-lived access token      |
+| `PROVIDER_FETCH_FAILED`       | The provider fetch failed before an HTTP response was received         |
+| `PROVIDER_STREAM_FAILED`      | A successful provider response could not be streamed                   |
+| `CANCELLED`                   | The page disconnected or cancelled the run                             |
+
+An HTTP rejection such as an unavailable model, account entitlement, rate limit, or depleted credit
+is logged separately as `model.response.start` with its numeric status. Diagnostics include only
+request IDs, stages, status codes, character/chunk counts, and sanitized broker codes. They never
+include tokens, account IDs, authorization headers, prompts, tool arguments, file contents, or
+response chunks.
+
 ## Safe automated verification
 
 The automated scenario uses an unpacked extension, synthetic credentials, local intercepted auth

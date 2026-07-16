@@ -9,6 +9,7 @@ import {
   CODEX_MODEL_TRANSPORT_VERSION,
   CODEX_RESPONSES_ENDPOINT,
   createCodexModelPortListener,
+  type CodexModelDiagnosticEvent,
 } from '../src/model-transport.js';
 
 function tokenService(): ExtensionTokenService {
@@ -79,6 +80,7 @@ function request(): Readonly<Record<string, unknown>> {
 
 describe('experimental Codex extension model transport', () => {
   it('keeps credentials extension-side and streams provider bytes over an authorized port', async () => {
+    const diagnostics: CodexModelDiagnosticEvent[] = [];
     const encoder = new TextEncoder();
     const fetchRequest = vi.fn<CodexModelFetch>(() =>
       Promise.resolve({
@@ -99,6 +101,7 @@ describe('experimental Codex extension model transport', () => {
       accountRoutingStore: routingStore(),
       fetchRequest,
       authorizer: { assertAuthorized: vi.fn() },
+      diagnosticSink: (event) => diagnostics.push(event),
     })(externalPort.value);
 
     externalPort.send(request());
@@ -119,6 +122,19 @@ describe('experimental Codex extension model transport', () => {
       }),
     );
     expect(JSON.stringify(externalPort.messages)).not.toContain('private-access-token');
+    expect(JSON.stringify(diagnostics)).not.toContain('private-access-token');
+    expect(diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ event: 'request.validated', stage: 'validation' }),
+        expect.objectContaining({ event: 'access-token.available', stage: 'authentication' }),
+        expect.objectContaining({ event: 'provider.request.started', stage: 'provider' }),
+        expect.objectContaining({
+          event: 'provider.response.completed',
+          stage: 'stream',
+          chunks: 2,
+        }),
+      ]),
+    );
     expect(externalPort.messages).toContainEqual({
       type: 'start',
       requestId: 'request-1',
@@ -147,7 +163,8 @@ describe('experimental Codex extension model transport', () => {
       expect(externalPort.messages).toContainEqual({
         type: 'error',
         requestId: 'invalid-request',
-        code: 'MODEL_REQUEST_FAILED',
+        code: 'UNAUTHORIZED_ORIGIN',
+        stage: 'authorization',
         message: 'Experimental Codex model transport failed.',
       }),
     );
@@ -183,7 +200,51 @@ describe('experimental Codex extension model transport', () => {
     expect(fetchRequest).not.toHaveBeenCalled();
     expect(externalPort.messages[0]).toMatchObject({
       type: 'error',
-      code: 'MODEL_REQUEST_FAILED',
+      code: 'INVALID_REQUEST',
+      stage: 'validation',
     });
+  });
+
+  it('reports missing routing and refresh failures without exposing sensitive values', async () => {
+    const missingRouting = port();
+    createCodexModelPortListener({
+      providerId: 'openai/codex-experimental',
+      tokenService: tokenService(),
+      accountRoutingStore: { ...routingStore(), get: vi.fn(() => Promise.resolve(undefined)) },
+      fetchRequest: vi.fn<CodexModelFetch>(),
+      authorizer: { assertAuthorized: vi.fn() },
+    })(missingRouting.value);
+    missingRouting.send(request());
+    await vi.waitFor(() =>
+      expect(missingRouting.messages).toContainEqual(
+        expect.objectContaining({
+          type: 'error',
+          code: 'ACCOUNT_ROUTING_UNAVAILABLE',
+          stage: 'routing',
+        }),
+      ),
+    );
+
+    const refreshFailure = port();
+    const failingTokens = tokenService();
+    vi.mocked(failingTokens.getAccessToken).mockRejectedValue(new Error('secret refresh detail'));
+    createCodexModelPortListener({
+      providerId: 'openai/codex-experimental',
+      tokenService: failingTokens,
+      accountRoutingStore: routingStore(),
+      fetchRequest: vi.fn<CodexModelFetch>(),
+      authorizer: { assertAuthorized: vi.fn() },
+    })(refreshFailure.value);
+    refreshFailure.send(request());
+    await vi.waitFor(() =>
+      expect(refreshFailure.messages).toContainEqual(
+        expect.objectContaining({
+          type: 'error',
+          code: 'AUTHENTICATION_FAILED',
+          stage: 'authentication',
+        }),
+      ),
+    );
+    expect(JSON.stringify(refreshFailure.messages)).not.toContain('secret refresh detail');
   });
 });

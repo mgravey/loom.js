@@ -11,7 +11,8 @@ phases.
 - [Codex authentication experiment](./docs/codex-auth-experiment.md) — Phase 5 audit, threat model,
   feasibility verdict, and manual experiment policy
 - [Phase 5.5 vertical slice](./docs/phase-5-5-vertical-slice.md) — build, extension installation,
-  localhost application, authentication, model run, logout, and local verification
+  localhost application, authentication, model run, two-sided diagnostics, logout, and local
+  verification
 - [Testing](./docs/testing.md) — local checks, browser smoke tests, and acceptance criteria
 - [Architecture decision records](./docs/adr/README.md) — rationale behind the stable contracts
 - [Changes](./CHANGES.md) — milestone-level release notes

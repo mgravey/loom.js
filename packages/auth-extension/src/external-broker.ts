@@ -1,11 +1,21 @@
 import {
   CredentialBrokerError,
+  GET_ACCESS_TOKEN_RESULT_MESSAGE_TYPE,
+  GET_CREDENTIAL_STATUS_RESULT_MESSAGE_TYPE,
+  LOGOUT_RESULT_MESSAGE_TYPE,
+  createGetCredentialStatusRequest,
   createGetAccessTokenRequest,
+  createLogoutRequest,
   parseCredentialBrokerResponse,
   type AccessToken,
   type CredentialBroker,
+  type CredentialBrokerRequest,
+  type CredentialBrokerResponse,
+  type CredentialStatus,
+  type GetCredentialStatusInput,
   type GetAccessTokenInput,
   type GetAccessTokenRequest,
+  type LogoutInput,
 } from '@loom/credential-broker-api';
 
 /** The minimal injected surface needed from an extension external-message runtime. */
@@ -82,7 +92,7 @@ function transportFailure(cause: unknown): CredentialBrokerError {
 function sendExternalMessage(
   runtime: ExternalMessageRuntime,
   extensionId: string,
-  request: GetAccessTokenRequest,
+  request: CredentialBrokerRequest,
 ): Promise<unknown> {
   return new Promise((resolve, reject) => {
     let settled = false;
@@ -143,6 +153,32 @@ export function createExternalCredentialBroker(
   options: CreateExternalCredentialBrokerOptions,
 ): ExternalCredentialBroker {
   const { configuration, runtime, requestIdFactory } = validateOptions(options);
+  async function execute(
+    request: CredentialBrokerRequest,
+    expectedType: CredentialBrokerResponse['type'],
+  ): Promise<Extract<CredentialBrokerResponse, { readonly ok: true }>> {
+    let untrustedResponse: unknown;
+    try {
+      untrustedResponse = await sendExternalMessage(runtime, configuration.extensionId, request);
+    } catch (cause) {
+      throw transportFailure(cause);
+    }
+
+    const response = parseCredentialBrokerResponse(untrustedResponse);
+    if (response.requestId !== request.requestId || response.type !== expectedType) {
+      throw new CredentialBrokerError(
+        'INVALID_REQUEST',
+        'Credential broker response does not match the request.',
+      );
+    }
+    if (!response.ok) {
+      throw new CredentialBrokerError(response.error.code, response.error.message, {
+        retryable: response.error.retryable,
+      });
+    }
+    return response;
+  }
+
   return Object.freeze({
     configuration,
     async getAccessToken(input: GetAccessTokenInput): Promise<AccessToken> {
@@ -153,26 +189,20 @@ export function createExternalCredentialBroker(
         throw transportFailure(cause);
       }
 
-      let untrustedResponse: unknown;
-      try {
-        untrustedResponse = await sendExternalMessage(runtime, configuration.extensionId, request);
-      } catch (cause) {
-        throw transportFailure(cause);
-      }
-
-      const response = parseCredentialBrokerResponse(untrustedResponse);
-      if (response.requestId !== request.requestId) {
-        throw new CredentialBrokerError(
-          'INVALID_REQUEST',
-          'Credential broker response request ID does not match the request.',
-        );
-      }
-      if (!response.ok) {
-        throw new CredentialBrokerError(response.error.code, response.error.message, {
-          retryable: response.error.retryable,
-        });
-      }
+      const response = await execute(request, GET_ACCESS_TOKEN_RESULT_MESSAGE_TYPE);
+      if (response.type !== GET_ACCESS_TOKEN_RESULT_MESSAGE_TYPE) throw new Error('unreachable');
       return immutableToken(response.accessToken, response.expiresAt);
+    },
+    async getStatus(input: GetCredentialStatusInput): Promise<CredentialStatus> {
+      const request = createGetCredentialStatusRequest(requestIdFactory(), input);
+      const response = await execute(request, GET_CREDENTIAL_STATUS_RESULT_MESSAGE_TYPE);
+      if (response.type !== GET_CREDENTIAL_STATUS_RESULT_MESSAGE_TYPE)
+        throw new Error('unreachable');
+      return Object.freeze({ authenticated: response.authenticated });
+    },
+    async logout(input: LogoutInput): Promise<void> {
+      const request = createLogoutRequest(requestIdFactory(), input);
+      await execute(request, LOGOUT_RESULT_MESSAGE_TYPE);
     },
   });
 }

@@ -18,6 +18,8 @@ export interface CreateExtensionTokenServiceOptions {
 
 export interface ExtensionTokenService {
   getAccessToken(providerId: string): Promise<CachedAccessToken>;
+  getStatus(providerId: string): Promise<{ readonly authenticated: boolean }>;
+  logout(providerId: string): Promise<void>;
   acceptAuthorizationResult(
     providerId: string,
     result: AccessTokenResult,
@@ -194,6 +196,44 @@ export function createExtensionTokenService(
     },
     clearCachedAccessToken(providerId: string) {
       cache.delete(providerId);
+    },
+    async getStatus(providerId: string) {
+      if (!providers.has(providerId)) {
+        throw new ExtensionBrokerError(
+          'UNKNOWN_PROVIDER',
+          `Unknown credential provider "${providerId}".`,
+        );
+      }
+      const authenticated =
+        cache.has(providerId) || (await options.credentialStore.get(providerId)) !== undefined;
+      return Object.freeze({ authenticated });
+    },
+    async logout(providerId: string) {
+      if (!providers.has(providerId)) {
+        throw new ExtensionBrokerError(
+          'UNKNOWN_PROVIDER',
+          `Unknown credential provider "${providerId}".`,
+        );
+      }
+
+      const existing = pending.get(providerId);
+      if (existing !== undefined) {
+        try {
+          await existing;
+        } catch {
+          // Logout still clears any credential left behind by a failed operation.
+        }
+      }
+      cache.delete(providerId);
+      try {
+        await options.credentialStore.delete(providerId);
+      } catch (cause) {
+        throw new ExtensionBrokerError(
+          'INTERNAL_ERROR',
+          `Credential cleanup failed for provider "${providerId}".`,
+          { cause },
+        );
+      }
     },
   });
 }

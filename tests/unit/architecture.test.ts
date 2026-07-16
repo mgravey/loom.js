@@ -20,6 +20,7 @@ const runtimePackages = [
   'extension',
   'auth-codex-experimental',
   'extension-codex-experimental',
+  'model-codex-experimental',
   'examples',
 ] as const;
 
@@ -44,6 +45,7 @@ const allowedInternalDependencies: Readonly<
     '@loom/credential-provider-api',
     '@loom/extension',
   ],
+  'model-codex-experimental': ['@loom/agent-codex', '@loom/plugin-api', '@loom/types'],
   examples: ['@loom/agent-codex', '@loom/plugin-api', '@loom/tool-workspace', '@loom/types'],
 });
 
@@ -127,6 +129,24 @@ describe('package architecture', () => {
       imports.filter((value) => value.startsWith('@loom/') && value.split('/').length > 2),
     ).toEqual([]);
     expect(imports).not.toContain('@loom/core');
+  });
+
+  it('keeps the experimental Codex browser example on public package entry points', async () => {
+    const imports = await packageImports('example-codex-experimental');
+    expect(
+      imports.filter((value) => value.startsWith('@loom/') && value.split('/').length > 2),
+    ).toEqual([]);
+    expect(new Set(imports.filter((value) => value.startsWith('@loom/')))).toEqual(
+      new Set([
+        '@loom/agent-codex',
+        '@loom/auth-extension',
+        '@loom/core',
+        '@loom/model-codex-experimental',
+        '@loom/platform-browser',
+        '@loom/types',
+        '@loom/workspace-fsa',
+      ]),
+    );
   });
 
   it('keeps the browser example on explicit public package dependencies', async () => {
@@ -318,6 +338,10 @@ describe('package architecture', () => {
       expect(imports).not.toContain('@loom/types');
       expect(imports.filter((value) => value.startsWith('node:'))).toEqual([]);
     }
+
+    const modelImports = await packageImports('model-codex-experimental');
+    expect(modelImports).not.toContain('@loom/core');
+    expect(modelImports.filter((value) => value.startsWith('node:'))).toEqual([]);
 
     for (const packageName of [
       'credential-broker-api',

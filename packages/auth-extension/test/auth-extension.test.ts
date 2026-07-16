@@ -2,9 +2,12 @@ import {
   CredentialBrokerError,
   createGetAccessTokenFailure,
   createGetAccessTokenSuccess,
+  createGetCredentialStatusSuccess,
+  createLogoutSuccess,
   credentialProviderId,
   type CredentialBroker,
   type GetAccessTokenRequest,
+  type CredentialBrokerRequest,
 } from '@loom/credential-broker-api';
 import {
   PLUGIN_API_VERSION,
@@ -27,7 +30,11 @@ import {
 const PROVIDER_ID = credentialProviderId('example/provider');
 
 function broker(getAccessToken: CredentialBroker['getAccessToken']): CredentialBroker {
-  return { getAccessToken };
+  return {
+    getAccessToken,
+    getStatus: async () => ({ authenticated: true }),
+    logout: async () => undefined,
+  };
 }
 
 describe('extension authentication provider', () => {
@@ -67,6 +74,26 @@ describe('extension authentication provider', () => {
     expect(firstGet).toHaveBeenCalledWith({ providerId: PROVIDER_ID });
     expect(secondGet).not.toHaveBeenCalled();
     expect(provider.configuration.providerId).toBe(PROVIDER_ID);
+  });
+
+  it('exposes status, authenticated, and logout without exposing credentials', async () => {
+    const status = vi.fn<CredentialBroker['getStatus']>(async () => ({ authenticated: true }));
+    const logout = vi.fn<CredentialBroker['logout']>(async () => undefined);
+    const provider = createExtensionAuthProvider({
+      broker: {
+        getAccessToken: async () => ({ accessToken: 'temporary' }),
+        getStatus: status,
+        logout,
+      },
+      providerId: PROVIDER_ID,
+    });
+
+    await expect(provider.getStatus()).resolves.toEqual({ authenticated: true });
+    await expect(provider.isAuthenticated()).resolves.toBe(true);
+    await expect(provider.logout()).resolves.toBeUndefined();
+    expect(status).toHaveBeenCalledTimes(2);
+    expect(logout).toHaveBeenCalledWith({ providerId: PROVIDER_ID });
+    expect(JSON.stringify(await provider.getStatus())).not.toContain('accessToken');
   });
 
   it('maps structured broker failures without including credentials', async () => {
@@ -207,6 +234,32 @@ describe('external-message credential broker', () => {
     await expect(external.getAccessToken({ providerId: PROVIDER_ID })).resolves.toEqual({
       accessToken: 'callback-token',
     });
+  });
+
+  it('transports provider status and logout as credential-free operations', async () => {
+    const sendMessage = vi.fn((_extensionId: string, message: unknown): Promise<unknown> => {
+      const request = message as CredentialBrokerRequest;
+      if (request.type === 'getCredentialStatus') {
+        return Promise.resolve(
+          createGetCredentialStatusSuccess(request.requestId, { authenticated: true }),
+        );
+      }
+      if (request.type === 'logout') return Promise.resolve(createLogoutSuccess(request.requestId));
+      return Promise.resolve(createGetAccessTokenSuccess(request.requestId, { accessToken: 'x' }));
+    });
+    const external = createExternalCredentialBroker({
+      extensionId: 'extension-id',
+      runtime: { sendMessage },
+    });
+
+    await expect(external.getStatus({ providerId: PROVIDER_ID })).resolves.toEqual({
+      authenticated: true,
+    });
+    await expect(external.logout({ providerId: PROVIDER_ID })).resolves.toBeUndefined();
+    expect(sendMessage.mock.calls.map((call) => (call[1] as CredentialBrokerRequest).type)).toEqual(
+      ['getCredentialStatus', 'logout'],
+    );
+    expect(JSON.stringify(sendMessage.mock.calls)).not.toMatch(/accessToken|refreshToken/);
   });
 
   it('maps remote failure envelopes to structured broker errors', async () => {

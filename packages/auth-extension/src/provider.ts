@@ -3,6 +3,7 @@ import {
   credentialProviderId,
   type AccessToken,
   type CredentialBroker,
+  type CredentialStatus,
   type CredentialProviderId,
   type GetAccessTokenInput,
 } from '@loom/credential-broker-api';
@@ -21,6 +22,9 @@ export interface CreateExtensionAuthProviderOptions {
 
 export interface ExtensionAuthProvider extends AuthProvider {
   readonly configuration: ExtensionAuthConfiguration;
+  getStatus(): Promise<CredentialStatus>;
+  isAuthenticated(): Promise<boolean>;
+  logout(): Promise<void>;
 }
 
 function optionsRecord(value: unknown): Readonly<Record<string, unknown>> {
@@ -42,7 +46,9 @@ function validateOptions(value: unknown): {
   if (
     broker === null ||
     (typeof broker !== 'object' && typeof broker !== 'function') ||
-    typeof (broker as Partial<CredentialBroker>).getAccessToken !== 'function'
+    typeof (broker as Partial<CredentialBroker>).getAccessToken !== 'function' ||
+    typeof (broker as Partial<CredentialBroker>).getStatus !== 'function' ||
+    typeof (broker as Partial<CredentialBroker>).logout !== 'function'
   ) {
     throw new ExtensionAuthError(
       'INVALID_CONFIGURATION',
@@ -106,6 +112,21 @@ function mapBrokerFailure(cause: unknown, providerId: CredentialProviderId): Ext
   );
 }
 
+function assertStatus(value: unknown, providerId: CredentialProviderId): CredentialStatus {
+  if (
+    value === null ||
+    typeof value !== 'object' ||
+    typeof (value as Partial<CredentialStatus>).authenticated !== 'boolean'
+  ) {
+    throw new ExtensionAuthError(
+      'INVALID_BROKER_RESPONSE',
+      `Credential broker returned an invalid status for provider "${providerId}".`,
+      { details: { providerId } },
+    );
+  }
+  return Object.freeze({ authenticated: (value as CredentialStatus).authenticated });
+}
+
 export function createExtensionAuthProvider(
   options: CreateExtensionAuthProviderOptions,
 ): ExtensionAuthProvider {
@@ -119,6 +140,28 @@ export function createExtensionAuthProvider(
     async getAccessToken(): Promise<string> {
       try {
         return assertAccessToken(await broker.getAccessToken(request), configuration.providerId);
+      } catch (cause) {
+        throw mapBrokerFailure(cause, configuration.providerId);
+      }
+    },
+    async getStatus(): Promise<CredentialStatus> {
+      try {
+        return assertStatus(await broker.getStatus(request), configuration.providerId);
+      } catch (cause) {
+        throw mapBrokerFailure(cause, configuration.providerId);
+      }
+    },
+    async isAuthenticated(): Promise<boolean> {
+      try {
+        return assertStatus(await broker.getStatus(request), configuration.providerId)
+          .authenticated;
+      } catch (cause) {
+        throw mapBrokerFailure(cause, configuration.providerId);
+      }
+    },
+    async logout(): Promise<void> {
+      try {
+        await broker.logout(request);
       } catch (cause) {
         throw mapBrokerFailure(cause, configuration.providerId);
       }

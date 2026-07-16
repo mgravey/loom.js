@@ -60,11 +60,11 @@ The experiment can model and test the complete browser mechanism without claimin
 provider interoperability. A Codex or OpenAI change can replace or remove the leaf package without
 affecting Loom Core, existing auth adapters, or other credential providers.
 
-Live feasibility remains unresolved until redirect registration is documented and tested with
-permission. `chrome.storage.local` is a weaker at-rest boundary than an OS credential store and does
-not protect against compromised extension code or a compromised browser profile. Every future live
-attempt requires a source re-audit, a security review, a stable extension identity, and explicit
-manual activation.
+Direct-browser live feasibility remains unresolved until redirect registration is documented and
+tested with permission. `chrome.storage.local` is a weaker at-rest boundary than an OS credential
+store and does not protect against compromised extension code or a compromised browser profile.
+Every future live attempt requires a source re-audit, a security review, a stable extension
+identity, and explicit manual activation.
 
 The device-code experiment can be tested manually before Chrome redirect registration only to record
 whether the audited beta endpoints accept the client at that moment. Such a result is not a support

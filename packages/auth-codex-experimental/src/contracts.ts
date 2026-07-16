@@ -76,7 +76,11 @@ export interface DeviceAuthorizationInteraction {
 
 export interface CodexExperimentalAuth {
   readonly provider: CredentialProvider;
-  readonly authorization: InteractiveCredentialAuthorization;
+  readonly authorization: CodexInteractiveCredentialAuthorization;
+}
+
+export interface CodexInteractiveCredentialAuthorization extends InteractiveCredentialAuthorization {
+  authorize(): Promise<TokenEndpointResult>;
 }
 
 export interface CodexOAuthDependencies {

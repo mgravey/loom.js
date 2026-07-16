@@ -1,5 +1,7 @@
 import {
   createGetAccessTokenRequest,
+  createGetCredentialStatusRequest,
+  createLogoutRequest,
   credentialProviderId,
   parseCredentialBrokerResponse,
 } from '@loom/credential-broker-api';
@@ -64,6 +66,47 @@ describe('credential broker message handler', () => {
       ok: false,
       error: { code: 'UNAUTHORIZED_REQUEST', retryable: false },
     });
+  });
+
+  it('reports authentication state and logs out without returning credentials', async () => {
+    const handler = createHandler();
+    const sender = { origin: 'https://app.example' };
+    const statusRequest = createGetCredentialStatusRequest('status-1', { providerId });
+    const logoutRequest = createLogoutRequest('logout-1', { providerId });
+
+    await expect(handler.handle(statusRequest, sender)).resolves.toMatchObject({
+      type: 'getCredentialStatusResult',
+      requestId: 'status-1',
+      ok: true,
+      authenticated: true,
+    });
+    const logoutResponse = await handler.handle(logoutRequest, sender);
+    expect(logoutResponse).toMatchObject({ type: 'logoutResult', requestId: 'logout-1', ok: true });
+    expect(JSON.stringify(logoutResponse)).not.toMatch(/accessToken|refreshToken/);
+    await expect(handler.handle(statusRequest, sender)).resolves.toMatchObject({
+      ok: true,
+      authenticated: false,
+    });
+    await expect(handler.handle(request, sender)).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'AUTHENTICATION_REQUIRED' },
+    });
+  });
+
+  it('applies exact-origin authorization to status and logout', async () => {
+    const handler = createHandler();
+    for (const message of [
+      createGetCredentialStatusRequest('status-denied', { providerId }),
+      createLogoutRequest('logout-denied', { providerId }),
+    ]) {
+      await expect(
+        handler.handle(message, { origin: 'https://attacker.example' }),
+      ).resolves.toMatchObject({
+        requestId: message.requestId,
+        ok: false,
+        error: { code: 'UNAUTHORIZED_REQUEST' },
+      });
+    }
   });
 
   it('maps malformed requests, unsupported versions, and provider failures', async () => {

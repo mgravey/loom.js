@@ -11,6 +11,8 @@ playwright/.auth/
 output/
 packages/*/*.crx
 packages/*/*.pem
+packages/*/*.key
+packages/*/*.zip
 *.tsbuildinfo
 *.log
 .DS_Store

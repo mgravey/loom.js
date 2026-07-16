@@ -8,6 +8,15 @@ import {
 } from '../src/composition.js';
 import { runManualDeviceAuthorization } from '../src/manual-authorization.js';
 
+function idToken(accountId = 'account-test'): string {
+  const payload = Buffer.from(
+    JSON.stringify({
+      'https://api.openai.com/auth': { chatgpt_account_id: accountId },
+    }),
+  ).toString('base64url');
+  return `header.${payload}.signature`;
+}
+
 class MemoryStorage implements ChromeStorageArea {
   readonly entries = new Map<string, unknown>();
   accessLevelCalls = 0;
@@ -40,6 +49,7 @@ function host(storage: MemoryStorage): CodexChromeExtensionApi {
     },
     runtime: {
       onMessageExternal: { addListener: vi.fn() },
+      onConnectExternal: { addListener: vi.fn() },
     },
     storage: { local: storage, session: new MemoryStorage() },
   };
@@ -63,6 +73,9 @@ describe('Codex experimental extension composition', () => {
     await expect(
       composition.tokenService.getAccessToken(composition.providerId),
     ).rejects.toMatchObject({ code: 'MISSING_CREDENTIAL' });
+    await expect(composition.tokenService.getStatus(composition.providerId)).resolves.toEqual({
+      authenticated: false,
+    });
     expect(fetchRequest).not.toHaveBeenCalled();
 
     await composition.settings.setDeviceAuthorizationEnabled(true);
@@ -133,6 +146,7 @@ describe('Codex experimental extension composition', () => {
       {
         status: 200,
         body: JSON.stringify({
+          id_token: idToken(),
           access_token: 'temporary-access-token',
           refresh_token: 'private-refresh-token',
           expires_in: 3600,
@@ -162,6 +176,7 @@ describe('Codex experimental extension composition', () => {
       runManualDeviceAuthorization({
         settings: composition.settings,
         credentialStore: composition.credentialStore,
+        accountRoutingStore: composition.accountRoutingStore,
         host: {
           fetchRequest,
           cryptoApi,
@@ -176,6 +191,7 @@ describe('Codex experimental extension composition', () => {
     await runManualDeviceAuthorization({
       settings: composition.settings,
       credentialStore: composition.credentialStore,
+      accountRoutingStore: composition.accountRoutingStore,
       host: {
         fetchRequest,
         cryptoApi,
@@ -193,6 +209,7 @@ describe('Codex experimental extension composition', () => {
     await expect(
       composition.credentialStore.get(CODEX_EXPERIMENTAL_CONFIGURATION.providerId),
     ).resolves.toEqual({ value: 'private-refresh-token' });
+    await expect(composition.accountRoutingStore.get()).resolves.toBe('account-test');
     expect([...storage.entries.values()]).not.toContain('temporary-access-token');
   });
 
@@ -251,6 +268,7 @@ describe('Codex experimental extension composition', () => {
       runManualDeviceAuthorization({
         settings: composition.settings,
         credentialStore: composition.credentialStore,
+        accountRoutingStore: composition.accountRoutingStore,
         host: {
           fetchRequest,
           cryptoApi,

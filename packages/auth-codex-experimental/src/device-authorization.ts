@@ -1,6 +1,5 @@
-import type { InteractiveCredentialAuthorization } from '@loom/credential-provider-api';
-
 import type {
+  CodexInteractiveCredentialAuthorization,
   CodexDeviceAuthorizationDependencies,
   CodexOAuthConfiguration,
   OAuthClock,
@@ -51,7 +50,7 @@ async function postJson(
 export function createCodexExperimentalDeviceAuthorization(
   configuration: CodexOAuthConfiguration,
   dependencies: CodexDeviceAuthorizationDependencies,
-): InteractiveCredentialAuthorization {
+): CodexInteractiveCredentialAuthorization {
   const normalized = normalizeConfiguration(configuration);
   const clock = dependencies.clock ?? systemClock;
 

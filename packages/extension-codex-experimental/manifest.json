@@ -6,7 +6,7 @@
   "description": "Disabled-by-default experimental Codex credential provider for the Loom broker.",
   "incognito": "not_allowed",
   "permissions": ["identity", "storage"],
-  "host_permissions": ["https://auth.openai.com/*"],
+  "host_permissions": ["https://auth.openai.com/*", "https://chatgpt.com/backend-api/codex/*"],
   "background": {
     "service_worker": "service-worker.js",
     "type": "module"

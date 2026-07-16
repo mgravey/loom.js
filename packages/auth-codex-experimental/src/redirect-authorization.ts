@@ -1,6 +1,5 @@
-import type { InteractiveCredentialAuthorization } from '@loom/credential-provider-api';
-
 import type {
+  CodexInteractiveCredentialAuthorization,
   CodexOAuthConfiguration,
   CodexRedirectAuthorizationDependencies,
   OAuthClock,
@@ -42,7 +41,7 @@ function callbackQuery(callback: string, redirectUri: string): string {
 export function createCodexExperimentalRedirectAuthorization(
   configuration: CodexOAuthConfiguration,
   dependencies: CodexRedirectAuthorizationDependencies,
-): InteractiveCredentialAuthorization {
+): CodexInteractiveCredentialAuthorization {
   const normalized = normalizeConfiguration(configuration);
   const clock = dependencies.clock ?? systemClock;
   const transactionTtlMs = dependencies.transactionTtlMs ?? 10 * 60 * 1_000;

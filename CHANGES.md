@@ -2,7 +2,38 @@
 
 This project follows a lightweight milestone changelog while packages remain private.
 
-## Unreleased — Phase 5
+## Unreleased — Phase 5.5
+
+### Added
+
+- `@loom/model-codex-experimental`, an isolated adapter from the Phase 2 agent protocol to an
+  audited Responses-style request and streamed SSE response, with an injected credential-free
+  transport as its preferred mode.
+- A separate versioned `chrome.runtime.Port` transport. The experimental extension owns the ChatGPT
+  backend request, credential and account-routing headers, cancellation, and sanitized failure
+  boundary.
+- `@loom/example-codex-experimental`, a localhost browser application composing the browser
+  platform, File System Access tools, extension auth, experimental model, and Codex-style agent.
+- Credential status and logout operations in the provider-neutral broker protocol and extension
+  options/application UI.
+- A real Chromium vertical-slice test using the unpacked extension, local auth and model fixtures,
+  an OPFS directory handle, a workspace tool turn, response streaming, and logout.
+- Current Codex inference protocol re-audit, a Phase 5.5 guide, and ADR-010.
+
+### Security
+
+- The initial ID token is parsed only in the extension. Only the non-bearer ChatGPT account routing
+  ID is persisted in trusted storage; raw ID tokens are neither retained nor exposed to the page.
+- The application never receives access or refresh credentials. The provider request runs in the
+  extension because the audited ChatGPT backend does not allow the localhost page's CORS preflight.
+- Automated tests remain offline from OpenAI and use synthetic credentials and local responses.
+
+### Still deferred
+
+- Supported OpenAI client registration and third-party inference access, extension-store
+  publication, provider stability guarantees, production model selection, and execution runtimes.
+
+## Phase 5
 
 ### Changed
 

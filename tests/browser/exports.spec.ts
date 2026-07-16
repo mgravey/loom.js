@@ -21,6 +21,7 @@ test('built packages publish declaration entry points', async () => {
     'extension',
     'auth-codex-experimental',
     'extension-codex-experimental',
+    'model-codex-experimental',
     'examples',
   ]) {
     const declaration = await readFile(
@@ -45,6 +46,9 @@ test('built packages publish declaration entry points', async () => {
   );
   expect(declarations.get('extension-codex-experimental')).toContain(
     'createCodexExperimentalExtension',
+  );
+  expect(declarations.get('model-codex-experimental')).toContain(
+    'createCodexExperimentalModelPlugin',
   );
   expect(declarations.get('examples')).toContain('createAllCapabilitiesPlugin');
   expect(declarations.get('examples')).toContain('createInMemoryTextWorkspace');
@@ -89,7 +93,7 @@ test('built experimental extension is isolated, installable, and self-contained'
   expect(manifest).toMatchObject({
     manifest_version: 3,
     permissions: ['identity', 'storage'],
-    host_permissions: ['https://auth.openai.com/*'],
+    host_permissions: ['https://auth.openai.com/*', 'https://chatgpt.com/backend-api/codex/*'],
     incognito: 'not_allowed',
     background: { service_worker: 'service-worker.js' },
     options_ui: { page: 'options.html' },
@@ -119,6 +123,7 @@ test('built ESM packages expose their public runtime APIs', async ({ page }) => 
       credentialBrokerExtension,
       experimentalCodexAuth,
       experimentalCodexExtension,
+      experimentalCodexModel,
       examples,
     ] = await Promise.all([
       import(`${origin}/packages/types/dist/index.js`),
@@ -135,6 +140,7 @@ test('built ESM packages expose their public runtime APIs', async ({ page }) => 
       import(`${origin}/packages/extension/dist/index.js`),
       import(`${origin}/packages/auth-codex-experimental/dist/index.js`),
       import(`${origin}/packages/extension-codex-experimental/dist/index.js`),
+      import(`${origin}/packages/model-codex-experimental/dist/index.js`),
       import(`${origin}/packages/examples/dist/index.js`),
     ]);
     return {
@@ -152,6 +158,7 @@ test('built ESM packages expose their public runtime APIs', async ({ page }) => 
       credentialBrokerExtension: Object.keys(credentialBrokerExtension),
       experimentalCodexAuth: Object.keys(experimentalCodexAuth),
       experimentalCodexExtension: Object.keys(experimentalCodexExtension),
+      experimentalCodexModel: Object.keys(experimentalCodexModel),
       examples: Object.keys(examples),
     };
   }, browserOrigin);
@@ -251,6 +258,14 @@ test('built ESM packages expose their public runtime APIs', async ({ page }) => 
       'createChromeIdentityRedirect',
       'createCodexExperimentalExtension',
       'runManualDeviceAuthorization',
+    ]),
+  );
+  expect(exportsByPackage.experimentalCodexModel).toEqual(
+    expect.arrayContaining([
+      'CODEX_EXPERIMENTAL_MODEL_KEY',
+      'createCodexExperimentalModel',
+      'createCodexExperimentalModelPlugin',
+      'createCodexResponsesRequestBody',
     ]),
   );
   expect(exportsByPackage.examples).toEqual(

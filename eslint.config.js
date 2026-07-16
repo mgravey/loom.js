@@ -334,6 +334,28 @@ export default tseslint.config(
     },
   },
   {
+    files: ['packages/model-codex-experimental/src/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: [
+                '@loom/*',
+                '!@loom/agent-codex',
+                '!@loom/plugin-api',
+                '!@loom/types',
+                'node:*',
+              ],
+              message: 'The experimental model adapter may depend only on public agent contracts.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ['packages/extension-codex-experimental/src/**/*.ts'],
     rules: {
       'no-restricted-imports': [

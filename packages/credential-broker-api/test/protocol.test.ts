@@ -7,11 +7,16 @@ import {
   createGetAccessTokenFailure,
   createGetAccessTokenRequest,
   createGetAccessTokenSuccess,
+  createGetCredentialStatusRequest,
+  createGetCredentialStatusSuccess,
+  createLogoutRequest,
+  createLogoutSuccess,
   credentialProviderId,
   isCredentialBrokerResponse,
   isCredentialProviderId,
   isGetAccessTokenRequest,
   parseCredentialBrokerResponse,
+  parseCredentialBrokerRequest,
   parseGetAccessTokenRequest,
   type CredentialBroker,
 } from '../src/index.js';
@@ -183,6 +188,8 @@ describe('getAccessToken result protocol', () => {
   it('supports transport-independent implementations', async () => {
     const broker: CredentialBroker = {
       getAccessToken: async ({ providerId }) => ({ accessToken: `token:${providerId}` }),
+      getStatus: async () => ({ authenticated: true }),
+      logout: async () => undefined,
     };
     await expect(
       broker.getAccessToken({ providerId: credentialProviderId('example/mock') }),
@@ -201,5 +208,65 @@ describe('getAccessToken result protocol', () => {
       retryable: true,
       cause,
     });
+  });
+});
+
+describe('status and logout protocol operations', () => {
+  it('round-trips status without credential material', () => {
+    const input = { providerId: credentialProviderId('example/mock'), sessionId: 'session-1' };
+    const request = createGetCredentialStatusRequest('status-1', input);
+    const response = createGetCredentialStatusSuccess('status-1', { authenticated: true });
+
+    expect(parseCredentialBrokerRequest(request)).toEqual({
+      protocol: CREDENTIAL_BROKER_PROTOCOL,
+      version: CREDENTIAL_BROKER_PROTOCOL_VERSION,
+      type: 'getCredentialStatus',
+      requestId: 'status-1',
+      providerId: 'example/mock',
+      sessionId: 'session-1',
+    });
+    expect(parseCredentialBrokerResponse(response)).toEqual({
+      protocol: CREDENTIAL_BROKER_PROTOCOL,
+      version: CREDENTIAL_BROKER_PROTOCOL_VERSION,
+      type: 'getCredentialStatusResult',
+      requestId: 'status-1',
+      ok: true,
+      authenticated: true,
+    });
+    expect(JSON.stringify(response)).not.toMatch(/accessToken|refreshToken/);
+  });
+
+  it('round-trips a credential-free logout acknowledgement', () => {
+    const input = { providerId: credentialProviderId('example/mock') };
+    const request = createLogoutRequest('logout-1', input);
+    const response = createLogoutSuccess('logout-1');
+
+    expect(parseCredentialBrokerRequest(request)).toMatchObject({
+      type: 'logout',
+      requestId: 'logout-1',
+      providerId: 'example/mock',
+    });
+    expect(parseCredentialBrokerResponse(response)).toEqual({
+      protocol: CREDENTIAL_BROKER_PROTOCOL,
+      version: CREDENTIAL_BROKER_PROTOCOL_VERSION,
+      type: 'logoutResult',
+      requestId: 'logout-1',
+      ok: true,
+    });
+  });
+
+  it('rejects secret-shaped fields in status and logout responses', () => {
+    expect(() =>
+      parseCredentialBrokerResponse({
+        ...createGetCredentialStatusSuccess('status-1', { authenticated: true }),
+        accessToken: 'must-not-cross-boundary',
+      }),
+    ).toThrow(CredentialBrokerError);
+    expect(() =>
+      parseCredentialBrokerResponse({
+        ...createLogoutSuccess('logout-1'),
+        refreshToken: 'must-not-cross-boundary',
+      }),
+    ).toThrow(CredentialBrokerError);
   });
 });

@@ -80,6 +80,9 @@ Tests must cover:
 - audited Codex refresh request shape, device-code issuance/polling/timeout, server-supplied PKCE
   validation, direct S256/state/callback handling, response sanitization, and explicit experiment
   gates.
+- experimental model request encoding, chunk-safe SSE parsing, streamed text/tool/completion events,
+  cancellation, account routing, model Port origin checks, and credential-free page transport;
+- credential status/logout behavior and deletion of extension-owned refresh/routing state.
 
 Provider-neutral fakes should cover every capability category while importing only `@loom/types` and
 `@loom/plugin-api`. Compile-time fixtures verify public types and package-boundary failures.
@@ -88,7 +91,7 @@ Provider-neutral fakes should cover every capability category while importing on
 
 Across `@loom/types`, `@loom/plugin-api`, `@loom/core`, `@loom/tool-workspace`, and
 `@loom/agent-codex`, plus the Phase 3 browser plugins, Phase 4 credential packages, and Phase 5
-experimental authentication packages, V8 coverage must meet:
+experimental authentication and model packages, V8 coverage must meet:
 
 | Metric     | Minimum |
 | ---------- | ------: |
@@ -133,6 +136,12 @@ separate experimental extension and verifies that authorization is off by defaul
 only from trusted extension UI, and never returns refresh credentials through the external broker.
 Any live compatibility check is manual, opt-in, unsupported, and must follow the re-audit gate in
 the [experiment guide](./codex-auth-experiment.md).
+
+Phase 5.5 loads the experimental extension and the built localhost application together. Its local
+fixtures complete device authorization, refresh a synthetic access token, stream two synthetic
+provider turns over the external Port, execute `workspace/list-files` against an injected OPFS
+directory, and verify logout. The page DOM is checked for fixture-secret leakage. See the
+[vertical-slice guide](./phase-5-5-vertical-slice.md).
 
 ## CI
 

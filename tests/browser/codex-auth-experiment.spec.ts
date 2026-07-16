@@ -9,6 +9,15 @@ const extensionPath = join(workspaceRoot, 'packages', 'extension-codex-experimen
 const providerId = 'openai/codex-experimental';
 const refreshKey = `loom.refresh-credential.${encodeURIComponent(providerId)}`;
 
+function idToken(accountId = 'account-browser-test'): string {
+  const payload = Buffer.from(
+    JSON.stringify({
+      'https://api.openai.com/auth': { chatgpt_account_id: accountId },
+    }),
+  ).toString('base64url');
+  return `header.${payload}.signature`;
+}
+
 interface ExternalResponse {
   readonly ok?: boolean;
   readonly accessToken?: string;
@@ -86,7 +95,7 @@ test.describe('experimental Codex credential extension', () => {
       await expect(
         options.getByRole('button', { name: 'Start device authorization' }),
       ).toBeDisabled();
-      await expect(options.getByRole('status')).toHaveText('The experiment is disabled.');
+      await expect(options.locator('#status')).toHaveText('The experiment is disabled.');
 
       const application = await context.newPage();
       await openBuiltEsmHarness(application);
@@ -145,7 +154,7 @@ test.describe('experimental Codex credential extension', () => {
             status: 200,
             headers,
             body: JSON.stringify({
-              id_token: 'local-id-token',
+              id_token: idToken(),
               access_token: 'local-access-token',
               refresh_token: 'local-refresh-token',
               expires_in: 60,
@@ -160,7 +169,7 @@ test.describe('experimental Codex credential extension', () => {
       await options.goto(`chrome-extension://${extensionId}/options.html`);
       await options.getByLabel(/enable the experimental device-code flow/i).check();
       await options.getByRole('button', { name: 'Start device authorization' }).click();
-      await expect(options.getByRole('status')).toHaveText(/Authorization complete/);
+      await expect(options.locator('#status')).toHaveText(/Authorization complete/);
 
       const stored = await options.evaluate(async (key) => {
         const storage = (

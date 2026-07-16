@@ -16,8 +16,10 @@
     { "path": "./packages/extension" },
     { "path": "./packages/auth-codex-experimental" },
     { "path": "./packages/extension-codex-experimental" },
+    { "path": "./packages/model-codex-experimental" },
     { "path": "./packages/examples" },
     { "path": "./packages/example-browser" },
-    { "path": "./packages/example-extension" }
+    { "path": "./packages/example-extension" },
+    { "path": "./packages/example-codex-experimental" }
   ]
 }

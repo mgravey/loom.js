@@ -19,6 +19,10 @@ import {
 } from '@loom/extension';
 
 import { createFetchOAuthTransport } from './adapters.js';
+import {
+  createCodexAccountRoutingStore,
+  type CodexAccountRoutingStore,
+} from './account-routing.js';
 import type { CodexChromeExtensionApi, OAuthFetch } from './chrome-contracts.js';
 import { createCodexExperimentSettings, type CodexExperimentSettings } from './settings.js';
 
@@ -48,6 +52,7 @@ export interface CreateCodexExperimentalExtensionOptions {
 export interface CodexExperimentalExtensionComposition {
   readonly providerId: string;
   readonly credentialStore: RefreshCredentialStore;
+  readonly accountRoutingStore: CodexAccountRoutingStore;
   readonly settings: CodexExperimentSettings;
   readonly tokenService: ExtensionTokenService;
   readonly externalMessageListener: ChromeExternalMessageListener;
@@ -59,6 +64,7 @@ export function createCodexExperimentalExtension(
   const storage = options.chromeApi.storage.local;
   const settings = createCodexExperimentSettings(storage);
   const credentialStore = createChromeRefreshCredentialStore(storage);
+  const accountRoutingStore = createCodexAccountRoutingStore(storage);
   const ready = initializeTrustedCredentialStorage(storage, () => Promise.resolve());
   const initializedStore: RefreshCredentialStore = Object.freeze({
     async get(providerId: string) {
@@ -91,6 +97,7 @@ export function createCodexExperimentalExtension(
         const credential = enabled ? await initializedStore.get(providerId) : undefined;
         if (!enabled || credential === undefined) {
           tokenService.clearCachedAccessToken(providerId);
+          await accountRoutingStore.delete();
           throw new ExtensionBrokerError(
             'MISSING_CREDENTIAL',
             enabled
@@ -99,11 +106,32 @@ export function createCodexExperimentalExtension(
           );
         }
       }
-      return tokenService.getAccessToken(providerId);
+      try {
+        return await tokenService.getAccessToken(providerId);
+      } catch (error) {
+        if (
+          providerId === provider.id &&
+          error instanceof ExtensionBrokerError &&
+          error.code === 'MISSING_CREDENTIAL'
+        ) {
+          await accountRoutingStore.delete();
+        }
+        throw error;
+      }
     },
     acceptAuthorizationResult: (providerId: string, result: AccessTokenResult) =>
       tokenService.acceptAuthorizationResult(providerId, result),
     clearCachedAccessToken: (providerId: string) => tokenService.clearCachedAccessToken(providerId),
+    async getStatus(providerId: string) {
+      if (providerId === provider.id && !(await settings.isDeviceAuthorizationEnabled())) {
+        return Object.freeze({ authenticated: false });
+      }
+      return tokenService.getStatus(providerId);
+    },
+    async logout(providerId: string) {
+      await tokenService.logout(providerId);
+      if (providerId === provider.id) await accountRoutingStore.delete();
+    },
   });
   const handler = createCredentialBrokerMessageHandler({
     authorizer: createOriginAuthorizer(options.allowedOrigins ?? DEVELOPMENT_ALLOWED_ORIGINS),
@@ -113,6 +141,7 @@ export function createCodexExperimentalExtension(
   return Object.freeze({
     providerId: provider.id,
     credentialStore: initializedStore,
+    accountRoutingStore,
     settings,
     tokenService: gatedTokenService,
     externalMessageListener: createChromeExternalMessageListener(handler),

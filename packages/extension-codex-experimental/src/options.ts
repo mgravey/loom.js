@@ -4,6 +4,7 @@ import {
 } from '@loom/extension';
 
 import type { BrowserCrypto, CodexChromeExtensionApi, OAuthFetch } from './chrome-contracts.js';
+import { createCodexAccountRoutingStore } from './account-routing.js';
 import { CODEX_EXPERIMENTAL_CONFIGURATION } from './composition.js';
 import { runManualDeviceAuthorization } from './manual-authorization.js';
 import { createCodexExperimentSettings } from './settings.js';
@@ -24,12 +25,15 @@ const host = globalThis as unknown as {
 const storage = host.chrome.storage.local;
 const settings = createCodexExperimentSettings(storage);
 const credentialStore = createChromeRefreshCredentialStore(storage);
+const accountRoutingStore = createCodexAccountRoutingStore(storage);
 const ready = initializeTrustedCredentialStorage(storage, () => Promise.resolve());
 const enabled = requiredElement<HTMLInputElement>(host.document, 'enabled');
 const authorize = requiredElement<HTMLButtonElement>(host.document, 'authorize');
+const logout = requiredElement<HTMLButtonElement>(host.document, 'logout');
 const challenge = requiredElement<HTMLElement>(host.document, 'challenge');
 const verificationUrl = requiredElement<HTMLAnchorElement>(host.document, 'verification-url');
 const userCode = requiredElement<HTMLElement>(host.document, 'user-code');
+const credentialStatus = requiredElement<HTMLElement>(host.document, 'credential-status');
 const status = requiredElement<HTMLElement>(host.document, 'status');
 
 function clearChallenge(): void {
@@ -39,10 +43,20 @@ function clearChallenge(): void {
   userCode.textContent = '';
 }
 
+async function refreshCredentialStatus(): Promise<void> {
+  const credential = await credentialStore.get(CODEX_EXPERIMENTAL_CONFIGURATION.providerId);
+  const authenticated = credential !== undefined;
+  logout.disabled = !authenticated;
+  credentialStatus.textContent = authenticated
+    ? 'Authenticated. A refresh credential is stored inside the extension.'
+    : 'Not authenticated. No refresh credential is stored.';
+}
+
 async function initialize(): Promise<void> {
   await ready;
   enabled.checked = await settings.isDeviceAuthorizationEnabled();
   authorize.disabled = !enabled.checked;
+  await refreshCredentialStatus();
   status.textContent = enabled.checked
     ? 'The experiment is enabled. Authorization still requires the button below.'
     : 'The experiment is disabled.';
@@ -55,6 +69,8 @@ enabled.addEventListener('change', () => {
     clearChallenge();
     if (!enabled.checked) {
       await credentialStore.delete(CODEX_EXPERIMENTAL_CONFIGURATION.providerId);
+      await accountRoutingStore.delete();
+      await refreshCredentialStatus();
       status.textContent = 'The experiment is disabled and its refresh credential was removed.';
     } else {
       status.textContent = 'Enabled. Select Start device authorization to continue.';
@@ -66,6 +82,20 @@ enabled.addEventListener('change', () => {
   });
 });
 
+logout.addEventListener('click', () => {
+  logout.disabled = true;
+  void credentialStore
+    .delete(CODEX_EXPERIMENTAL_CONFIGURATION.providerId)
+    .then(() => accountRoutingStore.delete())
+    .then(refreshCredentialStatus)
+    .then(() => {
+      status.textContent = 'Stored authorization was removed.';
+    })
+    .catch(() => {
+      status.textContent = 'Stored authorization could not be removed.';
+    });
+});
+
 authorize.addEventListener('click', () => {
   authorize.disabled = true;
   clearChallenge();
@@ -73,6 +103,7 @@ authorize.addEventListener('click', () => {
   void runManualDeviceAuthorization({
     settings,
     credentialStore,
+    accountRoutingStore,
     host: {
       fetchRequest: host.fetch.bind(globalThis),
       cryptoApi: host.crypto,
@@ -82,13 +113,16 @@ authorize.addEventListener('click', () => {
         verificationUrl.href = prompt.verificationUrl;
         verificationUrl.textContent = prompt.verificationUrl;
         userCode.textContent = prompt.userCode;
-        status.textContent = 'Complete sign-in in the opened provider page.';
+        status.textContent = 'Open the linked provider page and complete sign-in.';
         return Promise.resolve();
       },
     },
   })
     .then(() => {
       clearChallenge();
+      return refreshCredentialStatus();
+    })
+    .then(() => {
       status.textContent =
         'Authorization complete. The temporary access token was discarded; Loom will refresh on demand.';
     })

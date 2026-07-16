@@ -53,12 +53,14 @@
           I understand and want to enable the experimental device-code flow.
         </label>
         <button id="authorize" type="button" disabled>Start device authorization</button>
+        <button id="logout" type="button" disabled>Remove stored authorization</button>
       </div>
       <section id="challenge" hidden aria-live="polite">
         <h2>Complete sign-in</h2>
         <p>Open <a id="verification-url" target="_blank" rel="noreferrer"></a> and enter:</p>
         <p id="user-code"></p>
       </section>
+      <p id="credential-status" role="status" aria-live="polite">Not authenticated.</p>
       <p id="status" role="status" aria-live="polite">The experiment is disabled.</p>
     </main>
     <script type="module" src="options.js"></script>

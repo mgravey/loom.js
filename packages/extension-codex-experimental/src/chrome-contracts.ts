@@ -1,4 +1,4 @@
-import type { ChromeExtensionApi, ChromeStorageArea } from '@loom/extension';
+import type { ChromeExtensionApi, ChromeMessageSender, ChromeStorageArea } from '@loom/extension';
 
 export interface ChromeIdentityApi {
   getRedirectURL(path?: string): string;
@@ -8,11 +8,31 @@ export interface ChromeIdentityApi {
   }): Promise<string | undefined>;
 }
 
+export interface CodexExternalPort {
+  readonly name: string;
+  readonly sender?: ChromeMessageSender;
+  readonly onMessage: {
+    addListener(listener: (message: unknown) => void): void;
+  };
+  readonly onDisconnect: {
+    addListener(listener: () => void): void;
+  };
+  postMessage(message: unknown): void;
+  disconnect(): void;
+}
+
+export interface CodexExternalConnectEvent {
+  addListener(listener: (port: CodexExternalPort) => void): void;
+}
+
 export interface CodexChromeExtensionApi extends ChromeExtensionApi {
   readonly identity: ChromeIdentityApi;
   readonly storage: {
     readonly local: ChromeStorageArea;
     readonly session: ChromeStorageArea;
+  };
+  readonly runtime: ChromeExtensionApi['runtime'] & {
+    readonly onConnectExternal: CodexExternalConnectEvent;
   };
 }
 
@@ -32,6 +52,24 @@ export type OAuthFetch = (
     readonly redirect: 'error';
   },
 ) => Promise<OAuthFetchResponse>;
+
+export interface CodexModelFetchResponse {
+  readonly status: number;
+  readonly body: ReadableStream<Uint8Array> | null;
+}
+
+export type CodexModelFetch = (
+  input: string,
+  init: {
+    readonly method: 'POST';
+    readonly headers: Readonly<Record<string, string>>;
+    readonly body: string;
+    readonly cache: 'no-store';
+    readonly credentials: 'omit';
+    readonly redirect: 'error';
+    readonly signal: AbortSignal;
+  },
+) => Promise<CodexModelFetchResponse>;
 
 export interface BrowserCrypto {
   getRandomValues<T extends Uint8Array>(array: T): T;

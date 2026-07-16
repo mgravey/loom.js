@@ -54,6 +54,13 @@ Both are removable leaves: they do not change Core, plugin contracts, or the ext
 protocol. See [the experiment guide](./codex-auth-experiment.md) and
 [ADR-009](./adr/009-codex-auth-experiment-boundary.md).
 
+Phase 5.5 adds `@loom/model-codex-experimental` as another removable leaf above the Phase 2 model
+protocol. A localhost application injects a credential-free transport; a separate versioned Port in
+the experimental extension performs the provider fetch and returns streamed response bytes. The
+model path does not change Core, the generic credential broker, or the agent contract. See
+[the vertical-slice guide](./phase-5-5-vertical-slice.md) and
+[ADR-010](./adr/010-extension-model-transport.md).
+
 Core and portable plugin TypeScript projects compile with `lib: ["ES2022"]`. DOM and Node typings
 are not available to that production source. Browser-leaf packages add only the browser libraries
 they implement. This preserves portable ESM for a browser window, dedicated Web Worker, or a
@@ -161,10 +168,16 @@ adapts this response to `AuthProvider.getAccessToken()` without exposing extensi
 Service-worker restart may discard the access-token cache, but the next authorized request can
 refresh from extension-owned state.
 
+Phase 5.5 adds safe status and logout operations to that versioned protocol. The experimental model
+request uses a different Port protocol because account routing, Responses request bodies, and SSE
+are provider-specific. The extension resolves its own token and account routing ID for each model
+request. The page receives neither credential.
+
 ## Deferred architecture
 
 Phase 3 supplies browser storage and filesystem access, and Phase 4 supplies mock-backed extension
 credential brokering, without changing runtime lifecycle or registry semantics. Phase 5 supplies an
-unsupported, disabled-by-default Codex authentication experiment as a separate leaf. Supported
+unsupported, disabled-by-default Codex authentication experiment as a separate leaf. Phase 5.5
+proves an experimental vertical slice without promoting its provider contracts into Core. Supported
 OAuth/Codex authentication, production model providers, additional agents, and execution
 environments remain future independent plugins.

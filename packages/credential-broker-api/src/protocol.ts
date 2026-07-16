@@ -9,6 +9,10 @@ export const CREDENTIAL_BROKER_PROTOCOL = 'loom/credential-broker' as const;
 export const CREDENTIAL_BROKER_PROTOCOL_VERSION = 1 as const;
 export const GET_ACCESS_TOKEN_MESSAGE_TYPE = 'getAccessToken' as const;
 export const GET_ACCESS_TOKEN_RESULT_MESSAGE_TYPE = 'getAccessTokenResult' as const;
+export const GET_CREDENTIAL_STATUS_MESSAGE_TYPE = 'getCredentialStatus' as const;
+export const GET_CREDENTIAL_STATUS_RESULT_MESSAGE_TYPE = 'getCredentialStatusResult' as const;
+export const LOGOUT_MESSAGE_TYPE = 'logout' as const;
+export const LOGOUT_RESULT_MESSAGE_TYPE = 'logoutResult' as const;
 
 export type CredentialBrokerErrorCode =
   | 'INVALID_REQUEST'
@@ -20,10 +24,14 @@ export type CredentialBrokerErrorCode =
   | 'BROKER_UNAVAILABLE'
   | 'INTERNAL_ERROR';
 
-export interface GetAccessTokenInput {
+export interface CredentialProviderInput {
   readonly providerId: CredentialProviderId;
   readonly sessionId?: string;
 }
+
+export type GetAccessTokenInput = CredentialProviderInput;
+export type GetCredentialStatusInput = CredentialProviderInput;
+export type LogoutInput = CredentialProviderInput;
 
 /** A short-lived bearer credential. `expiresAt` is Unix epoch time in milliseconds. */
 export interface AccessToken {
@@ -31,27 +39,43 @@ export interface AccessToken {
   readonly expiresAt?: number;
 }
 
+/** Credential state that is safe to expose outside the extension. */
+export interface CredentialStatus {
+  readonly authenticated: boolean;
+}
+
 /** Transport-independent client contract implemented by credential broker adapters. */
 export interface CredentialBroker {
   getAccessToken(input: GetAccessTokenInput): Promise<AccessToken>;
+  getStatus(input: GetCredentialStatusInput): Promise<CredentialStatus>;
+  logout(input: LogoutInput): Promise<void>;
 }
 
-export interface GetAccessTokenRequest extends GetAccessTokenInput {
+interface RequestEnvelope extends CredentialProviderInput {
   readonly protocol: typeof CREDENTIAL_BROKER_PROTOCOL;
   readonly version: typeof CREDENTIAL_BROKER_PROTOCOL_VERSION;
+  readonly requestId: string;
+}
+
+export interface GetAccessTokenRequest extends RequestEnvelope {
   readonly type: typeof GET_ACCESS_TOKEN_MESSAGE_TYPE;
-  readonly requestId: string;
 }
 
-interface GetAccessTokenResultEnvelope {
+export interface GetCredentialStatusRequest extends RequestEnvelope {
+  readonly type: typeof GET_CREDENTIAL_STATUS_MESSAGE_TYPE;
+}
+
+export interface LogoutRequest extends RequestEnvelope {
+  readonly type: typeof LOGOUT_MESSAGE_TYPE;
+}
+
+export type CredentialBrokerRequest =
+  GetAccessTokenRequest | GetCredentialStatusRequest | LogoutRequest;
+
+interface ResultEnvelope {
   readonly protocol: typeof CREDENTIAL_BROKER_PROTOCOL;
   readonly version: typeof CREDENTIAL_BROKER_PROTOCOL_VERSION;
-  readonly type: typeof GET_ACCESS_TOKEN_RESULT_MESSAGE_TYPE;
   readonly requestId: string;
-}
-
-export interface GetAccessTokenSuccess extends GetAccessTokenResultEnvelope, AccessToken {
-  readonly ok: true;
 }
 
 export interface CredentialBrokerFailureDetails {
@@ -60,12 +84,45 @@ export interface CredentialBrokerFailureDetails {
   readonly retryable: boolean;
 }
 
-export interface GetAccessTokenFailure extends GetAccessTokenResultEnvelope {
+interface FailureEnvelope extends ResultEnvelope {
   readonly ok: false;
   readonly error: CredentialBrokerFailureDetails;
 }
 
-export type CredentialBrokerResponse = GetAccessTokenSuccess | GetAccessTokenFailure;
+export interface GetAccessTokenSuccess extends ResultEnvelope, AccessToken {
+  readonly type: typeof GET_ACCESS_TOKEN_RESULT_MESSAGE_TYPE;
+  readonly ok: true;
+}
+
+export interface GetAccessTokenFailure extends FailureEnvelope {
+  readonly type: typeof GET_ACCESS_TOKEN_RESULT_MESSAGE_TYPE;
+}
+
+export interface GetCredentialStatusSuccess extends ResultEnvelope, CredentialStatus {
+  readonly type: typeof GET_CREDENTIAL_STATUS_RESULT_MESSAGE_TYPE;
+  readonly ok: true;
+}
+
+export interface GetCredentialStatusFailure extends FailureEnvelope {
+  readonly type: typeof GET_CREDENTIAL_STATUS_RESULT_MESSAGE_TYPE;
+}
+
+export interface LogoutSuccess extends ResultEnvelope {
+  readonly type: typeof LOGOUT_RESULT_MESSAGE_TYPE;
+  readonly ok: true;
+}
+
+export interface LogoutFailure extends FailureEnvelope {
+  readonly type: typeof LOGOUT_RESULT_MESSAGE_TYPE;
+}
+
+export type CredentialBrokerResponse =
+  | GetAccessTokenSuccess
+  | GetAccessTokenFailure
+  | GetCredentialStatusSuccess
+  | GetCredentialStatusFailure
+  | LogoutSuccess
+  | LogoutFailure;
 
 export class CredentialBrokerError extends Error {
   public readonly code: CredentialBrokerErrorCode;
@@ -94,6 +151,16 @@ const ERROR_CODES: ReadonlySet<string> = new Set<CredentialBrokerErrorCode>([
   'BROKER_UNAVAILABLE',
   'INTERNAL_ERROR',
 ]);
+const REQUEST_TYPES = [
+  GET_ACCESS_TOKEN_MESSAGE_TYPE,
+  GET_CREDENTIAL_STATUS_MESSAGE_TYPE,
+  LOGOUT_MESSAGE_TYPE,
+] as const;
+const RESULT_TYPES = [
+  GET_ACCESS_TOKEN_RESULT_MESSAGE_TYPE,
+  GET_CREDENTIAL_STATUS_RESULT_MESSAGE_TYPE,
+  LOGOUT_RESULT_MESSAGE_TYPE,
+] as const;
 
 export function isCredentialProviderId(value: unknown): value is CredentialProviderId {
   return typeof value === 'string' && NAMESPACED_ID.test(value);
@@ -112,14 +179,37 @@ export function createGetAccessTokenRequest(
   requestId: string,
   input: GetAccessTokenInput,
 ): GetAccessTokenRequest {
-  return normalizeRequest({
+  return normalizeRequest(
+    requestValue(GET_ACCESS_TOKEN_MESSAGE_TYPE, requestId, input),
+  ) as GetAccessTokenRequest;
+}
+
+export function createGetCredentialStatusRequest(
+  requestId: string,
+  input: GetCredentialStatusInput,
+): GetCredentialStatusRequest {
+  return normalizeRequest(
+    requestValue(GET_CREDENTIAL_STATUS_MESSAGE_TYPE, requestId, input),
+  ) as GetCredentialStatusRequest;
+}
+
+export function createLogoutRequest(requestId: string, input: LogoutInput): LogoutRequest {
+  return normalizeRequest(requestValue(LOGOUT_MESSAGE_TYPE, requestId, input)) as LogoutRequest;
+}
+
+function requestValue(
+  type: CredentialBrokerRequest['type'],
+  requestId: string,
+  input: CredentialProviderInput,
+): unknown {
+  return {
     protocol: CREDENTIAL_BROKER_PROTOCOL,
     version: CREDENTIAL_BROKER_PROTOCOL_VERSION,
-    type: GET_ACCESS_TOKEN_MESSAGE_TYPE,
+    type,
     requestId,
     providerId: input.providerId,
     ...(input.sessionId === undefined ? {} : { sessionId: input.sessionId }),
-  });
+  };
 }
 
 export function createGetAccessTokenSuccess(
@@ -127,14 +217,29 @@ export function createGetAccessTokenSuccess(
   token: AccessToken,
 ): GetAccessTokenSuccess {
   return normalizeSuccess({
-    protocol: CREDENTIAL_BROKER_PROTOCOL,
-    version: CREDENTIAL_BROKER_PROTOCOL_VERSION,
-    type: GET_ACCESS_TOKEN_RESULT_MESSAGE_TYPE,
-    requestId,
+    ...resultValue(GET_ACCESS_TOKEN_RESULT_MESSAGE_TYPE, requestId),
     ok: true,
     accessToken: token.accessToken,
     ...(token.expiresAt === undefined ? {} : { expiresAt: token.expiresAt }),
-  });
+  }) as GetAccessTokenSuccess;
+}
+
+export function createGetCredentialStatusSuccess(
+  requestId: string,
+  status: CredentialStatus,
+): GetCredentialStatusSuccess {
+  return normalizeSuccess({
+    ...resultValue(GET_CREDENTIAL_STATUS_RESULT_MESSAGE_TYPE, requestId),
+    ok: true,
+    authenticated: status.authenticated,
+  }) as GetCredentialStatusSuccess;
+}
+
+export function createLogoutSuccess(requestId: string): LogoutSuccess {
+  return normalizeSuccess({
+    ...resultValue(LOGOUT_RESULT_MESSAGE_TYPE, requestId),
+    ok: true,
+  }) as LogoutSuccess;
 }
 
 export function createGetAccessTokenFailure(
@@ -142,13 +247,44 @@ export function createGetAccessTokenFailure(
   error: CredentialBrokerFailureDetails,
 ): GetAccessTokenFailure {
   return normalizeFailure({
-    protocol: CREDENTIAL_BROKER_PROTOCOL,
-    version: CREDENTIAL_BROKER_PROTOCOL_VERSION,
-    type: GET_ACCESS_TOKEN_RESULT_MESSAGE_TYPE,
-    requestId,
+    ...resultValue(GET_ACCESS_TOKEN_RESULT_MESSAGE_TYPE, requestId),
     ok: false,
     error,
-  });
+  }) as GetAccessTokenFailure;
+}
+
+export function createGetCredentialStatusFailure(
+  requestId: string,
+  error: CredentialBrokerFailureDetails,
+): GetCredentialStatusFailure {
+  return normalizeFailure({
+    ...resultValue(GET_CREDENTIAL_STATUS_RESULT_MESSAGE_TYPE, requestId),
+    ok: false,
+    error,
+  }) as GetCredentialStatusFailure;
+}
+
+export function createLogoutFailure(
+  requestId: string,
+  error: CredentialBrokerFailureDetails,
+): LogoutFailure {
+  return normalizeFailure({
+    ...resultValue(LOGOUT_RESULT_MESSAGE_TYPE, requestId),
+    ok: false,
+    error,
+  }) as LogoutFailure;
+}
+
+function resultValue(
+  type: CredentialBrokerResponse['type'],
+  requestId: string,
+): ResultEnvelope & { readonly type: CredentialBrokerResponse['type'] } {
+  return {
+    protocol: CREDENTIAL_BROKER_PROTOCOL,
+    version: CREDENTIAL_BROKER_PROTOCOL_VERSION,
+    type,
+    requestId,
+  };
 }
 
 export function isGetAccessTokenRequest(value: unknown): value is GetAccessTokenRequest {
@@ -169,10 +305,16 @@ export function isCredentialBrokerResponse(value: unknown): value is CredentialB
   }
 }
 
-/** Validates untrusted transport data and returns an immutable normalized request. */
-export function parseGetAccessTokenRequest(value: unknown): GetAccessTokenRequest {
+export function parseCredentialBrokerRequest(value: unknown): CredentialBrokerRequest {
   assertProtocolVersion(value);
   return normalizeRequest(value);
+}
+
+export function parseGetAccessTokenRequest(value: unknown): GetAccessTokenRequest {
+  const request = parseCredentialBrokerRequest(value);
+  if (request.type !== GET_ACCESS_TOKEN_MESSAGE_TYPE)
+    throw invalidRequest('Expected a getAccessToken request.');
+  return request;
 }
 
 /** Validates untrusted transport data and returns an immutable normalized response. */
@@ -184,7 +326,7 @@ export function parseCredentialBrokerResponse(value: unknown): CredentialBrokerR
   return value.ok === true ? normalizeSuccess(value) : normalizeFailure(value);
 }
 
-function normalizeRequest(value: unknown): GetAccessTokenRequest {
+function normalizeRequest(value: unknown): CredentialBrokerRequest {
   if (
     !isRecordWithExactKeys(
       value,
@@ -192,71 +334,105 @@ function normalizeRequest(value: unknown): GetAccessTokenRequest {
       ['sessionId'],
     )
   ) {
-    throw invalidRequest('Malformed getAccessToken request.');
+    throw invalidRequest('Malformed credential broker request.');
   }
   if (
     value.protocol !== CREDENTIAL_BROKER_PROTOCOL ||
     value.version !== CREDENTIAL_BROKER_PROTOCOL_VERSION ||
-    value.type !== GET_ACCESS_TOKEN_MESSAGE_TYPE ||
+    !REQUEST_TYPES.includes(value.type as never) ||
     !isRequestId(value.requestId) ||
     !isCredentialProviderId(value.providerId) ||
     (value.sessionId !== undefined && !isSessionId(value.sessionId))
-  ) {
-    throw invalidRequest('Malformed getAccessToken request.');
-  }
+  )
+    throw invalidRequest('Malformed credential broker request.');
   return Object.freeze({
     protocol: CREDENTIAL_BROKER_PROTOCOL,
     version: CREDENTIAL_BROKER_PROTOCOL_VERSION,
-    type: GET_ACCESS_TOKEN_MESSAGE_TYPE,
+    type: value.type,
     requestId: value.requestId,
     providerId: value.providerId,
     ...(value.sessionId === undefined ? {} : { sessionId: value.sessionId }),
-  });
+  }) as CredentialBrokerRequest;
 }
 
-function normalizeSuccess(value: unknown): GetAccessTokenSuccess {
-  if (
-    !isRecordWithExactKeys(
-      value,
-      ['protocol', 'version', 'type', 'requestId', 'ok', 'accessToken'],
-      ['expiresAt'],
-    )
-  ) {
+function normalizeSuccess(value: unknown): CredentialBrokerResponse {
+  if (!isRecord(value) || !RESULT_TYPES.includes(value.type as never)) {
     throw invalidRequest('Malformed successful credential broker response.');
   }
+  const baseValid =
+    value.protocol === CREDENTIAL_BROKER_PROTOCOL &&
+    value.version === CREDENTIAL_BROKER_PROTOCOL_VERSION &&
+    value.ok === true &&
+    isRequestId(value.requestId);
+  if (value.type === GET_ACCESS_TOKEN_RESULT_MESSAGE_TYPE) {
+    if (
+      !isRecordWithExactKeys(
+        value,
+        ['protocol', 'version', 'type', 'requestId', 'ok', 'accessToken'],
+        ['expiresAt'],
+      ) ||
+      !baseValid ||
+      !isNonEmptyString(value.accessToken) ||
+      (value.expiresAt !== undefined && !isEpochMilliseconds(value.expiresAt))
+    ) {
+      throw invalidRequest('Malformed successful credential broker response.');
+    }
+    return Object.freeze({
+      protocol: CREDENTIAL_BROKER_PROTOCOL,
+      version: CREDENTIAL_BROKER_PROTOCOL_VERSION,
+      type: value.type,
+      requestId: value.requestId,
+      ok: true,
+      accessToken: value.accessToken,
+      ...(value.expiresAt === undefined ? {} : { expiresAt: value.expiresAt }),
+    }) as CredentialBrokerResponse;
+  }
+  if (value.type === GET_CREDENTIAL_STATUS_RESULT_MESSAGE_TYPE) {
+    if (
+      !isRecordWithExactKeys(value, [
+        'protocol',
+        'version',
+        'type',
+        'requestId',
+        'ok',
+        'authenticated',
+      ]) ||
+      !baseValid ||
+      typeof value.authenticated !== 'boolean'
+    ) {
+      throw invalidRequest('Malformed successful credential broker response.');
+    }
+    return Object.freeze({
+      protocol: CREDENTIAL_BROKER_PROTOCOL,
+      version: CREDENTIAL_BROKER_PROTOCOL_VERSION,
+      type: value.type,
+      requestId: value.requestId,
+      ok: true,
+      authenticated: value.authenticated,
+    }) as CredentialBrokerResponse;
+  }
   if (
-    value.protocol !== CREDENTIAL_BROKER_PROTOCOL ||
-    value.version !== CREDENTIAL_BROKER_PROTOCOL_VERSION ||
-    value.type !== GET_ACCESS_TOKEN_RESULT_MESSAGE_TYPE ||
-    value.ok !== true ||
-    !isRequestId(value.requestId) ||
-    !isNonEmptyString(value.accessToken) ||
-    (value.expiresAt !== undefined && !isEpochMilliseconds(value.expiresAt))
+    !isRecordWithExactKeys(value, ['protocol', 'version', 'type', 'requestId', 'ok']) ||
+    !baseValid
   ) {
     throw invalidRequest('Malformed successful credential broker response.');
   }
   return Object.freeze({
     protocol: CREDENTIAL_BROKER_PROTOCOL,
     version: CREDENTIAL_BROKER_PROTOCOL_VERSION,
-    type: GET_ACCESS_TOKEN_RESULT_MESSAGE_TYPE,
+    type: LOGOUT_RESULT_MESSAGE_TYPE,
     requestId: value.requestId,
     ok: true,
-    accessToken: value.accessToken,
-    ...(value.expiresAt === undefined ? {} : { expiresAt: value.expiresAt }),
-  });
+  }) as CredentialBrokerResponse;
 }
 
-function normalizeFailure(value: unknown): GetAccessTokenFailure {
+function normalizeFailure(value: unknown): CredentialBrokerResponse {
   if (
     !isRecordWithExactKeys(value, ['protocol', 'version', 'type', 'requestId', 'ok', 'error']) ||
-    !isRecordWithExactKeys(value.error, ['code', 'message', 'retryable'])
-  ) {
-    throw invalidRequest('Malformed failed credential broker response.');
-  }
-  if (
+    !RESULT_TYPES.includes(value.type as never) ||
+    !isRecordWithExactKeys(value.error, ['code', 'message', 'retryable']) ||
     value.protocol !== CREDENTIAL_BROKER_PROTOCOL ||
     value.version !== CREDENTIAL_BROKER_PROTOCOL_VERSION ||
-    value.type !== GET_ACCESS_TOKEN_RESULT_MESSAGE_TYPE ||
     value.ok !== false ||
     !isRequestId(value.requestId) ||
     !isCredentialBrokerErrorCode(value.error.code) ||
@@ -268,7 +444,7 @@ function normalizeFailure(value: unknown): GetAccessTokenFailure {
   return Object.freeze({
     protocol: CREDENTIAL_BROKER_PROTOCOL,
     version: CREDENTIAL_BROKER_PROTOCOL_VERSION,
-    type: GET_ACCESS_TOKEN_RESULT_MESSAGE_TYPE,
+    type: value.type,
     requestId: value.requestId,
     ok: false,
     error: Object.freeze({
@@ -276,7 +452,7 @@ function normalizeFailure(value: unknown): GetAccessTokenFailure {
       message: value.error.message,
       retryable: value.error.retryable,
     }),
-  });
+  }) as CredentialBrokerResponse;
 }
 
 function assertProtocolVersion(value: unknown): void {
@@ -297,9 +473,7 @@ function isCredentialBrokerErrorCode(value: unknown): value is CredentialBrokerE
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
-    return false;
-  }
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
   const prototype = Object.getPrototypeOf(value) as unknown;
   return prototype === Object.prototype || prototype === null;
 }
@@ -309,9 +483,7 @@ function isRecordWithExactKeys(
   required: readonly string[],
   optional: readonly string[] = [],
 ): value is Record<string, unknown> {
-  if (!isRecord(value)) {
-    return false;
-  }
+  if (!isRecord(value)) return false;
   const keys = Object.keys(value);
   return (
     required.every((key) => Object.hasOwn(value, key)) &&
@@ -322,23 +494,18 @@ function isRecordWithExactKeys(
 function isRequestId(value: unknown): value is string {
   return isBoundedNonEmptyString(value, 256);
 }
-
 function isSessionId(value: unknown): value is string {
   return isBoundedNonEmptyString(value, 256);
 }
-
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
 }
-
 function isBoundedNonEmptyString(value: unknown, maximumLength: number): value is string {
   return isNonEmptyString(value) && value.length <= maximumLength;
 }
-
 function isEpochMilliseconds(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 }
-
 function invalidRequest(message: string): CredentialBrokerError {
   return new CredentialBrokerError('INVALID_REQUEST', message);
 }

@@ -1,8 +1,14 @@
 import {
   CredentialBrokerError,
+  GET_CREDENTIAL_STATUS_MESSAGE_TYPE,
+  LOGOUT_MESSAGE_TYPE,
+  createGetCredentialStatusFailure,
+  createGetCredentialStatusSuccess,
   createGetAccessTokenFailure,
   createGetAccessTokenSuccess,
-  parseGetAccessTokenRequest,
+  createLogoutFailure,
+  createLogoutSuccess,
+  parseCredentialBrokerRequest,
   type CredentialBrokerErrorCode,
   type CredentialBrokerResponse,
 } from '@loom/credential-broker-api';
@@ -23,6 +29,8 @@ export interface CredentialBrokerMessageHandler {
 
 const FALLBACK_REQUEST_ID = 'invalid-request';
 
+type ResponseOperation = 'token' | 'status' | 'logout';
+
 function requestIdFrom(message: unknown): string {
   if (message === null || typeof message !== 'object' || Array.isArray(message)) {
     return FALLBACK_REQUEST_ID;
@@ -31,6 +39,15 @@ function requestIdFrom(message: unknown): string {
   return typeof requestId === 'string' && requestId.trim().length > 0 && requestId.length <= 256
     ? requestId
     : FALLBACK_REQUEST_ID;
+}
+
+function operationFrom(message: unknown): ResponseOperation {
+  if (message !== null && typeof message === 'object' && !Array.isArray(message)) {
+    const type = (message as Record<string, unknown>).type;
+    if (type === GET_CREDENTIAL_STATUS_MESSAGE_TYPE) return 'status';
+    if (type === LOGOUT_MESSAGE_TYPE) return 'logout';
+  }
+  return 'token';
 }
 
 const errorCodeMap: Readonly<Record<BrokerErrorCode, CredentialBrokerErrorCode>> = Object.freeze({
@@ -69,19 +86,38 @@ function failureDetails(error: unknown): {
   });
 }
 
+function createFailure(
+  operation: ResponseOperation,
+  requestId: string,
+  details: ReturnType<typeof failureDetails>,
+): CredentialBrokerResponse {
+  if (operation === 'status') return createGetCredentialStatusFailure(requestId, details);
+  if (operation === 'logout') return createLogoutFailure(requestId, details);
+  return createGetAccessTokenFailure(requestId, details);
+}
+
 export function createCredentialBrokerMessageHandler(
   options: CreateCredentialBrokerMessageHandlerOptions,
 ): CredentialBrokerMessageHandler {
   return Object.freeze({
     async handle(message: unknown, sender: ChromeMessageSender) {
       const fallbackRequestId = requestIdFrom(message);
+      const operation = operationFrom(message);
       try {
         options.authorizer.assertAuthorized(sender);
-        const request = parseGetAccessTokenRequest(message);
+        const request = parseCredentialBrokerRequest(message);
+        if (request.type === GET_CREDENTIAL_STATUS_MESSAGE_TYPE) {
+          const status = await options.tokenService.getStatus(request.providerId);
+          return createGetCredentialStatusSuccess(request.requestId, status);
+        }
+        if (request.type === LOGOUT_MESSAGE_TYPE) {
+          await options.tokenService.logout(request.providerId);
+          return createLogoutSuccess(request.requestId);
+        }
         const token = await options.tokenService.getAccessToken(request.providerId);
         return createGetAccessTokenSuccess(request.requestId, token);
       } catch (error) {
-        return createGetAccessTokenFailure(fallbackRequestId, failureDetails(error));
+        return createFailure(operation, fallbackRequestId, failureDetails(error));
       }
     },
   });
@@ -93,7 +129,7 @@ export function createChromeExternalMessageListener(
   return (message, sender, sendResponse) => {
     void handler.handle(message, sender).then(sendResponse, () => {
       sendResponse(
-        createGetAccessTokenFailure(FALLBACK_REQUEST_ID, {
+        createFailure('token', FALLBACK_REQUEST_ID, {
           code: 'INTERNAL_ERROR',
           message: 'The credential broker could not complete the request.',
           retryable: false,

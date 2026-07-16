@@ -22,6 +22,7 @@ const packageEntries = Object.freeze({
   '@loom/extension': '/packages/extension/dist/index.js',
   '@loom/auth-codex-experimental': '/packages/auth-codex-experimental/dist/index.js',
   '@loom/extension-codex-experimental': '/packages/extension-codex-experimental/dist/index.js',
+  '@loom/model-codex-experimental': '/packages/model-codex-experimental/dist/index.js',
   '@loom/examples': '/packages/examples/dist/index.js',
 });
 
@@ -67,6 +68,22 @@ function resolveExtensionExampleAsset(pathname: string): string | undefined {
         : undefined;
   if (relative === undefined) return undefined;
   const exampleRoot = join(workspaceRoot, 'packages', 'example-extension');
+  const absolute = join(exampleRoot, relative);
+  return absolute === join(exampleRoot, 'index.html') || absolute.startsWith(exampleRoot + sep)
+    ? absolute
+    : undefined;
+}
+
+function resolveExperimentalCodexExampleAsset(pathname: string): string | undefined {
+  const relative =
+    pathname === '/example-codex-experimental/' ||
+    pathname === '/example-codex-experimental/index.html'
+      ? 'index.html'
+      : pathname.startsWith('/example-codex-experimental/')
+        ? normalize(decodeURIComponent(pathname).slice('/example-codex-experimental/'.length))
+        : undefined;
+  if (relative === undefined) return undefined;
+  const exampleRoot = join(workspaceRoot, 'packages', 'example-codex-experimental');
   const absolute = join(exampleRoot, relative);
   return absolute === join(exampleRoot, 'index.html') || absolute.startsWith(exampleRoot + sep)
     ? absolute
@@ -354,7 +371,9 @@ async function routeBuiltAssets(route: Route): Promise<void> {
   const asset = resolveWorkspaceAsset(url.pathname);
   const exampleAsset = resolveBrowserExampleAsset(url.pathname);
   const extensionExampleAsset = resolveExtensionExampleAsset(url.pathname);
-  const resolvedAsset = asset ?? exampleAsset ?? extensionExampleAsset;
+  const experimentalCodexExampleAsset = resolveExperimentalCodexExampleAsset(url.pathname);
+  const resolvedAsset =
+    asset ?? exampleAsset ?? extensionExampleAsset ?? experimentalCodexExampleAsset;
   if (resolvedAsset === undefined) {
     await route.fulfill({ status: 404, body: 'Not found' });
     return;

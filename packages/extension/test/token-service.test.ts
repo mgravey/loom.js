@@ -86,10 +86,74 @@ describe('extension token service', () => {
     await expect(service.getAccessToken('test/unknown')).rejects.toMatchObject({
       code: 'UNKNOWN_PROVIDER',
     });
+    await expect(service.getStatus('test/unknown')).rejects.toMatchObject({
+      code: 'UNKNOWN_PROVIDER',
+    });
+    await expect(service.logout('test/unknown')).rejects.toMatchObject({
+      code: 'UNKNOWN_PROVIDER',
+    });
     await expect(service.getAccessToken('test/provider')).rejects.toMatchObject({
       code: 'MISSING_CREDENTIAL',
     });
     expect(provider.refresh).not.toHaveBeenCalled();
+  });
+
+  it('reports credential presence and logout clears cached and stored credentials', async () => {
+    const credentialStore = createMemoryRefreshCredentialStore({
+      'test/provider': 'private-refresh-value',
+    });
+    const provider: ExtensionCredentialProvider = {
+      id: 'test/provider',
+      refresh: vi.fn(async () => ({ accessToken: 'temporary', expiresAt: 10_000 })),
+    };
+    const service = createExtensionTokenService({
+      providers: [provider],
+      credentialStore,
+      clock: { now: () => 1_000 },
+    });
+
+    await expect(service.getStatus('test/provider')).resolves.toEqual({ authenticated: true });
+    await service.getAccessToken('test/provider');
+    await service.logout('test/provider');
+    await expect(service.getStatus('test/provider')).resolves.toEqual({ authenticated: false });
+    expect(await credentialStore.get('test/provider')).toBeUndefined();
+    await expect(service.getAccessToken('test/provider')).rejects.toMatchObject({
+      code: 'MISSING_CREDENTIAL',
+    });
+  });
+
+  it('waits for in-flight authorization before deleting its rotated credential', async () => {
+    const persisted = deferred<undefined>();
+    const entries = new Map<string, StoredRefreshCredential>();
+    const store: RefreshCredentialStore = {
+      get: vi.fn(async (id) => entries.get(id)),
+      set: vi.fn(async (id, credential) => {
+        await persisted.promise;
+        entries.set(id, credential);
+      }),
+      delete: vi.fn(async (id) => {
+        entries.delete(id);
+      }),
+    };
+    const service = createExtensionTokenService({
+      providers: [{ id: 'test/provider', refresh: vi.fn() }],
+      credentialStore: store,
+      clock: { now: () => 1_000 },
+    });
+    const authorization = service.acceptAuthorizationResult('test/provider', {
+      accessToken: 'temporary',
+      expiresAt: 2_000,
+      nextRefreshCredential: { value: 'rotated' },
+    });
+    const logout = service.logout('test/provider');
+
+    await Promise.resolve();
+    expect(store.delete).not.toHaveBeenCalled();
+    persisted.resolve(undefined);
+    await authorization;
+    await logout;
+    expect(store.delete).toHaveBeenCalledWith('test/provider');
+    expect(entries.has('test/provider')).toBe(false);
   });
 
   it('sanitizes provider failures and rejects invalid results', async () => {

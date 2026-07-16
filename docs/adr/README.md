@@ -14,3 +14,4 @@ ADRs document decisions that constrain Loom's stable core. Status values are `Pr
 | [007](./007-explicit-browser-hosts.md)         | Explicit browser host injection          | Accepted |
 | [008](./008-extension-credential-boundary.md)  | Extension-owned credential boundary      | Accepted |
 | [009](./009-codex-auth-experiment-boundary.md) | Isolated, gated Codex auth experiment    | Accepted |
+| [010](./010-extension-model-transport.md)      | Extension-owned experimental model path  | Accepted |

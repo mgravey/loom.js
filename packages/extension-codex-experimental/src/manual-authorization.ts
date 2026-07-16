@@ -9,6 +9,7 @@ import {
   createFetchOAuthTransport,
   createWebCryptoSha256Digest,
 } from './adapters.js';
+import { chatGptAccountIdFromIdToken, type CodexAccountRoutingStore } from './account-routing.js';
 import type { BrowserCrypto, OAuthFetch } from './chrome-contracts.js';
 import { CODEX_EXPERIMENTAL_CONFIGURATION } from './composition.js';
 import type { CodexExperimentSettings } from './settings.js';
@@ -23,6 +24,7 @@ export interface ManualDeviceAuthorizationHost {
 export interface RunManualDeviceAuthorizationOptions {
   readonly settings: CodexExperimentSettings;
   readonly credentialStore: RefreshCredentialStore;
+  readonly accountRoutingStore: CodexAccountRoutingStore;
   readonly host: ManualDeviceAuthorizationHost;
 }
 
@@ -50,5 +52,15 @@ export async function runManualDeviceAuthorization(
   if (!(await options.settings.isDeviceAuthorizationEnabled())) {
     throw new Error('The experimental device-code flow was disabled before completion.');
   }
-  await options.credentialStore.set(authorization.providerId, result.nextRefreshCredential);
+  if (result.idToken === undefined) {
+    throw new Error('Authorization completed without account routing metadata.');
+  }
+  const accountId = chatGptAccountIdFromIdToken(result.idToken);
+  await options.accountRoutingStore.set(accountId);
+  try {
+    await options.credentialStore.set(authorization.providerId, result.nextRefreshCredential);
+  } catch (error) {
+    await options.accountRoutingStore.delete();
+    throw error;
+  }
 }

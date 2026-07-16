@@ -5,14 +5,15 @@ environments. Its core behaves like a small operating system: plugins declare wh
 runtime validates and orders them, and consumers resolve capabilities through stable public
 contracts.
 
-Phases 1 through 5 are consolidated on `master`. Phase 1 established the architecture-only runtime.
-Phase 2 added a minimal Codex-style orchestration plugin and text-workspace tools. Phase 3 added
-replaceable browser plugins for explicit host capabilities, IndexedDB storage, and File System
+Phases 1 through 5.5 are consolidated on `master`. Phase 1 established the architecture-only
+runtime. Phase 2 added a minimal Codex-style orchestration plugin and text-workspace tools. Phase 3
+added replaceable browser plugins for explicit host capabilities, IndexedDB storage, and File System
 Access workspaces. Phase 4 added a provider-neutral Manifest V3 credential broker and a Loom
 authentication adapter. Phase 5 adds an isolated, disabled-by-default Codex authentication
-experiment based on an audited open-source CLI revision. Core and the agent packages remain free of
-provider, browser, and extension APIs. Loom still contains no production model provider, supported
-OAuth product, or execution runtime.
+experiment based on an audited open-source CLI revision. Phase 5.5 adds a runnable experimental
+vertical slice: a provider-specific model leaf, extension-owned provider transport, status/logout,
+and a localhost browser application. Core and the agent packages remain free of provider, browser,
+and extension APIs. Loom still contains no supported OpenAI OAuth product or execution runtime.
 
 ## Packages
 
@@ -32,9 +33,11 @@ OAuth product, or execution runtime.
 | `@loom/extension`                    | Manifest V3 credential broker with extension-owned refresh state                    |
 | `@loom/auth-codex-experimental`      | Audited Codex PKCE/device-auth experiment with injected host services               |
 | `@loom/extension-codex-experimental` | Separate disabled-by-default Manifest V3 experiment composition                     |
+| `@loom/model-codex-experimental`     | Experimental Responses/SSE adapter with an injected credential-free transport       |
 | `@loom/examples`                     | Provider-neutral examples that use public package exports only                      |
 | `@loom/example-browser`              | Browser application demonstrating explicit Phase 3 composition                      |
 | `@loom/example-extension`            | Browser application demonstrating the Phase 4 extension boundary                    |
+| `@loom/example-codex-experimental`   | Phase 5.5 localhost app joining agent, tools, model transport, and extension        |
 
 Dependency direction is intentional:
 
@@ -51,6 +54,8 @@ Dependency direction is intentional:
 @loom/credential-provider-api <- @loom/extension
              ^
              +-- @loom/auth-codex-experimental <- @loom/extension-codex-experimental
+
+@loom/agent-codex <- @loom/model-codex-experimental <- @loom/example-codex-experimental
 ```
 
 Plugins may use the public runtime composition API when acting as an application entry point, but
@@ -72,8 +77,8 @@ pnpm check
 
 Use Node.js 22 to match CI. On Linux machines that do not already have Chromium system libraries,
 install the browser with `pnpm exec playwright install --with-deps chromium`. No OpenAI credentials,
-refresh tokens, extension installation, or live OAuth access is needed: Phase 5 acceptance tests use
-deterministic fakes and local fixtures.
+refresh tokens, extension installation, or live OAuth access is needed for acceptance: Phase 5.5
+tests use deterministic synthetic credentials and local network fixtures.
 
 Useful commands:
 
@@ -108,6 +113,8 @@ troubleshooting.
 - External token requests require an exact authorized origin and a validated versioned envelope.
 - Experimental provider failures remain sanitized and refresh rotation is persisted before an access
   token is exposed.
+- The experimental browser page receives authentication state and streamed response bytes, never
+  extension-owned access, refresh, or ID credentials.
 
 Start with [the documentation index](./DOCUMENTATION.md), then read
 [the architecture guide](./docs/architecture.md) and
@@ -119,16 +126,23 @@ extension workflow. The [Codex authentication experiment](./docs/codex-auth-expe
 the Phase 5 source audit, threat model, test policy, and current feasibility blockers. Architectural
 decisions are recorded in [`docs/adr`](./docs/adr/README.md).
 
+The [Phase 5.5 vertical-slice guide](./docs/phase-5-5-vertical-slice.md) explains how to build, load
+the unpacked extension, serve the browser application, authenticate from trusted extension UI, run
+an agent, log out, and perform the fully local acceptance test.
+
 The interactive [browser example](./packages/example-browser/README.md) composes the scripted agent
 with an application-selected directory using the Phase 3 plugins. The
 [credential-broker example](./packages/example-extension/README.md) requests a short-lived mock
 token from the separately loaded extension and resolves it through Loom's public `AuthProvider`
 capability.
 
+The [experimental Codex example](./packages/example-codex-experimental/README.md) is the only
+browser-to-extension real-provider composition and remains explicitly unsupported.
+
 ## Project status
 
 Loom.js packages remain private at `0.1.0`. The generic Phase 4 extension remains development-only
-and ships a mock provider. The separate Phase 5 provider is unsupported, disabled by default, and
+and ships a mock provider. The separate Phase 5.5 provider is unsupported, disabled by default, and
 must not be described as production ChatGPT/Codex authentication: the direct Chrome redirect is not
 registered for the audited CLI client, while device authorization can be server-disabled and is not
 a documented third-party contract. Publishing, license selection, Changesets, public namespace

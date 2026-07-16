@@ -12,8 +12,9 @@ Core. Four packages divide the responsibilities:
 - `@loom/example-extension` is an application page proving public-API composition with the bundled
   mock provider.
 
-The broker protocol is generic. It is not shaped around OpenAI, Codex, or another provider and does
-not encode an OAuth authorization flow.
+The broker protocol is generic. It supports temporary token retrieval, credential-safe
+authentication status, and logout. It is not shaped around OpenAI, Codex, or another provider and
+does not encode an OAuth authorization or inference flow.
 
 ## Trust boundary
 
@@ -47,6 +48,11 @@ Authorization happens before protocol parsing or provider lookup.
 After authorization, the extension strictly validates the complete versioned envelope. Unknown keys,
 malformed IDs, unsupported versions, invalid request IDs, and mismatched response IDs do not cross
 the adapter silently. Responses use stable provider-neutral error codes.
+
+Status exposes only `{ authenticated: boolean }`. Logout clears the provider's cached access token
+and stored refresh credential and returns only an acknowledgement. Both operations use the same
+origin authorization, strict envelope validation, response correlation, and sanitized failures as
+token retrieval.
 
 ## Credential ownership
 
@@ -123,9 +129,9 @@ Run the complete suite with:
 pnpm check
 ```
 
-## Deferred to Phase 5
+## Provider-specific leaves
 
-Phase 5 may investigate Codex CLI OAuth and PKCE as an experimental credential-provider
-implementation. That work must plug into the broker contracts without changing Loom Core or the
-Phase 4 transport. If the experiment is unsupported or later replaced, the runtime and existing auth
-capability remain unchanged.
+Phase 5 investigated Codex CLI OAuth and PKCE as an experimental credential-provider implementation.
+Phase 5.5 adds a separate provider-specific model Port because inference does not belong in the
+credential broker. Both remain removable leaves without changing Loom Core. See the
+[Phase 5.5 guide](./phase-5-5-vertical-slice.md).

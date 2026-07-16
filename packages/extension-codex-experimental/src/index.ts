@@ -3,3 +3,5 @@ export type * from './chrome-contracts.js';
 export * from './composition.js';
 export * from './manual-authorization.js';
 export * from './settings.js';
+export * from './account-routing.js';
+export * from './model-transport.js';

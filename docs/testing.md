@@ -2,12 +2,21 @@
 
 ## Local workflow
 
-Install the exact workspace dependency graph and Chromium once:
+For a clean verification matching CI, use Node.js 22 and pnpm 11.7.0, then run:
 
 ```sh
 pnpm install --frozen-lockfile
 pnpm exec playwright install chromium
+pnpm check
 ```
+
+On Linux or in a minimal container, use `pnpm exec playwright install --with-deps chromium` instead.
+The browser command is a one-time setup per Playwright version; subsequent verification runs need
+only `pnpm check` when the frozen dependency graph is already installed.
+
+No OpenAI credential, refresh token, unpacked extension, or live OAuth endpoint is required. The
+Phase 5 provider tests use deterministic fakes and a local fixture, and the extension tests launch
+ephemeral Chromium profiles themselves. Do not add live authorization to the automated suite.
 
 During development, run the focused commands:
 
@@ -25,6 +34,21 @@ pnpm check
 
 The complete check verifies formatting, lint and import boundaries, the strict TypeScript
 project-reference graph, coverage, ESM/declaration builds, and Chromium window/worker compatibility.
+
+To isolate a failure, run the corresponding stage directly:
+
+```sh
+pnpm format:check
+pnpm lint
+pnpm typecheck
+pnpm test:coverage
+pnpm build
+pnpm test:browser
+```
+
+Keep `pnpm build` before a direct `pnpm test:browser` run because the browser suite imports the
+published ESM artifacts from each package's `dist` directory. The aggregate `pnpm test` and
+`pnpm check` commands already enforce that order.
 
 ## Unit and integration coverage
 
@@ -82,8 +106,9 @@ Playwright launches real Chromium. One smoke test imports the built public ESM i
 another performs the same composition and disposal in a dedicated Web Worker. Neither test may rely
 on a bundler to rewrite environment-specific imports.
 
-Compatibility tests build packages first. The production packages compile without DOM or Node types;
-browser-only test harness files live outside package source.
+The acceptance commands build packages before compatibility tests. A direct `pnpm test:browser` run
+expects an existing build. The production packages compile without DOM or Node types; browser-only
+test harness files live outside package source.
 
 Phase 2 repeats the window and worker smoke path with the built agent package, scripted model, and
 in-memory workspace. The scenario must perform list, read, and write operations, verify the written

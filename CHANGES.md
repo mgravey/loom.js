@@ -4,6 +4,11 @@ This project follows a lightweight milestone changelog while packages remain pri
 
 ## Unreleased — Phase 5
 
+### Changed
+
+- Consolidated the completed Phase 3, Phase 4, and Phase 5 linear history onto `master` and
+  clarified the clean-checkout, Chromium, and credential-free acceptance workflow.
+
 ### Added
 
 - `@loom/credential-provider-api`, extracting host-neutral refresh, interactive authorization,

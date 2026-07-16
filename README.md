@@ -5,13 +5,14 @@ environments. Its core behaves like a small operating system: plugins declare wh
 runtime validates and orders them, and consumers resolve capabilities through stable public
 contracts.
 
-Phase 1 established the architecture-only runtime. Phase 2 added a minimal Codex-style orchestration
-plugin and text-workspace tools. Phase 3 added replaceable browser plugins for explicit host
-capabilities, IndexedDB storage, and File System Access workspaces. Phase 4 added a provider-neutral
-Manifest V3 credential broker and a Loom authentication adapter. Phase 5 adds an isolated,
-disabled-by-default Codex authentication experiment based on an audited open-source CLI revision.
-Core and the agent packages remain free of provider, browser, and extension APIs. Loom still
-contains no production model provider, supported OAuth product, or execution runtime.
+Phases 1 through 5 are consolidated on `master`. Phase 1 established the architecture-only runtime.
+Phase 2 added a minimal Codex-style orchestration plugin and text-workspace tools. Phase 3 added
+replaceable browser plugins for explicit host capabilities, IndexedDB storage, and File System
+Access workspaces. Phase 4 added a provider-neutral Manifest V3 credential broker and a Loom
+authentication adapter. Phase 5 adds an isolated, disabled-by-default Codex authentication
+experiment based on an audited open-source CLI revision. Core and the agent packages remain free of
+provider, browser, and extension APIs. Loom still contains no production model provider, supported
+OAuth product, or execution runtime.
 
 ## Packages
 
@@ -69,6 +70,11 @@ pnpm exec playwright install chromium
 pnpm check
 ```
 
+Use Node.js 22 to match CI. On Linux machines that do not already have Chromium system libraries,
+install the browser with `pnpm exec playwright install --with-deps chromium`. No OpenAI credentials,
+refresh tokens, extension installation, or live OAuth access is needed: Phase 5 acceptance tests use
+deterministic fakes and local fixtures.
+
 Useful commands:
 
 | Command              | Purpose                                                 |
@@ -80,6 +86,11 @@ Useful commands:
 | `pnpm test:coverage` | Run unit tests with repository coverage gates           |
 | `pnpm format:check`  | Verify formatting                                       |
 | `pnpm check`         | Run the complete CI acceptance suite                    |
+
+`pnpm check` is the release gate. It covers formatting, package-boundary linting, strict TypeScript,
+coverage thresholds, ESM and declaration builds, browser-window and dedicated-worker smoke tests,
+and Manifest V3 extension tests. See [Testing](./docs/testing.md) for focused commands and
+troubleshooting.
 
 ## Design guarantees
 

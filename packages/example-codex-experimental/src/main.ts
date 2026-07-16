@@ -100,6 +100,12 @@ function diagnosticCode(value: unknown, fallback: string): string {
   return typeof value === 'string' && /^[A-Z_]{1,64}$/u.test(value) ? value : fallback;
 }
 
+function providerDiagnostic(value: unknown): string {
+  return typeof value === 'string' && /^[a-zA-Z0-9._:[\]-]{1,256}$/u.test(value)
+    ? value
+    : 'unclassified';
+}
+
 function diagnosticStage(value: unknown): string {
   return typeof value === 'string' && /^[a-z-]{1,32}$/u.test(value) ? value : 'unknown';
 }
@@ -229,6 +235,22 @@ function createExtensionModelTransport(
             ended = true;
             unsubscribe();
             stream.finish();
+            return;
+          }
+          if (message.type === 'provider-error' && typeof message.status === 'number') {
+            const providerCode = providerDiagnostic(message.providerCode);
+            const providerType = providerDiagnostic(message.providerType);
+            const providerParam = providerDiagnostic(message.providerParam);
+            pageDiagnostic('model.response.rejected', {
+              requestId,
+              status: message.status,
+              providerCode,
+              providerType,
+              providerParam,
+            });
+            appendLog(
+              `Provider rejected the request (${String(message.status)}): ${providerCode}; type ${providerType}; parameter ${providerParam}.`,
+            );
             return;
           }
           if (message.type === 'error') {

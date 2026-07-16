@@ -17,6 +17,7 @@ packages/*/*.zip
 *.log
 *.har
 *.trace.zip
+*.netlog
 .DS_Store
 .env
 .env.*

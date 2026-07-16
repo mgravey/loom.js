@@ -71,9 +71,11 @@ function request(): Readonly<Record<string, unknown>> {
       tools: [],
       tool_choice: 'auto',
       parallel_tool_calls: true,
+      reasoning: { effort: 'medium' },
       stream: true,
       store: false,
       include: ['reasoning.encrypted_content'],
+      text: { verbosity: 'low' },
     }),
   });
 }
@@ -121,13 +123,28 @@ describe('experimental Codex extension model transport', () => {
         }),
       }),
     );
+    const sentBody = JSON.parse(vi.mocked(fetchRequest).mock.calls[0]?.[1].body ?? '{}') as Record<
+      string,
+      unknown
+    >;
+    expect(sentBody).toMatchObject({
+      prompt_cache_key: 'session-1',
+      client_metadata: { session_id: 'session-1', thread_id: 'thread-1' },
+    });
     expect(JSON.stringify(externalPort.messages)).not.toContain('private-access-token');
     expect(JSON.stringify(diagnostics)).not.toContain('private-access-token');
     expect(diagnostics).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ event: 'request.validated', stage: 'validation' }),
         expect.objectContaining({ event: 'access-token.available', stage: 'authentication' }),
-        expect.objectContaining({ event: 'provider.request.started', stage: 'provider' }),
+        expect.objectContaining({
+          event: 'provider.fetch.started',
+          stage: 'provider',
+          method: 'POST',
+          targetHost: 'chatgpt.com',
+          targetPath: '/backend-api/codex/responses',
+          model: 'gpt-test',
+        }),
         expect.objectContaining({
           event: 'provider.response.completed',
           stage: 'stream',
@@ -169,6 +186,63 @@ describe('experimental Codex extension model transport', () => {
       }),
     );
     expect(fetchRequest).not.toHaveBeenCalled();
+  });
+
+  it('reports only allowlisted provider error metadata for rejected HTTP responses', async () => {
+    const diagnostics: CodexModelDiagnosticEvent[] = [];
+    const encoder = new TextEncoder();
+    const externalPort = port();
+    createCodexModelPortListener({
+      providerId: 'openai/codex-experimental',
+      tokenService: tokenService(),
+      accountRoutingStore: routingStore(),
+      fetchRequest: vi.fn<CodexModelFetch>(() =>
+        Promise.resolve({
+          status: 400,
+          body: new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(
+                encoder.encode(
+                  JSON.stringify({
+                    error: {
+                      message: 'secret provider explanation',
+                      code: 'invalid_model',
+                      type: 'invalid_request_error',
+                      param: 'model',
+                    },
+                  }),
+                ),
+              );
+              controller.close();
+            },
+          }),
+        }),
+      ),
+      authorizer: { assertAuthorized: vi.fn() },
+      diagnosticSink: (event) => diagnostics.push(event),
+    })(externalPort.value);
+
+    externalPort.send(request());
+    await vi.waitFor(() =>
+      expect(externalPort.messages).toContainEqual({ type: 'end', requestId: 'request-1' }),
+    );
+
+    expect(externalPort.messages).toContainEqual({
+      type: 'provider-error',
+      requestId: 'request-1',
+      status: 400,
+      providerCode: 'invalid_model',
+      providerType: 'invalid_request_error',
+      providerParam: 'model',
+    });
+    expect(diagnostics).toContainEqual(
+      expect.objectContaining({
+        event: 'provider.response.rejected',
+        providerCode: 'invalid_model',
+      }),
+    );
+    expect(JSON.stringify(externalPort.messages)).not.toContain('secret provider explanation');
+    expect(JSON.stringify(diagnostics)).not.toContain('secret provider explanation');
   });
 
   it('rejects bodies that could retain a provider response', async () => {

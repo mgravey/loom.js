@@ -44,12 +44,18 @@ function clearChallenge(): void {
 }
 
 async function refreshCredentialStatus(): Promise<void> {
-  const credential = await credentialStore.get(CODEX_EXPERIMENTAL_CONFIGURATION.providerId);
-  const authenticated = credential !== undefined;
-  logout.disabled = !authenticated;
+  const [credential, accountId] = await Promise.all([
+    credentialStore.get(CODEX_EXPERIMENTAL_CONFIGURATION.providerId),
+    accountRoutingStore.get(),
+  ]);
+  const authenticated = credential !== undefined && accountId !== undefined;
+  const incomplete = (credential === undefined) !== (accountId === undefined);
+  logout.disabled = credential === undefined && accountId === undefined;
   credentialStatus.textContent = authenticated
-    ? 'Authenticated. A refresh credential is stored inside the extension.'
-    : 'Not authenticated. No refresh credential is stored.';
+    ? 'Authenticated. Refresh and account-routing state are stored inside the extension.'
+    : incomplete
+      ? 'Incomplete authorization. Remove stored authorization, then sign in again.'
+      : 'Not authenticated. No authorization state is stored.';
 }
 
 async function initialize(): Promise<void> {

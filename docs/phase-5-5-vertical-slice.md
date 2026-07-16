@@ -85,8 +85,11 @@ localhost page's **Network** panel. Open both diagnostic consoles before retryin
 
 The page logs credential-status messages plus Port request/start/chunk/end/error metadata. The
 extension logs origin authorization, envelope validation, account-routing lookup, token refresh,
-provider-fetch start, HTTP status, and stream totals. A failure returned to the page includes one
-safe code and stage:
+provider-fetch host/path/method/model, HTTP status, and stream totals. The current suggested model
+is `gpt-5.5`: it is the newest model in the audited Codex catalog that uses the classic Responses
+shape and ordinary function tools. The catalog's `gpt-5.6-sol`, `gpt-5.6-terra`, and `gpt-5.6-luna`
+entries require the separate Responses Lite protocol, which this experimental adapter does not yet
+implement. A failure returned to the page includes one safe code and stage:
 
 | Code                          | Meaning before provider inference                                      |
 | ----------------------------- | ---------------------------------------------------------------------- |
@@ -98,11 +101,18 @@ safe code and stage:
 | `PROVIDER_STREAM_FAILED`      | A successful provider response could not be streamed                   |
 | `CANCELLED`                   | The page disconnected or cancelled the run                             |
 
+`ACCOUNT_ROUTING_UNAVAILABLE` with an otherwise authenticated status indicates partial state from an
+older or interrupted authorization. Select **Log out extension credential**, then complete a fresh
+device authorization from the extension options page. A refresh token cannot reconstruct the missing
+account-routing claim, so reauthorization is required.
+
 An HTTP rejection such as an unavailable model, account entitlement, rate limit, or depleted credit
-is logged separately as `model.response.start` with its numeric status. Diagnostics include only
-request IDs, stages, status codes, character/chunk counts, and sanitized broker codes. They never
-include tokens, account IDs, authorization headers, prompts, tool arguments, file contents, or
-response chunks.
+is logged separately as `model.response.start` with its numeric status. The extension reads at most
+16 KiB from a rejected response and exposes only syntactically restricted `error.code`,
+`error.type`, and `error.param` values. Raw provider messages and bodies are discarded. Diagnostics
+otherwise include only request IDs, stages, status codes, target host/path, method/model,
+character/chunk counts, and sanitized broker codes. They never include tokens, account IDs,
+authorization headers, prompts, tool arguments, file contents, or response chunks.
 
 ## Safe automated verification
 

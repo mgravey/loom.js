@@ -21,6 +21,10 @@ In `chrome://extensions`, enable Developer mode, select **Load unpacked**, and c
 and complete device authorization. Then open `http://localhost:4173/example-codex-experimental/`,
 enter the extension ID, check authentication, and select a workspace directory.
 
+The suggested `gpt-5.5` model uses the classic Responses request and ordinary function tools. The
+current GPT-5.6 Codex variants use a separate Responses Lite protocol that this experiment does not
+yet implement.
+
 Disabling the experiment or selecting logout deletes the extension-owned refresh credential. The
 application cannot start interactive authorization and cannot read refresh or ID credentials.
 

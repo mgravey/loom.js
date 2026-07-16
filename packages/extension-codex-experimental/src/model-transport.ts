@@ -15,6 +15,7 @@ export const CODEX_MODEL_TRANSPORT_VERSION = 1 as const;
 export const CODEX_RESPONSES_ENDPOINT = 'https://chatgpt.com/backend-api/codex/responses' as const;
 
 const MAXIMUM_REQUEST_BODY_LENGTH = 4 * 1024 * 1024;
+const MAXIMUM_PROVIDER_ERROR_BODY_LENGTH = 16 * 1024;
 
 interface GenerateRequest {
   readonly protocol: typeof CODEX_MODEL_TRANSPORT_PROTOCOL;
@@ -23,6 +24,7 @@ interface GenerateRequest {
   readonly requestId: string;
   readonly sessionId: string;
   readonly threadId: string;
+  readonly model: string;
   readonly body: string;
 }
 
@@ -56,6 +58,13 @@ export interface CodexModelDiagnosticEvent {
   readonly status?: number;
   readonly characters?: number;
   readonly chunks?: number;
+  readonly method?: 'POST';
+  readonly targetHost?: string;
+  readonly targetPath?: string;
+  readonly model?: string;
+  readonly providerCode?: string;
+  readonly providerType?: string;
+  readonly providerParam?: string;
 }
 
 export type CodexModelDiagnosticSink = (event: CodexModelDiagnosticEvent) => void;
@@ -96,7 +105,62 @@ function headerIdentifier(value: unknown): value is string {
   return typeof value === 'string' && /^[a-zA-Z0-9._:-]{1,256}$/u.test(value);
 }
 
-function normalizedRequestBody(value: string): string {
+function providerIdentifier(value: unknown): string | undefined {
+  return typeof value === 'string' && /^[a-zA-Z0-9._:[\]-]{1,256}$/u.test(value)
+    ? value
+    : undefined;
+}
+
+interface ProviderErrorMetadata {
+  readonly providerCode?: string;
+  readonly providerType?: string;
+  readonly providerParam?: string;
+}
+
+async function readProviderErrorMetadata(
+  body: ReadableStream<Uint8Array> | null,
+): Promise<ProviderErrorMetadata> {
+  if (body === null) return Object.freeze({});
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let bytes = 0;
+  let text = '';
+  try {
+    for (;;) {
+      const result = await reader.read();
+      if (result.done) break;
+      bytes += result.value.byteLength;
+      if (bytes > MAXIMUM_PROVIDER_ERROR_BODY_LENGTH) {
+        await reader.cancel();
+        return Object.freeze({});
+      }
+      text += decoder.decode(result.value, { stream: true });
+    }
+    text += decoder.decode();
+  } catch {
+    return Object.freeze({});
+  } finally {
+    reader.releaseLock();
+  }
+
+  try {
+    const envelope: unknown = JSON.parse(text);
+    const error = isRecord(envelope) && isRecord(envelope.error) ? envelope.error : undefined;
+    if (error === undefined) return Object.freeze({});
+    const providerCode = providerIdentifier(error.code);
+    const providerType = providerIdentifier(error.type);
+    const providerParam = providerIdentifier(error.param);
+    return Object.freeze({
+      ...(providerCode === undefined ? {} : { providerCode }),
+      ...(providerType === undefined ? {} : { providerType }),
+      ...(providerParam === undefined ? {} : { providerParam }),
+    });
+  } catch {
+    return Object.freeze({});
+  }
+}
+
+function normalizedRequestBody(value: string, sessionId: string, threadId: string): string {
   let body: unknown;
   try {
     body = JSON.parse(value);
@@ -114,9 +178,11 @@ function normalizedRequestBody(value: string): string {
           'tools',
           'tool_choice',
           'parallel_tool_calls',
+          'reasoning',
           'stream',
           'store',
           'include',
+          'text',
         ].includes(key),
     ) ||
     !boundedString(body.model, 256) ||
@@ -125,15 +191,25 @@ function normalizedRequestBody(value: string): string {
     !Array.isArray(body.tools) ||
     body.tool_choice !== 'auto' ||
     body.parallel_tool_calls !== true ||
+    !isRecord(body.reasoning) ||
+    Object.keys(body.reasoning).some((key) => key !== 'effort') ||
+    body.reasoning.effort !== 'medium' ||
     body.stream !== true ||
     body.store !== false ||
     !Array.isArray(body.include) ||
     body.include.length !== 1 ||
-    body.include[0] !== 'reasoning.encrypted_content'
+    body.include[0] !== 'reasoning.encrypted_content' ||
+    !isRecord(body.text) ||
+    Object.keys(body.text).some((key) => key !== 'verbosity') ||
+    body.text.verbosity !== 'low'
   ) {
     throw new Error('Invalid experimental model request.');
   }
-  return JSON.stringify(body);
+  return JSON.stringify({
+    ...body,
+    prompt_cache_key: sessionId,
+    client_metadata: { session_id: sessionId, thread_id: threadId },
+  });
 }
 
 function parseGenerateRequest(value: unknown): GenerateRequest {
@@ -159,6 +235,11 @@ function parseGenerateRequest(value: unknown): GenerateRequest {
   ) {
     throw new Error('Invalid experimental model request.');
   }
+  const body = normalizedRequestBody(value.body, value.sessionId, value.threadId);
+  const parsedBody: unknown = JSON.parse(body);
+  if (!isRecord(parsedBody) || typeof parsedBody.model !== 'string') {
+    throw new Error('Invalid experimental model request.');
+  }
   return Object.freeze({
     protocol: CODEX_MODEL_TRANSPORT_PROTOCOL,
     version: CODEX_MODEL_TRANSPORT_VERSION,
@@ -166,7 +247,8 @@ function parseGenerateRequest(value: unknown): GenerateRequest {
     requestId: value.requestId,
     sessionId: value.sessionId,
     threadId: value.threadId,
-    body: normalizedRequestBody(value.body),
+    model: parsedBody.model,
+    body,
   });
 }
 
@@ -240,10 +322,14 @@ export function createCodexModelPortListener(
           report(options.diagnosticSink, { event: 'access-token.available', stage, requestId });
           stage = 'provider';
           report(options.diagnosticSink, {
-            event: 'provider.request.started',
+            event: 'provider.fetch.started',
             stage,
             requestId,
             characters: request.body.length,
+            method: 'POST',
+            targetHost: 'chatgpt.com',
+            targetPath: '/backend-api/codex/responses',
+            model: request.model,
           });
           const response = await options.fetchRequest(CODEX_RESPONSES_ENDPOINT, {
             method: 'POST',
@@ -272,6 +358,15 @@ export function createCodexModelPortListener(
           });
           if (!post(port, { type: 'start', requestId, status: response.status })) return;
           if (response.status < 200 || response.status >= 300) {
+            const metadata = await readProviderErrorMetadata(response.body);
+            report(options.diagnosticSink, {
+              event: 'provider.response.rejected',
+              stage,
+              requestId,
+              status: response.status,
+              ...metadata,
+            });
+            post(port, { type: 'provider-error', requestId, status: response.status, ...metadata });
             post(port, { type: 'end', requestId });
             return;
           }

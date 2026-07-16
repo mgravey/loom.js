@@ -102,8 +102,13 @@ describe('experimental Codex Responses model', () => {
     });
     expect(JSON.stringify(body)).not.toContain('Bearer');
     expect(body.input).toEqual([
-      { role: 'user', content: [{ type: 'input_text', text: 'Inspect the workspace.' }] },
       {
+        type: 'message',
+        role: 'user',
+        content: [{ type: 'input_text', text: 'Inspect the workspace.' }],
+      },
+      {
+        type: 'message',
         role: 'assistant',
         content: [{ type: 'output_text', text: 'I will inspect it.' }],
       },
@@ -157,6 +162,8 @@ describe('experimental Codex Responses model', () => {
       stream: true,
       store: false,
       tools: [{ type: 'function', name: 'loom_0_workspace_read-file', strict: false }],
+      reasoning: { effort: 'medium' },
+      text: { verbosity: 'low' },
     });
     await expect(
       collect(parseCodexResponsesSse(chunks('event: custom\ndata: {"a":', '1}\n\n'))),

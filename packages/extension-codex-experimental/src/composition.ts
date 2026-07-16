@@ -94,15 +94,19 @@ export function createCodexExperimentalExtension(
     async getAccessToken(providerId: string) {
       if (providerId === provider.id) {
         const enabled = await settings.isDeviceAuthorizationEnabled();
-        const credential = enabled ? await initializedStore.get(providerId) : undefined;
-        if (!enabled || credential === undefined) {
+        const [credential, accountId] = enabled
+          ? await Promise.all([initializedStore.get(providerId), accountRoutingStore.get()])
+          : [undefined, undefined];
+        if (!enabled || credential === undefined || accountId === undefined) {
           tokenService.clearCachedAccessToken(providerId);
-          await accountRoutingStore.delete();
+          if (credential === undefined) await accountRoutingStore.delete();
           throw new ExtensionBrokerError(
             'MISSING_CREDENTIAL',
-            enabled
-              ? 'The experimental Codex credential provider requires authorization.'
-              : 'The experimental Codex credential provider is disabled.',
+            !enabled
+              ? 'The experimental Codex credential provider is disabled.'
+              : accountId === undefined
+                ? 'The experimental Codex credential provider requires account routing authorization.'
+                : 'The experimental Codex credential provider requires authorization.',
           );
         }
       }
@@ -123,8 +127,15 @@ export function createCodexExperimentalExtension(
       tokenService.acceptAuthorizationResult(providerId, result),
     clearCachedAccessToken: (providerId: string) => tokenService.clearCachedAccessToken(providerId),
     async getStatus(providerId: string) {
-      if (providerId === provider.id && !(await settings.isDeviceAuthorizationEnabled())) {
-        return Object.freeze({ authenticated: false });
+      if (providerId === provider.id) {
+        if (!(await settings.isDeviceAuthorizationEnabled())) {
+          return Object.freeze({ authenticated: false });
+        }
+        const [status, accountId] = await Promise.all([
+          tokenService.getStatus(providerId),
+          accountRoutingStore.get(),
+        ]);
+        return Object.freeze({ authenticated: status.authenticated && accountId !== undefined });
       }
       return tokenService.getStatus(providerId);
     },

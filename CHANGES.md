@@ -21,6 +21,12 @@ This project follows a lightweight milestone changelog while packages remain pri
 - Current Codex inference protocol re-audit, a Phase 5.5 guide, and ADR-010.
 - Secret-safe page and extension-service-worker diagnostics for every model transport stage,
   including explicit pre-fetch failure codes and streamed byte-count metadata.
+- Authentication status now requires both a refresh credential and ChatGPT account-routing state;
+  partial legacy state is surfaced as incomplete and cannot reach the model transport.
+- The browser example now defaults to the audited classic Responses model `gpt-5.5`; requests carry
+  the catalog's reasoning/verbosity defaults plus session-scoped cache and client metadata.
+- Provider fetch diagnostics now name the non-secret target/method/model and expose only bounded,
+  allowlisted error code/type/parameter metadata for non-2xx responses.
 
 ### Security
 

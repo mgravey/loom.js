@@ -106,6 +106,7 @@ describe('Codex experimental extension composition', () => {
     await composition.credentialStore.set(composition.providerId, {
       value: 'initial-refresh-token',
     });
+    await composition.accountRoutingStore.set('account-test');
     await expect(composition.tokenService.getAccessToken(composition.providerId)).resolves.toEqual(
       expect.objectContaining({ accessToken: 'short-lived-access-token' }),
     );
@@ -118,6 +119,32 @@ describe('Codex experimental extension composition', () => {
       composition.tokenService.getAccessToken(composition.providerId),
     ).rejects.toMatchObject({ code: 'MISSING_CREDENTIAL' });
     expect(fetchRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it('treats a refresh credential without account routing as incomplete authorization', async () => {
+    const storage = new MemoryStorage();
+    const fetchRequest = vi.fn<OAuthFetch>();
+    const composition = createCodexExperimentalExtension({
+      chromeApi: host(storage),
+      fetchRequest,
+    });
+    await composition.settings.setDeviceAuthorizationEnabled(true);
+    await composition.credentialStore.set(composition.providerId, {
+      value: 'orphaned-refresh-token',
+    });
+
+    await expect(composition.tokenService.getStatus(composition.providerId)).resolves.toEqual({
+      authenticated: false,
+    });
+    await expect(
+      composition.tokenService.getAccessToken(composition.providerId),
+    ).rejects.toMatchObject({ code: 'MISSING_CREDENTIAL' });
+    expect(fetchRequest).not.toHaveBeenCalled();
+
+    await composition.accountRoutingStore.set('account-test');
+    await expect(composition.tokenService.getStatus(composition.providerId)).resolves.toEqual({
+      authenticated: true,
+    });
   });
 
   it('runs device authorization only after opt-in and persists only the refresh credential', async () => {

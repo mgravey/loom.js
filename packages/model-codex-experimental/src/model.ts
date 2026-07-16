@@ -204,7 +204,9 @@ function encodeMessage(
   aliases: OperationAliases,
 ): readonly JsonValue[] {
   if (message.role === 'user') {
-    return [{ role: 'user', content: [{ type: 'input_text', text: message.content }] }];
+    return [
+      { type: 'message', role: 'user', content: [{ type: 'input_text', text: message.content }] },
+    ];
   }
   if (message.role === 'tool') {
     return [
@@ -218,6 +220,7 @@ function encodeMessage(
   const items: JsonValue[] = [];
   if (message.content !== '') {
     items.push({
+      type: 'message',
       role: 'assistant',
       content: [{ type: 'output_text', text: message.content }],
     });
@@ -263,9 +266,11 @@ export function createCodexResponsesRequestBody(
     })),
     tool_choice: 'auto',
     parallel_tool_calls: true,
+    reasoning: { effort: 'medium' },
     stream: true,
     store: false,
     include: ['reasoning.encrypted_content'],
+    text: { verbosity: 'low' },
   };
 }
 

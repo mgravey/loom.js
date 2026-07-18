@@ -16,6 +16,7 @@ const metadata = JSON.parse(
 const archive = join(root, 'store-artifacts', metadata.archive);
 const entries = execFileSync('unzip', ['-Z1', archive], { encoding: 'utf8' }).trim().split('\n');
 const allowedEntries = new Set([
+  'brand-animation.js',
   'callback.html',
   'callback.js',
   'manifest.json',

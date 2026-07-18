@@ -24,13 +24,16 @@ interface ExternalResponse {
   readonly error?: { readonly code?: string };
 }
 
-async function launchExtension(): Promise<{
+async function launchExtension(
+  reducedMotion: 'no-preference' | 'reduce' = 'no-preference',
+): Promise<{
   readonly context: BrowserContext;
   readonly extensionId: string;
 }> {
   const context = await chromium.launchPersistentContext('', {
     channel: 'chromium',
     headless: true,
+    reducedMotion,
     args: [`--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`],
   });
   const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker'));
@@ -89,11 +92,18 @@ test.describe('experimental Codex credential extension', () => {
     try {
       const options = await context.newPage();
       await options.goto(`chrome-extension://${extensionId}/options.html`);
+      await expect(options.locator('#brand-animation')).toHaveClass(/\bis-animated\b/u);
+      await expect(options.locator('#brand-animation svg')).toBeVisible();
       await expect(options.locator('#enabled')).not.toBeChecked();
       await expect(
         options.getByRole('button', { name: 'Use device-code fallback' }),
       ).toBeDisabled();
       await expect(options.locator('#status')).toHaveText('The experiment is disabled.');
+
+      const privacy = await context.newPage();
+      await privacy.goto(`chrome-extension://${extensionId}/privacy.html`);
+      await expect(privacy.locator('#brand-animation')).toHaveClass(/\bis-animated\b/u);
+      await expect(privacy.locator('#brand-animation svg')).toBeVisible();
 
       const application = await context.newPage();
       await openBuiltEsmHarness(application);
@@ -103,6 +113,25 @@ test.describe('experimental Codex credential extension', () => {
         error: { code: 'UNAUTHORIZED_REQUEST' },
       });
       expect(JSON.stringify(response)).not.toMatch(/refresh|verifier|authorization.code/iu);
+    } finally {
+      await context.close();
+    }
+  });
+
+  test('keeps the static logo when reduced motion is requested', async () => {
+    const { context, extensionId } = await launchExtension('reduce');
+    try {
+      const options = await context.newPage();
+      await options.goto(`chrome-extension://${extensionId}/options.html`);
+      await expect(options.locator('#brand-animation')).not.toHaveClass(/\bis-animated\b/u);
+      await expect(options.locator('#brand-animation svg')).toHaveCount(0);
+      await expect(options.locator('.brand-fallback')).toBeVisible();
+
+      const privacy = await context.newPage();
+      await privacy.goto(`chrome-extension://${extensionId}/privacy.html`);
+      await expect(privacy.locator('#brand-animation')).not.toHaveClass(/\bis-animated\b/u);
+      await expect(privacy.locator('#brand-animation svg')).toHaveCount(0);
+      await expect(privacy.locator('.brand-fallback')).toBeVisible();
     } finally {
       await context.close();
     }

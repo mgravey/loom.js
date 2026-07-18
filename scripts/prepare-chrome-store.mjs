@@ -43,6 +43,7 @@ manifest.externally_connectable = { matches: [`${site.origin}/*`] };
 manifest.homepage_url = site.origin;
 
 const runtimeFiles = [
+  'brand-animation.js',
   'callback.html',
   'callback.js',
   'manifest.json',

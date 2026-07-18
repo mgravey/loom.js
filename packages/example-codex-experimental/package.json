@@ -16,7 +16,8 @@
     "@loom/model-codex-experimental": "workspace:*",
     "@loom/tool-workspace": "workspace:*",
     "@loom/types": "workspace:*",
-    "@loom/workspace-fsa": "workspace:*"
+    "@loom/workspace-fsa": "workspace:*",
+    "lottie-web": "5.13.0"
   },
   "devDependencies": {
     "tsup": "^8.5.0",

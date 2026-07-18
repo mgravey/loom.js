@@ -28,6 +28,8 @@ test('runs the interactive browser example with an application-owned directory p
 
   await openBuiltEsmHarness(page);
   await page.goto(`${browserOrigin}/example-browser/index.html`);
+  await expect(page.locator('.brand-heading img')).toBeVisible();
+  await expect(page.locator('link[rel="icon"]')).toHaveAttribute('href', './assets/favicon.png');
   await page.getByRole('button', { name: 'Choose directory and run' }).click();
   await expect(page.getByRole('status')).toHaveText(
     'Complete. The selected directory now contains result.txt.',

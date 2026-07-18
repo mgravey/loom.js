@@ -100,7 +100,13 @@ test('built experimental extension is isolated, installable, and self-contained'
     readonly options_ui?: { readonly page?: string };
   };
   const serviceWorker = await readFile(join(extensionDirectory, 'service-worker.js'), 'utf8');
+  const brandAnimationScript = await readFile(
+    join(extensionDirectory, 'brand-animation.js'),
+    'utf8',
+  );
   const optionsScript = await readFile(join(extensionDirectory, 'options.js'), 'utf8');
+  const optionsPage = await readFile(join(extensionDirectory, 'options.html'), 'utf8');
+  const callbackPage = await readFile(join(extensionDirectory, 'callback.html'), 'utf8');
   const privacyPage = await readFile(join(extensionDirectory, 'privacy.html'), 'utf8');
   const icon128 = await readFile(join(extensionDirectory, 'icons', 'icon128.png'));
 
@@ -125,11 +131,18 @@ test('built experimental extension is isolated, installable, and self-contained'
     background: { service_worker: 'service-worker.js' },
     options_ui: { page: 'options.html' },
   });
-  for (const bundle of [serviceWorker, optionsScript]) {
+  for (const bundle of [serviceWorker, brandAnimationScript, optionsScript]) {
     expect(bundle).not.toMatch(/\b(?:import|export)\b/u);
     expect(bundle).not.toContain('@loom/');
   }
   expect(privacyPage).toMatch(/Chrome\s+Web Store User Data Policy/u);
+  expect(privacyPage).toContain('id="brand-animation"');
+  expect(privacyPage).toContain('src="brand-animation.js"');
+  expect(optionsPage).toContain('id="brand-animation"');
+  expect(optionsPage).toContain('src="icons/icon128.png"');
+  expect(callbackPage).toContain('src="icons/icon128.png"');
+  expect(callbackPage).toContain('href="icons/icon32.png"');
+  expect(brandAnimationScript).toContain('Reference_Weave_Draw');
   expect(icon128.byteLength).toBeGreaterThan(0);
 });
 

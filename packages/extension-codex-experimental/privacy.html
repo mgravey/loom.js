@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Privacy disclosure · Loom Secure Model Bridge</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="icons/icon32.png" />
     <style>
       :root {
         color-scheme: light dark;
@@ -15,6 +16,35 @@
         padding: 0 1.5rem;
         line-height: 1.6;
       }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+      }
+      .brand-logo {
+        position: relative;
+        width: 7.5rem;
+        height: 7.5rem;
+        flex: 0 0 auto;
+      }
+      .brand-logo .brand-fallback,
+      .brand-logo svg {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+      .brand-logo svg {
+        position: absolute;
+        inset: 0;
+      }
+      .brand-logo.is-animated .brand-fallback {
+        visibility: hidden;
+      }
+      .brand h1 {
+        margin: 0;
+      }
       h1,
       h2 {
         line-height: 1.2;
@@ -24,11 +54,25 @@
         border-radius: 0.5rem;
         padding: 1rem;
       }
+      @media (max-width: 32rem) {
+        body {
+          margin-top: 1.25rem;
+        }
+        .brand-logo {
+          width: 5rem;
+          height: 5rem;
+        }
+      }
     </style>
   </head>
   <body>
     <main>
-      <h1>Loom Secure Model Bridge privacy disclosure</h1>
+      <header class="brand">
+        <div id="brand-animation" class="brand-logo" aria-hidden="true">
+          <img class="brand-fallback" src="icons/icon128.png" alt="" width="128" height="128" />
+        </div>
+        <h1>Loom Secure Model Bridge privacy disclosure</h1>
+      </header>
       <p class="warning">
         This bundled disclosure describes the extension build. Before Chrome Web Store publication,
         the publisher must provide the completed public policy URL and verified contact details.
@@ -78,5 +122,6 @@
         advertising or credit decisions.
       </p>
     </main>
+    <script type="module" src="brand-animation.js"></script>
   </body>
 </html>

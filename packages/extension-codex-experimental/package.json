@@ -5,6 +5,7 @@
   "type": "module",
   "sideEffects": [
     "./dist/service-worker.js",
+    "./dist/brand-animation.js",
     "./dist/options.js",
     "./dist/callback.js"
   ],
@@ -29,7 +30,8 @@
   "dependencies": {
     "@loom/auth-codex-experimental": "workspace:*",
     "@loom/credential-provider-api": "workspace:*",
-    "@loom/extension": "workspace:*"
+    "@loom/extension": "workspace:*",
+    "lottie-web": "5.13.0"
   },
   "devDependencies": {
     "tsup": "^8.5.0",

@@ -50,6 +50,10 @@ This project follows a lightweight milestone changelog while packages remain pri
 
 ### Changed
 
+- Updated every browser example and experimental extension surface to Direction 08: self-contained
+  Lottie animation on the landing and extension onboarding pages, compact optimized marks in site
+  navigation, workbench/example headings and favicons, and the full SVG where space permits.
+  Animated placements keep a static reduced-motion fallback.
 - The experimental package now serves the project introduction at `index.html`, documentation at
   `docs.html`, and the runnable ChatGPT-backed composition at `workbench.html`.
 - The experimental extension is presented under the neutral single-purpose name **Loom Secure Model

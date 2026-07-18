@@ -230,6 +230,9 @@ importers:
       '@loom/workspace-fsa':
         specifier: workspace:*
         version: link:../workspace-fsa
+      lottie-web:
+        specifier: 5.13.0
+        version: 5.13.0
     devDependencies:
       tsup:
         specifier: ^8.5.0
@@ -311,6 +314,9 @@ importers:
       '@loom/extension':
         specifier: workspace:*
         version: link:../extension
+      lottie-web:
+        specifier: 5.13.0
+        version: 5.13.0
     devDependencies:
       tsup:
         specifier: ^8.5.0
@@ -1697,6 +1703,9 @@ packages:
 
   lodash.merge@4.6.2:
     resolution: {integrity: sha512-0KpjqXRVvrYyCsX1swR/XTK0va6VQkQM6MNo7PqW77ByjAhoARA8EfrP1N4+KlKj8YS0ZUCtRT/YUuhyYDujIQ==}
+
+  lottie-web@5.13.0:
+    resolution: {integrity: sha512-+gfBXl6sxXMPe8tKQm7qzLnUy5DUPJPKIyRHwtpCpyUEYjHYRJC/5gjUvdkuO2c3JllrPtHXH5UJJK8LRYl5yQ==}
 
   loupe@3.2.1:
     resolution: {integrity: sha512-CdzqowRJCeLU72bHvWqwRBBlLcMEtIvGrlvef74kMnV2AolS9Y8xUv1I0U/MNAWMhBlKIoyuEgoJ0t/bbwHbLQ==}
@@ -3177,6 +3186,8 @@ snapshots:
       p-locate: 5.0.0
 
   lodash.merge@4.6.2: {}
+
+  lottie-web@5.13.0: {}
 
   loupe@3.2.1: {}
 

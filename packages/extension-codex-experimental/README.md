@@ -46,6 +46,12 @@ The build copies only local extension HTML, JavaScript, manifest, privacy disclo
 assets. The extension package contains no remotely hosted scripts, `eval`, or dynamic code loader.
 Provider HTTPS requests carry data; they do not supply executable extension logic.
 
+The manifest icons use a compact square crop of the standalone Direction 08 Loom mark. Shortening
+the long input tails lets the weave and endpoint rings occupy almost the full height of Chrome's
+16px UI while preserving their proportions. The options and bundled privacy-page headings play the
+full self-contained Lottie weave once, then hold on its final frame. Reduced-motion preferences and
+rendering failures retain the compact 128px PNG fallback.
+
 ## Connect the local workbench
 
 ```sh

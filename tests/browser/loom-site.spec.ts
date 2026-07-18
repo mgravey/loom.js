@@ -9,6 +9,13 @@ test('presents Loom as a library before linking to the experimental workbench', 
   await page.goto(`${browserOrigin}/example-codex-experimental/`);
 
   await expect(page).toHaveTitle(/Loom\.js/u);
+  await expect(page.locator('link[rel="icon"]')).toHaveAttribute('href', './assets/favicon.png');
+  await expect(page.locator('#hero-brand-animation')).toHaveClass(/\bis-animated\b/u);
+  await expect(page.locator('#hero-brand-animation svg')).toBeVisible();
+  await expect(page.locator('.brand-mark').first()).toHaveCSS(
+    'background-image',
+    /loom-mark-compact\.png/u,
+  );
   await expect(page.getByRole('heading', { level: 1 })).toContainText(
     'Weave coding agents into your application.',
   );
@@ -44,6 +51,10 @@ test('serves installation, privacy, terms, legal, and support surfaces', async (
   ] as const) {
     await page.goto(`${browserOrigin}/example-codex-experimental/${path}`);
     await expect(page.getByRole('heading', { level: 1, name: heading })).toBeVisible();
+    await expect(page.locator('.brand-mark').first()).toHaveCSS(
+      'background-image',
+      /loom-mark-compact\.png/u,
+    );
   }
 
   await page.goto(`${browserOrigin}/example-codex-experimental/privacy.html`);

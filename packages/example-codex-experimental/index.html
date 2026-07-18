@@ -8,6 +8,7 @@
       content="Loom.js is a composable TypeScript library for browser-capable coding agents."
     />
     <title>Loom.js · Weave coding agents into your application</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="./assets/favicon.png" />
     <link rel="stylesheet" href="./site.css" />
   </head>
   <body>
@@ -30,6 +31,15 @@
       <section class="hero">
         <div class="shell hero-grid">
           <div>
+            <div id="hero-brand-animation" class="hero-brand-animation" aria-hidden="true">
+              <img
+                class="brand-fallback"
+                src="./assets/loom-mark.svg"
+                alt=""
+                width="112"
+                height="112"
+              />
+            </div>
             <span class="eyebrow">Composable agent infrastructure</span>
             <h1>Weave coding agents into <span class="gradient-text">your application.</span></h1>
             <p class="hero-copy">
@@ -280,5 +290,6 @@
     </footer>
     <script src="./deployment-config.js"></script>
     <script src="./site.js"></script>
+    <script type="module" src="./dist/brand-animation.js"></script>
   </body>
 </html>

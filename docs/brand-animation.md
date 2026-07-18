@@ -63,3 +63,14 @@ being horizontally scaled. It contains no font or text data and avoids expressio
 
 The colored mark works over both light and dark surfaces. Pair the resulting animation with a static
 wordmark in the surrounding website or application layout when needed.
+
+## Product placement
+
+- Use the Lottie weave for one deliberate introductory moment, such as the landing hero or trusted
+  extension onboarding. Never loop it continuously.
+- Use the compact optimized mark for navigation, footers, workbench headings, favicons, and other
+  small browser surfaces. Prefer the SVG where its full artboard remains legible; use the cropped
+  PNG export at favicon and small-icon sizes.
+- Use the full light/dark lockup for brand-led documentation and presentation material.
+- Preserve a static SVG or PNG fallback whenever animation is present, and honor
+  `prefers-reduced-motion`.

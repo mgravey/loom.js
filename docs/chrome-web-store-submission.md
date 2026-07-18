@@ -173,8 +173,11 @@ authentication and user content.
 Official Store guidance currently requires an icon, small promotional image, and at least one
 screenshot.
 
-- [x] Packaged icons: 16×16, 32×32, 48×48, and 128×128 PNG. The 128px canvas uses a 96px mark with
-      transparent padding.
+- [x] Packaged icons: 16×16, 32×32, 48×48, and 128×128 PNG. A compact square crop shortens the long
+      input tails so the weave and endpoint rings use substantially more vertical space, including
+      almost the full 16px toolbar canvas. The options page uses the full self-contained Lottie
+      weave in its heading, as does the bundled privacy page. Both retain the compact 128px asset as
+      their reduced-motion and rendering fallback.
 - [ ] Required small promotional image: 440×280 PNG/JPEG, brand-led and readable when reduced.
 - [ ] At least one screenshot, preferably 3–5: 1280×800 or 640×400, full bleed, actual experience.
 - [ ] Optional marquee image: 1400×560 for future featuring.

@@ -61,6 +61,12 @@ accepted closed ribbon contours from the standalone SVG mark. Centerline Trim Pa
 fixed silhouettes from left to right, preserving the original S-curves, crossings, and endpoint
 proportions without scaling the logo.
 
+The browser examples and experimental Chrome extension now use Direction 08 consistently. The
+landing page and extension onboarding surfaces play the self-contained Lottie weave, navigation,
+workbenches, favicons, and compact headings use the optimized square mark, and large static
+placements retain the master SVG. Every animation keeps the canonical static mark as its
+reduced-motion and loading fallback.
+
 ## Packages
 
 | Package                              | Responsibility                                                                      |

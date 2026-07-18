@@ -9,6 +9,11 @@ test-results/
 blob-report/
 playwright/.auth/
 output/
+site-preview/
+store-artifacts/
+packages/extension-codex-experimental/.chrome-store-staging/
+.loom-runs/
+loom-project.zip
 packages/*/*.crx
 packages/*/*.pem
 packages/*/*.key
@@ -18,12 +23,25 @@ packages/*/*.zip
 *.har
 *.trace.zip
 *.netlog
+*.openai-response.json
+openai-response-dumps/
 .DS_Store
 .env
 .env.*
 !.env.example
 .idea/
 .vscode/
+
+# Local working files for brand exploration; reviewed exports remain tracked.
+docs/assets/brand/.scratch/
+
+# Adobe After Effects autosaves and local render previews.
+Adobe After Effects Auto-Save/
+*.aep~
+docs/assets/brand/renders/
+scripts/after-effects/*.aep
+scripts/after-effects/*.aepx
+scripts/after-effects/renders/
 after-effects-reference-animation/*.aep
 after-effects-reference-animation/*.aepx
 after-effects-reference-animation/renders/

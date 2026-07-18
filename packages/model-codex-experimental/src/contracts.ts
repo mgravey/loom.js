@@ -1,9 +1,12 @@
 import type { AuthProvider } from '@loom/plugin-api';
 import type { CancellationSignal } from '@loom/types';
 
+export type CodexResponsesWireProtocol = 'classic' | 'responses-lite';
+
 /** A credential-free request for a trusted transport such as an extension broker. */
 export interface CodexResponsesRequest {
   readonly body: string;
+  readonly wireProtocol: CodexResponsesWireProtocol;
   readonly signal?: CancellationSignal;
 }
 
@@ -42,12 +45,15 @@ export type AccountIdSupplier = () => Promise<string | undefined>;
 
 export interface CodexExperimentalModelOptions {
   readonly model: string;
+  /** Defaults to classic. Responses Lite moves tools and instructions into input items. */
+  readonly wireProtocol?: CodexResponsesWireProtocol;
   /** Preferred brokered mode: no access token is made available to the model or calling page. */
   readonly transport: CodexResponsesTransport;
 }
 
 export interface CodexExperimentalDirectFetchOptions {
   readonly model: string;
+  readonly wireProtocol?: CodexResponsesWireProtocol;
   /** Experimental endpoint audited by the host; intentionally no provider URL is baked in. */
   readonly endpoint: string;
   readonly authentication: AuthProvider | AccessTokenSupplier;

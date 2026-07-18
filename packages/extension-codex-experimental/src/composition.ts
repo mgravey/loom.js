@@ -61,11 +61,11 @@ export interface CodexExperimentalExtensionComposition {
 export function createCodexExperimentalExtension(
   options: CreateCodexExperimentalExtensionOptions,
 ): CodexExperimentalExtensionComposition {
-  const storage = options.chromeApi.storage.local;
-  const settings = createCodexExperimentSettings(storage);
-  const credentialStore = createChromeRefreshCredentialStore(storage);
-  const accountRoutingStore = createCodexAccountRoutingStore(storage);
-  const ready = initializeTrustedCredentialStorage(storage, () => Promise.resolve());
+  const settings = createCodexExperimentSettings(options.chromeApi.storage.local);
+  const sessionStorage = options.chromeApi.storage.session;
+  const credentialStore = createChromeRefreshCredentialStore(sessionStorage);
+  const accountRoutingStore = createCodexAccountRoutingStore(sessionStorage);
+  const ready = initializeTrustedCredentialStorage(sessionStorage, () => Promise.resolve());
   const initializedStore: RefreshCredentialStore = Object.freeze({
     async get(providerId: string) {
       await ready;
@@ -147,6 +147,7 @@ export function createCodexExperimentalExtension(
   const handler = createCredentialBrokerMessageHandler({
     authorizer: createOriginAuthorizer(options.allowedOrigins ?? DEVELOPMENT_ALLOWED_ORIGINS),
     tokenService: gatedTokenService,
+    allowAccessTokenResponses: false,
   });
 
   return Object.freeze({

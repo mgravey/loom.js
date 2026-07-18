@@ -49,14 +49,21 @@ not used to guess a tool's behavior.
 ## Model protocol
 
 The Codex-style agent sends a provider-neutral request containing instructions, immutable message
-history, and definitions for the three workspace tools. A model adapter streams complete normalized
-events: text deltas, complete tool calls, and a completion marker. Provider-specific streaming
-fragments must be assembled inside the model adapter before they reach the agent.
+history, and definitions for the three workspace tools. Tool definitions can include structured
+output schemas and direct/programmatic caller policies. A model adapter streams complete normalized
+events: text deltas, complete tool calls, opaque continuation items, and a completion marker.
+Provider-specific streaming fragments must be assembled inside the model adapter before they reach
+the agent.
 
-Tool calls are executed serially and their immutable JSON results are appended to the next model
-request. Unknown tools, malformed events, duplicate call IDs, missing completion markers, and
-duplicate/missing workspace tools fail with typed agent errors. A configurable turn limit prevents
-an unbounded tool loop.
+Direct tool calls are executed serially. Consecutive read-only calls attributed to a hosted program
+run concurrently, and their immutable JSON results copy the caller metadata into the next model
+request. Opaque continuation items let stateless adapters replay reasoning, program, function-call,
+and program-output items without teaching the agent their provider-specific fields. A completion
+marker with `final: false` continues the loop until a final assistant message exists.
+
+Unknown tools, malformed events, duplicate call IDs, missing completion markers, unauthorized
+programmatic writes, and duplicate/missing workspace tools fail with typed agent errors. A
+configurable turn limit prevents an unbounded continuation or tool loop.
 
 The protocol intentionally remains in `@loom/agent-codex`. It is not part of `@loom/plugin-api`, so
 future planner, Claude-style, OpenHands-like, or custom agents can define different orchestration
@@ -64,7 +71,7 @@ protocols without changing core.
 
 ## Deliberate omissions
 
-Phase 2 does not add authentication, a model provider, a browser filesystem adapter, command
+The base agent does not add authentication, a model provider, a browser filesystem adapter, command
 execution, Git, search, persisted history, automatic agent selection, or automatic per-session agent
 construction. The in-memory workspace and scripted model in `@loom/examples` are deterministic
 fixtures, not production providers.

@@ -2,10 +2,75 @@
 
 This project follows a lightweight milestone changelog while packages remain private.
 
+## Unreleased — Browser coding workbench
+
+### Added
+
+- Transparent SVG exports and a Lottie-ready After Effects builder that reveals the accepted
+  `loom-mark-08.svg` ribbon silhouettes through centerline Trim Paths, preserving the original
+  S-curves and crossings without scaling.
+- A responsive Loom.js welcome page that separates the provider-neutral library from the
+  experimental browser workbench, plus a browser-readable onboarding manual covering repository
+  setup, first sessions, plugin lifecycle, typed capability registration, secure model transports,
+  runtime execution, security, and current limitations.
+- Chrome Web Store readiness infrastructure: a stable website deployment configuration, documented
+  development-to-Store ID migration, required extension icons, explicit in-product data disclosure,
+  bundled/public privacy disclosures, terms, legal notice, support and installation pages, a
+  production-origin ZIP packager and verification gate, and a submission dossier with
+  listing/privacy/reviewer fields.
+- `@loom/coding`, a reusable session-level orchestration API for streamed prompts, follow-ups,
+  transcript events, cancellation, injected execution runtimes, and deterministic disposal.
+- Binary-capable `ProjectWorkspace` contracts, a memory implementation, expanded FSA/OPFS adapter,
+  strict unified patches, and stat/mkdir/move/remove project tools while preserving the original
+  text-workspace API.
+- Safe recursive folder and ZIP import/export with traversal, symlink, conflict, entry-count, size,
+  and compression-ratio validation.
+- `@loom/execution-browser` with lazy, credential-free QuickJS, WebContainer Node.js, and Pyodide
+  adapters, streamed output, cancellation/timeouts, and explicit workspace snapshot/commit.
+- A multi-mode browser workbench for direct directories, disposable memory projects, and persistent
+  OPFS projects, including file editing, folder/ZIP transfer, model chat, and runtime execution.
+- A tab-scoped Manifest V3 callback bridge that transforms the audited localhost OAuth callback into
+  a web-accessible extension callback page. It validates PKCE state, tab, expiry, and replay;
+  device-code authentication remains an explicit fallback.
+- Classic Responses and Responses Lite request modes. Lite requests carry developer instruction and
+  `additional_tools` input items; only the extension adds the internal Lite transport header.
+
+### Security
+
+- The extension owns login, token refresh, account routing, ChatGPT model fetches, and streaming.
+  Access, refresh, and ID tokens never enter the workbench, project workspace, browser runtimes,
+  OPFS project archive, IndexedDB, configuration, or logs.
+- The experimental bridge rejects external access-token requests, derives its runtime origin
+  authorization from the packaged manifest, and keeps refresh/routing secrets only in trusted
+  session storage so they are cleared when Chrome exits.
+- Browser runtimes accept no environment map, credentials, headers, cookies, or host fetch adapter.
+  Runtime caches such as `node_modules`, `.venv`, and `__pycache__` are excluded from write-back.
+- Direct-directory runtime write-back requires an explicit confirmation. ZIP import is atomic and
+  bounded, and unified patches use exact context with no fuzzy matching.
+
+### Changed
+
+- The experimental package now serves the project introduction at `index.html`, documentation at
+  `docs.html`, and the runnable ChatGPT-backed composition at `workbench.html`.
+- The experimental extension is presented under the neutral single-purpose name **Loom Secure Model
+  Bridge**. Public submission remains blocked on a supported provider contract and verified
+  publisher/legal details.
+- The experimental example now defaults to `gpt-5.6-sol` and selects Responses Lite for GPT-5.6
+  model IDs, while retaining classic mode for older audited models.
+- The coding agent exposes optional stat, mkdir, move, remove, and exact-patch definitions only when
+  their corresponding tools are supplied. Hosted programs remain read-only.
+
 ## Unreleased — Phase 5.5
 
 ### Added
 
+- `@loom/model-openai-responses`, a separate adapter for the documented OpenAI Platform Responses
+  API with injected secure transport and trusted-host direct modes.
+- Programmatic Tool Calling request support, including `output_schema`, `allowed_callers`, hosted
+  `program`/`program_output` continuation items, caller-preserving function results, and
+  final-message continuation semantics.
+- Caller-aware parallel execution for hosted-program read-only calls. Workspace writes remain
+  direct-only and are rejected when attributed to a hosted program.
 - `@loom/model-codex-experimental`, an isolated adapter from the Phase 2 agent protocol to an
   audited Responses-style request and streamed SSE response, with an injected credential-free
   transport as its preferred mode.
@@ -38,8 +103,8 @@ This project follows a lightweight milestone changelog while packages remain pri
 
 ### Still deferred
 
-- Supported OpenAI client registration and third-party inference access, extension-store
-  publication, provider stability guarantees, production model selection, and execution runtimes.
+- Supported OpenAI client registration, a production API-key backend, extension-store publication,
+  production model selection and entitlement checks, and local execution runtimes.
 
 ## Phase 5
 

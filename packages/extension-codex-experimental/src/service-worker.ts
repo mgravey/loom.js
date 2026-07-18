@@ -1,12 +1,19 @@
 import { createCodexExperimentalExtension } from './composition.js';
 import type { CodexChromeExtensionApi, CodexModelFetch, OAuthFetch } from './chrome-contracts.js';
+import { externallyConnectableOrigins } from './manifest-origins.js';
 import { createCodexModelPortListener, type CodexModelDiagnosticEvent } from './model-transport.js';
+import { createOriginAuthorizer } from '@loom/extension';
 
 const host = globalThis as unknown as {
   readonly chrome: CodexChromeExtensionApi;
   readonly fetch: OAuthFetch & CodexModelFetch;
 };
 const fetchRequest = host.fetch.bind(globalThis);
+if (host.chrome.runtime.getManifest === undefined) {
+  throw new Error('Chrome runtime manifest access is unavailable.');
+}
+const allowedOrigins = externallyConnectableOrigins(host.chrome.runtime.getManifest());
+const originAuthorizer = createOriginAuthorizer(allowedOrigins);
 const reportModelDiagnostic = (event: CodexModelDiagnosticEvent): void => {
   globalThis.console.info('[loom:extension-model]', event);
 };
@@ -27,6 +34,7 @@ const authEnvelopeMetadata = (value: unknown): Readonly<Record<string, string | 
 const composition = createCodexExperimentalExtension({
   chromeApi: host.chrome,
   fetchRequest,
+  allowedOrigins,
 });
 
 host.chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => {
@@ -48,6 +56,7 @@ host.chrome.runtime.onConnectExternal.addListener(
     tokenService: composition.tokenService,
     accountRoutingStore: composition.accountRoutingStore,
     fetchRequest,
+    authorizer: originAuthorizer,
     diagnosticSink: reportModelDiagnostic,
   }),
 );

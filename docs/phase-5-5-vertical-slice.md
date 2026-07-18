@@ -8,7 +8,7 @@ be deployed as a production authentication or inference path.
 ## Trust boundary
 
 ```text
-localhost Loom page
+Loom workbench page
   |-- status/logout messages ---------------------------> extension
   |-- credential-free model request over runtime.Port --> extension
   |                                                       |-- refresh credential storage
@@ -45,9 +45,9 @@ Keep the server running. In Chrome:
 4. Choose `packages/extension-codex-experimental/dist` from this repository.
 5. Copy the generated extension ID.
 6. Open the extension's **Details**, then **Extension options**.
-7. Read the warning and enable the experimental device-code flow.
-8. Select **Start device authorization**, open the displayed provider URL, enter the displayed code,
-   and finish sign-in.
+7. Read the warning and enable the experimental authentication flows.
+8. Select **Sign in with ChatGPT** for the browser/PKCE callback bridge, or choose **Use device-code
+   fallback**, open the displayed provider URL, enter the displayed code, and finish sign-in.
 9. Confirm that the options page says a refresh credential is stored.
 
 Do not paste any token response into Loom. The extension completes the exchange itself. If a
@@ -56,15 +56,19 @@ credentials from Codex CLI or another application.
 
 ## Run the browser application
 
-Open <http://localhost:4173/example-codex-experimental/> in the same Chrome profile.
+Open the welcome page at <http://localhost:4173/example-codex-experimental/> in the same Chrome
+profile, then choose **Open workbench**. The runnable application is
+<http://localhost:4173/example-codex-experimental/workbench.html>.
 
 1. Paste only the non-secret extension ID into **Experimental extension ID**.
 2. Select **Check authentication**.
 3. Keep the suggested model or enter a model currently available to the signed-in account. Model
    availability is provider-controlled and may change independently of Loom.
-4. Enter an agent request.
-5. Select **Choose directory and run**, approve a workspace directory, and inspect the streamed
-   event log.
+4. Select a direct directory, disposable memory project, or persistent OPFS project. Folder and ZIP
+   import are available for virtual projects, and every mode can export a ZIP.
+5. Enter an agent request, select **Run agent**, and inspect the streamed event log. The lower
+   runner can execute QuickJS, WebContainer Node.js, or Pyodide Python against the same project
+   snapshot.
 6. Select **Log out extension credential** when finished. Logout removes both the refresh credential
    and saved account-routing ID.
 
@@ -85,11 +89,10 @@ localhost page's **Network** panel. Open both diagnostic consoles before retryin
 
 The page logs credential-status messages plus Port request/start/chunk/end/error metadata. The
 extension logs origin authorization, envelope validation, account-routing lookup, token refresh,
-provider-fetch host/path/method/model, HTTP status, and stream totals. The current suggested model
-is `gpt-5.5`: it is the newest model in the audited Codex catalog that uses the classic Responses
-shape and ordinary function tools. The catalog's `gpt-5.6-sol`, `gpt-5.6-terra`, and `gpt-5.6-luna`
-entries require the separate Responses Lite protocol, which this experimental adapter does not yet
-implement. A failure returned to the page includes one safe code and stage:
+provider-fetch host/path/method/model, HTTP status, and stream totals. The workbench defaults to
+`gpt-5.6-sol` and uses Responses Lite for GPT-5.6 model IDs. Lite moves instructions and tools into
+developer input items and the extension injects the required transport header; older model IDs
+retain the classic Responses shape. A failure returned to the page includes one safe code and stage:
 
 | Code                          | Meaning before provider inference                                      |
 | ----------------------------- | ---------------------------------------------------------------------- |
@@ -148,5 +151,6 @@ It uses `POST https://chatgpt.com/backend-api/codex/responses`, bearer authentic
 Platform Responses API.
 
 Use a dedicated test account, do not share token payloads, and log out immediately after testing.
-The direct `chrome.identity` authorization path remains blocked because the CLI's registered
-localhost redirect does not establish support for Chrome's `chromiumapp.org` redirect.
+The normal browser path keeps the CLI's registered localhost redirect and uses a tab-scoped DNR rule
+to transform that navigation into an extension callback page before localhost is contacted. This is
+an observed compatibility mechanism, not a supported third-party OAuth registration.

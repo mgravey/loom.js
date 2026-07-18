@@ -5,6 +5,12 @@ import {
 
 import type { BrowserCrypto, CodexChromeExtensionApi, OAuthFetch } from './chrome-contracts.js';
 import { createCodexAccountRoutingStore } from './account-routing.js';
+import {
+  clearBrowserAuthorization,
+  CODEX_EXTENSION_CALLBACK_PATH,
+  createBrowserAuthorizationBridgeStore,
+  startBrowserAuthorization,
+} from './browser-authorization.js';
 import { CODEX_EXPERIMENTAL_CONFIGURATION } from './composition.js';
 import { runManualDeviceAuthorization } from './manual-authorization.js';
 import { createCodexExperimentSettings } from './settings.js';
@@ -22,13 +28,15 @@ const host = globalThis as unknown as {
   readonly fetch: OAuthFetch;
   readonly setTimeout: (callback: () => void, milliseconds: number) => unknown;
 };
-const storage = host.chrome.storage.local;
-const settings = createCodexExperimentSettings(storage);
+const settings = createCodexExperimentSettings(host.chrome.storage.local);
+const storage = host.chrome.storage.session;
 const credentialStore = createChromeRefreshCredentialStore(storage);
 const accountRoutingStore = createCodexAccountRoutingStore(storage);
+const bridgeStore = createBrowserAuthorizationBridgeStore(host.chrome.storage.session);
 const ready = initializeTrustedCredentialStorage(storage, () => Promise.resolve());
 const enabled = requiredElement<HTMLInputElement>(host.document, 'enabled');
-const authorize = requiredElement<HTMLButtonElement>(host.document, 'authorize');
+const browserAuthorize = requiredElement<HTMLButtonElement>(host.document, 'browser-authorize');
+const deviceAuthorize = requiredElement<HTMLButtonElement>(host.document, 'device-authorize');
 const logout = requiredElement<HTMLButtonElement>(host.document, 'logout');
 const challenge = requiredElement<HTMLElement>(host.document, 'challenge');
 const verificationUrl = requiredElement<HTMLAnchorElement>(host.document, 'verification-url');
@@ -52,7 +60,7 @@ async function refreshCredentialStatus(): Promise<void> {
   const incomplete = (credential === undefined) !== (accountId === undefined);
   logout.disabled = credential === undefined && accountId === undefined;
   credentialStatus.textContent = authenticated
-    ? 'Authenticated. Refresh and account-routing state are stored inside the extension.'
+    ? 'Authenticated for this browser session. Refresh and routing state remain inside the extension.'
     : incomplete
       ? 'Incomplete authorization. Remove stored authorization, then sign in again.'
       : 'Not authenticated. No authorization state is stored.';
@@ -61,7 +69,8 @@ async function refreshCredentialStatus(): Promise<void> {
 async function initialize(): Promise<void> {
   await ready;
   enabled.checked = await settings.isDeviceAuthorizationEnabled();
-  authorize.disabled = !enabled.checked;
+  browserAuthorize.disabled = !enabled.checked;
+  deviceAuthorize.disabled = !enabled.checked;
   await refreshCredentialStatus();
   status.textContent = enabled.checked
     ? 'The experiment is enabled. Authorization still requires the button below.'
@@ -71,28 +80,43 @@ async function initialize(): Promise<void> {
 enabled.addEventListener('change', () => {
   void (async () => {
     await settings.setDeviceAuthorizationEnabled(enabled.checked);
-    authorize.disabled = !enabled.checked;
+    browserAuthorize.disabled = !enabled.checked;
+    deviceAuthorize.disabled = !enabled.checked;
     clearChallenge();
     if (!enabled.checked) {
-      await credentialStore.delete(CODEX_EXPERIMENTAL_CONFIGURATION.providerId);
-      await accountRoutingStore.delete();
+      await Promise.all([
+        clearBrowserAuthorization({
+          bridgeStore,
+          transactionStorage: host.chrome.storage.session,
+          declarativeNetRequest: host.chrome.declarativeNetRequest,
+        }),
+        credentialStore.delete(CODEX_EXPERIMENTAL_CONFIGURATION.providerId),
+        accountRoutingStore.delete(),
+      ]);
       await refreshCredentialStatus();
       status.textContent = 'The experiment is disabled and its refresh credential was removed.';
     } else {
-      status.textContent = 'Enabled. Select Start device authorization to continue.';
+      status.textContent = 'Enabled. Sign in with ChatGPT or use the device-code fallback.';
     }
   })().catch(() => {
     enabled.checked = false;
-    authorize.disabled = true;
+    browserAuthorize.disabled = true;
+    deviceAuthorize.disabled = true;
     status.textContent = 'The trusted extension settings could not be updated.';
   });
 });
 
 logout.addEventListener('click', () => {
   logout.disabled = true;
-  void credentialStore
-    .delete(CODEX_EXPERIMENTAL_CONFIGURATION.providerId)
-    .then(() => accountRoutingStore.delete())
+  void Promise.all([
+    clearBrowserAuthorization({
+      bridgeStore,
+      transactionStorage: host.chrome.storage.session,
+      declarativeNetRequest: host.chrome.declarativeNetRequest,
+    }),
+    credentialStore.delete(CODEX_EXPERIMENTAL_CONFIGURATION.providerId),
+    accountRoutingStore.delete(),
+  ])
     .then(refreshCredentialStatus)
     .then(() => {
       status.textContent = 'Stored authorization was removed.';
@@ -102,8 +126,36 @@ logout.addEventListener('click', () => {
     });
 });
 
-authorize.addEventListener('click', () => {
-  authorize.disabled = true;
+browserAuthorize.addEventListener('click', () => {
+  browserAuthorize.disabled = true;
+  clearChallenge();
+  status.textContent = 'Opening ChatGPT sign-in…';
+  void startBrowserAuthorization({
+    settings,
+    credentialStore,
+    accountRoutingStore,
+    transactionStorage: host.chrome.storage.session,
+    bridgeStore,
+    declarativeNetRequest: host.chrome.declarativeNetRequest,
+    tabs: host.chrome.tabs,
+    fetchRequest: host.fetch.bind(globalThis),
+    cryptoApi: host.crypto,
+    callbackUrl: host.chrome.runtime.getURL(CODEX_EXTENSION_CALLBACK_PATH),
+  })
+    .then(() => {
+      status.textContent =
+        'Complete ChatGPT sign-in in the new tab. The localhost callback will return to this extension.';
+    })
+    .catch(() => {
+      status.textContent = 'ChatGPT browser login could not be started.';
+    })
+    .finally(() => {
+      browserAuthorize.disabled = !enabled.checked;
+    });
+});
+
+deviceAuthorize.addEventListener('click', () => {
+  deviceAuthorize.disabled = true;
   clearChallenge();
   status.textContent = 'Requesting a device authorization code…';
   void runManualDeviceAuthorization({
@@ -130,7 +182,7 @@ authorize.addEventListener('click', () => {
     })
     .then(() => {
       status.textContent =
-        'Authorization complete. The temporary access token was discarded; Loom will refresh on demand.';
+        'Authorization complete for this browser session. The temporary access token was discarded; Loom will refresh on demand.';
     })
     .catch(() => {
       clearChallenge();
@@ -138,13 +190,18 @@ authorize.addEventListener('click', () => {
         'Authorization did not complete. No provider response details or credentials were logged.';
     })
     .finally(() => {
-      authorize.disabled = !enabled.checked;
+      deviceAuthorize.disabled = !enabled.checked;
     });
+});
+
+host.document.addEventListener('visibilitychange', () => {
+  if (host.document.visibilityState === 'visible') void refreshCredentialStatus();
 });
 
 void initialize().catch(() => {
   enabled.checked = false;
   enabled.disabled = true;
-  authorize.disabled = true;
+  browserAuthorize.disabled = true;
+  deviceAuthorize.disabled = true;
   status.textContent = 'Trusted credential storage could not be initialized.';
 });

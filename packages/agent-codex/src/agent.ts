@@ -1,13 +1,8 @@
 import type { Agent, AgentDependencies, AgentFactory, OperationContext } from '@loom/plugin-api';
 import {
   WORKSPACE_OPERATIONS,
-  type ListFilesTool,
-  type ReadFileInput,
-  type ReadFileTool,
   type WorkspaceOperation,
   type WorkspaceTool,
-  type WriteFileInput,
-  type WriteFileTool,
 } from '@loom/tool-workspace';
 import { immutableJson, type DeepReadonly, type JsonObject, type JsonValue } from '@loom/types';
 
@@ -47,17 +42,7 @@ export type CodexAgentFactory = AgentFactory<
   CodexAgentDependencies
 >;
 
-interface WorkspaceToolSet {
-  readonly listFiles: ListFilesTool;
-  readonly readFile: ReadFileTool;
-  readonly writeFile: WriteFileTool;
-}
-
-interface MutableWorkspaceToolSet {
-  listFiles?: ListFilesTool;
-  readFile?: ReadFileTool;
-  writeFile?: WriteFileTool;
-}
+type WorkspaceToolSet = ReadonlyMap<WorkspaceOperation, WorkspaceTool>;
 
 interface ValidatedConfiguration {
   readonly maxTurns: number;
@@ -73,6 +58,26 @@ const TOOL_DEFINITIONS = Object.freeze([
       properties: { path: { type: 'string' } },
       additionalProperties: false,
     }) as JsonObject,
+    outputSchema: immutableJson({
+      type: 'object',
+      properties: {
+        entries: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              path: { type: 'string' },
+              kind: { type: 'string', enum: ['file', 'directory'] },
+            },
+            required: ['path', 'kind'],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ['entries'],
+      additionalProperties: false,
+    }) as JsonObject,
+    allowedCallers: Object.freeze(['direct', 'programmatic'] as const),
   }),
   Object.freeze({
     operation: WORKSPACE_OPERATIONS.readFile,
@@ -83,6 +88,13 @@ const TOOL_DEFINITIONS = Object.freeze([
       required: ['path'],
       additionalProperties: false,
     }) as JsonObject,
+    outputSchema: immutableJson({
+      type: 'object',
+      properties: { path: { type: 'string' }, content: { type: 'string' } },
+      required: ['path', 'content'],
+      additionalProperties: false,
+    }) as JsonObject,
+    allowedCallers: Object.freeze(['direct', 'programmatic'] as const),
   }),
   Object.freeze({
     operation: WORKSPACE_OPERATIONS.writeFile,
@@ -93,8 +105,78 @@ const TOOL_DEFINITIONS = Object.freeze([
       required: ['path', 'content'],
       additionalProperties: false,
     }) as JsonObject,
+    outputSchema: immutableJson({
+      type: 'object',
+      properties: { path: { type: 'string' }, created: { type: 'boolean' } },
+      required: ['path', 'created'],
+      additionalProperties: false,
+    }) as JsonObject,
+    allowedCallers: Object.freeze(['direct'] as const),
+  }),
+  Object.freeze({
+    operation: WORKSPACE_OPERATIONS.stat,
+    description: 'Inspect the type, byte size, and modification time of a workspace entry.',
+    inputSchema: immutableJson({
+      type: 'object',
+      properties: { path: { type: 'string' } },
+      required: ['path'],
+      additionalProperties: false,
+    }) as JsonObject,
+    allowedCallers: Object.freeze(['direct', 'programmatic'] as const),
+  }),
+  Object.freeze({
+    operation: WORKSPACE_OPERATIONS.createDirectory,
+    description: 'Create a directory, optionally including missing parents.',
+    inputSchema: immutableJson({
+      type: 'object',
+      properties: { path: { type: 'string' }, recursive: { type: 'boolean' } },
+      required: ['path'],
+      additionalProperties: false,
+    }) as JsonObject,
+    allowedCallers: Object.freeze(['direct'] as const),
+  }),
+  Object.freeze({
+    operation: WORKSPACE_OPERATIONS.move,
+    description: 'Move or rename a file or directory.',
+    inputSchema: immutableJson({
+      type: 'object',
+      properties: {
+        source: { type: 'string' },
+        destination: { type: 'string' },
+        overwrite: { type: 'boolean' },
+      },
+      required: ['source', 'destination'],
+      additionalProperties: false,
+    }) as JsonObject,
+    allowedCallers: Object.freeze(['direct'] as const),
+  }),
+  Object.freeze({
+    operation: WORKSPACE_OPERATIONS.remove,
+    description: 'Remove a file or directory. Recursive removal must be explicitly requested.',
+    inputSchema: immutableJson({
+      type: 'object',
+      properties: { path: { type: 'string' }, recursive: { type: 'boolean' } },
+      required: ['path'],
+      additionalProperties: false,
+    }) as JsonObject,
+    allowedCallers: Object.freeze(['direct'] as const),
+  }),
+  Object.freeze({
+    operation: WORKSPACE_OPERATIONS.applyPatch,
+    description: 'Apply an exact-context unified diff to one UTF-8 workspace file.',
+    inputSchema: immutableJson({
+      type: 'object',
+      properties: { path: { type: 'string' }, patch: { type: 'string' } },
+      required: ['path', 'patch'],
+      additionalProperties: false,
+    }) as JsonObject,
+    allowedCallers: Object.freeze(['direct'] as const),
   }),
 ] satisfies readonly CodexModelToolDefinition[]);
+
+const AGENT_OPERATIONS = new Set<WorkspaceOperation>(
+  TOOL_DEFINITIONS.map((definition) => definition.operation),
+);
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
@@ -119,11 +201,7 @@ function exactKeys(
 }
 
 function isWorkspaceOperation(value: string): value is WorkspaceOperation {
-  return (
-    value === WORKSPACE_OPERATIONS.listFiles ||
-    value === WORKSPACE_OPERATIONS.readFile ||
-    value === WORKSPACE_OPERATIONS.writeFile
-  );
+  return AGENT_OPERATIONS.has(value as WorkspaceOperation);
 }
 
 function validateConfiguration(configuration: DeepReadonly<JsonObject>): ValidatedConfiguration {
@@ -153,7 +231,7 @@ function validateConfiguration(configuration: DeepReadonly<JsonObject>): Validat
 }
 
 function validateTools(tools: readonly WorkspaceTool[]): WorkspaceToolSet {
-  const found: MutableWorkspaceToolSet = {};
+  const found = new Map<WorkspaceOperation, WorkspaceTool>();
   for (const candidate of tools as readonly unknown[]) {
     if (!isRecord(candidate) || typeof candidate.operation !== 'string') {
       throw new CodexAgentError(
@@ -175,30 +253,22 @@ function validateTools(tools: readonly WorkspaceTool[]): WorkspaceToolSet {
       );
     }
 
-    const slot =
-      candidate.operation === WORKSPACE_OPERATIONS.listFiles
-        ? 'listFiles'
-        : candidate.operation === WORKSPACE_OPERATIONS.readFile
-          ? 'readFile'
-          : 'writeFile';
-    if (found[slot] !== undefined) {
+    if (found.has(candidate.operation)) {
       throw new CodexAgentError(
         'INVALID_DEPENDENCIES',
         `Duplicate Codex agent tool for operation '${candidate.operation}'.`,
         { details: { operation: candidate.operation } },
       );
     }
-    if (slot === 'listFiles') found.listFiles = candidate as unknown as ListFilesTool;
-    if (slot === 'readFile') found.readFile = candidate as unknown as ReadFileTool;
-    if (slot === 'writeFile') found.writeFile = candidate as unknown as WriteFileTool;
+    found.set(candidate.operation, candidate as unknown as WorkspaceTool);
   }
 
-  for (const [slot, operation] of [
-    ['listFiles', WORKSPACE_OPERATIONS.listFiles],
-    ['readFile', WORKSPACE_OPERATIONS.readFile],
-    ['writeFile', WORKSPACE_OPERATIONS.writeFile],
+  for (const operation of [
+    WORKSPACE_OPERATIONS.listFiles,
+    WORKSPACE_OPERATIONS.readFile,
+    WORKSPACE_OPERATIONS.writeFile,
   ] as const) {
-    if (found[slot] === undefined) {
+    if (!found.has(operation)) {
       throw new CodexAgentError(
         'INVALID_DEPENDENCIES',
         `Missing Codex agent tool for operation '${operation}'.`,
@@ -207,11 +277,7 @@ function validateTools(tools: readonly WorkspaceTool[]): WorkspaceToolSet {
     }
   }
 
-  return Object.freeze({
-    listFiles: found.listFiles,
-    readFile: found.readFile,
-    writeFile: found.writeFile,
-  }) as WorkspaceToolSet;
+  return found;
 }
 
 function validateDependencies(dependencies: CodexAgentDependencies): {
@@ -250,7 +316,12 @@ function validateRequest(request: CodexAgentRequest): string {
 }
 
 function normalizedToolCall(record: Readonly<Record<string, unknown>>): CodexAssistantToolCall {
-  exactKeys(record, ['id', 'operation', 'input'], 'MALFORMED_TOOL_CALL', 'Model tool call');
+  exactKeys(
+    record,
+    ['id', 'operation', 'input', 'caller'],
+    'MALFORMED_TOOL_CALL',
+    'Model tool call',
+  );
   if (typeof record.id !== 'string' || record.id.trim() === '') {
     throw new CodexAgentError('MALFORMED_TOOL_CALL', 'Model tool call requires a non-empty id.');
   }
@@ -279,7 +350,46 @@ function normalizedToolCall(record: Readonly<Record<string, unknown>>): CodexAss
   if (!isRecord(input)) {
     throw new CodexAgentError('MALFORMED_TOOL_CALL', 'Model tool call input must be an object.');
   }
-  return Object.freeze({ id: record.id, operation: record.operation, input });
+  let caller: JsonObject | undefined;
+  if (record.caller !== undefined) {
+    let candidate: JsonValue;
+    try {
+      candidate = immutableJson(record.caller);
+    } catch (error) {
+      throw new CodexAgentError('MALFORMED_TOOL_CALL', 'Model tool caller must be JSON.', {
+        cause: error,
+      });
+    }
+    if (
+      !isRecord(candidate) ||
+      candidate.type !== 'program' ||
+      typeof candidate.caller_id !== 'string' ||
+      candidate.caller_id.trim() === ''
+    ) {
+      throw new CodexAgentError(
+        'MALFORMED_TOOL_CALL',
+        'Model tool caller must identify a hosted program.',
+      );
+    }
+    if (
+      record.operation !== WORKSPACE_OPERATIONS.listFiles &&
+      record.operation !== WORKSPACE_OPERATIONS.readFile &&
+      record.operation !== WORKSPACE_OPERATIONS.stat
+    ) {
+      throw new CodexAgentError(
+        'UNAUTHORIZED_TOOL_CALL',
+        'Hosted programs cannot invoke mutating workspace operations.',
+        { details: { operation: record.operation } },
+      );
+    }
+    caller = candidate;
+  }
+  return Object.freeze({
+    id: record.id,
+    operation: record.operation,
+    input,
+    ...(caller === undefined ? {} : { caller }),
+  });
 }
 
 function normalizedModelEvent(
@@ -287,7 +397,8 @@ function normalizedModelEvent(
 ):
   | { readonly type: 'text'; readonly text: string }
   | { readonly type: 'tool-call'; readonly call: CodexAssistantToolCall }
-  | { readonly type: 'completed' } {
+  | { readonly type: 'continuation'; readonly item: JsonObject }
+  | { readonly type: 'completed'; readonly final: boolean } {
   if (!isRecord(value) || typeof value.type !== 'string') {
     throw new CodexAgentError('MALFORMED_MODEL_EVENT', 'Model emitted a malformed event.');
   }
@@ -305,9 +416,30 @@ function normalizedModelEvent(
     }
     return Object.freeze({ type: 'tool-call', call: normalizedToolCall(value.call) });
   }
+  if (value.type === 'continuation') {
+    exactKeys(value, ['type', 'item'], 'MALFORMED_MODEL_EVENT', 'Model continuation event');
+    let item: JsonValue;
+    try {
+      item = immutableJson(value.item);
+    } catch (error) {
+      throw new CodexAgentError('MALFORMED_MODEL_EVENT', 'Continuation item must be JSON.', {
+        cause: error,
+      });
+    }
+    if (!isRecord(item)) {
+      throw new CodexAgentError('MALFORMED_MODEL_EVENT', 'Continuation item must be an object.');
+    }
+    return Object.freeze({ type: 'continuation', item });
+  }
   if (value.type === 'completed') {
-    exactKeys(value, ['type'], 'MALFORMED_MODEL_EVENT', 'Model completed event');
-    return Object.freeze({ type: 'completed' });
+    exactKeys(value, ['type', 'final'], 'MALFORMED_MODEL_EVENT', 'Model completed event');
+    if (value.final !== undefined && typeof value.final !== 'boolean') {
+      throw new CodexAgentError(
+        'MALFORMED_MODEL_EVENT',
+        'Model completed event final must be boolean when provided.',
+      );
+    }
+    return Object.freeze({ type: 'completed', final: value.final ?? true });
   }
   throw new CodexAgentError('UNKNOWN_MODEL_EVENT', `Unknown model event type '${value.type}'.`, {
     details: { type: value.type },
@@ -321,13 +453,16 @@ async function executeTool(
 ): Promise<JsonValue> {
   let output: unknown;
   try {
-    if (call.operation === WORKSPACE_OPERATIONS.listFiles) {
-      output = await tools.listFiles.execute(call.input, context);
-    } else if (call.operation === WORKSPACE_OPERATIONS.readFile) {
-      output = await tools.readFile.execute(call.input as unknown as ReadFileInput, context);
-    } else {
-      output = await tools.writeFile.execute(call.input as unknown as WriteFileInput, context);
+    const tool = tools.get(call.operation);
+    if (tool === undefined) {
+      throw new CodexAgentError(
+        'UNKNOWN_TOOL_OPERATION',
+        `No workspace tool is available for '${call.operation}'.`,
+      );
     }
+    output = await (
+      tool.execute as (input: JsonObject, operationContext?: OperationContext) => Promise<unknown>
+    )(call.input, context);
     context?.signal?.throwIfCancelled();
     return immutableJson(output);
   } catch (error) {
@@ -343,11 +478,12 @@ async function executeTool(
 function modelRequest(
   messages: readonly CodexModelMessage[],
   instructions: string,
+  tools: WorkspaceToolSet,
 ): CodexModelRequest {
   return Object.freeze({
     instructions,
     messages: Object.freeze([...messages]),
-    tools: TOOL_DEFINITIONS,
+    tools: Object.freeze(TOOL_DEFINITIONS.filter((definition) => tools.has(definition.operation))),
   });
 }
 
@@ -364,11 +500,13 @@ function createAgent(bindings: ReturnType<typeof validateDependencies>): CodexAg
       for (let turn = 1; turn <= bindings.maxTurns; turn += 1) {
         context?.signal?.throwIfCancelled();
         let completed = false;
+        let final = true;
         let text = '';
         const calls: CodexAssistantToolCall[] = [];
+        const continuationItems: JsonObject[] = [];
         try {
           const stream = bindings.model.generate(
-            modelRequest(history, bindings.instructions),
+            modelRequest(history, bindings.instructions, bindings.tools),
             context,
           );
           for await (const rawEvent of stream as AsyncIterable<unknown>) {
@@ -376,11 +514,16 @@ function createAgent(bindings: ReturnType<typeof validateDependencies>): CodexAg
             const event = normalizedModelEvent(rawEvent);
             if (event.type === 'completed') {
               completed = true;
+              final = event.final;
               break;
             }
             if (event.type === 'text') {
               text += event.text;
               yield Object.freeze({ type: 'text', text: event.text });
+              continue;
+            }
+            if (event.type === 'continuation') {
+              continuationItems.push(event.item);
               continue;
             }
             if (seenCallIds.has(event.call.id)) {
@@ -415,15 +558,80 @@ function createAgent(bindings: ReturnType<typeof validateDependencies>): CodexAg
           role: 'assistant',
           content: text,
           toolCalls: Object.freeze([...calls]),
+          continuationItems: Object.freeze([...continuationItems]),
         });
         history.push(assistantMessage);
 
         if (calls.length === 0) {
+          if (!final) continue;
           yield Object.freeze({ type: 'completed', turns: turn });
           return;
         }
 
-        for (const call of calls) {
+        let callIndex = 0;
+        while (callIndex < calls.length) {
+          const call = calls[callIndex];
+          if (call === undefined) break;
+          if (call.caller !== undefined) {
+            const batch: CodexAssistantToolCall[] = [];
+            while (callIndex < calls.length) {
+              const candidate = calls[callIndex];
+              if (candidate?.caller === undefined) break;
+              batch.push(candidate);
+              callIndex += 1;
+            }
+            for (const nestedCall of batch) {
+              const nestedCaller = nestedCall.caller;
+              if (nestedCaller === undefined) {
+                throw new CodexAgentError(
+                  'MALFORMED_TOOL_CALL',
+                  `Nested tool call '${nestedCall.id}' is missing caller metadata.`,
+                );
+              }
+              yield Object.freeze({
+                type: 'tool-start',
+                callId: nestedCall.id,
+                operation: nestedCall.operation,
+                input: nestedCall.input,
+                caller: nestedCaller,
+              });
+            }
+            const results = await Promise.all(
+              batch.map((nestedCall) => executeTool(bindings.tools, nestedCall, context)),
+            );
+            for (const [index, nestedCall] of batch.entries()) {
+              const result = results[index];
+              if (result === undefined) {
+                throw new CodexAgentError(
+                  'TOOL_FAILURE',
+                  `Workspace tool '${nestedCall.operation}' returned no result for call '${nestedCall.id}'.`,
+                );
+              }
+              const nestedCaller = nestedCall.caller;
+              if (nestedCaller === undefined) {
+                throw new CodexAgentError(
+                  'MALFORMED_TOOL_CALL',
+                  `Nested tool call '${nestedCall.id}' is missing caller metadata.`,
+                );
+              }
+              const toolMessage: CodexToolMessage = Object.freeze({
+                role: 'tool',
+                callId: nestedCall.id,
+                operation: nestedCall.operation,
+                result,
+                caller: nestedCaller,
+              });
+              history.push(toolMessage);
+              yield Object.freeze({
+                type: 'tool-finish',
+                callId: nestedCall.id,
+                operation: nestedCall.operation,
+                result,
+                caller: nestedCaller,
+              });
+            }
+            continue;
+          }
           context?.signal?.throwIfCancelled();
           yield Object.freeze({
             type: 'tool-start',
@@ -445,6 +653,7 @@ function createAgent(bindings: ReturnType<typeof validateDependencies>): CodexAg
             operation: call.operation,
             result,
           });
+          callIndex += 1;
         }
       }
 

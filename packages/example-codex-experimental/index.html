@@ -3,106 +3,282 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Loom.js Codex experiment</title>
-    <style>
-      :root {
-        color-scheme: light dark;
-        font-family: system-ui, sans-serif;
-        line-height: 1.5;
-      }
-      body {
-        margin: 0;
-        padding: 2rem;
-      }
-      main {
-        max-width: 52rem;
-        margin: 0 auto;
-      }
-      .warning {
-        padding: 1rem;
-        border: 1px solid #b7791f;
-        border-radius: 0.5rem;
-      }
-      .grid,
-      label {
-        display: grid;
-        gap: 0.5rem;
-      }
-      .grid {
-        gap: 1rem;
-        margin-block: 1.5rem;
-      }
-      input,
-      textarea,
-      button {
-        padding: 0.65rem;
-        font: inherit;
-      }
-      textarea {
-        min-height: 7rem;
-        resize: vertical;
-      }
-      .actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.75rem;
-      }
-      button {
-        cursor: pointer;
-      }
-      button:disabled {
-        cursor: not-allowed;
-      }
-      #status {
-        min-height: 1.5rem;
-        font-weight: 600;
-      }
-      pre {
-        min-height: 10rem;
-        padding: 1rem;
-        overflow: auto;
-        border: 1px solid currentColor;
-        border-radius: 0.4rem;
-        white-space: pre-wrap;
-      }
-    </style>
+    <meta
+      name="description"
+      content="Loom.js is a composable TypeScript library for browser-capable coding agents."
+    />
+    <title>Loom.js · Weave coding agents into your application</title>
+    <link rel="stylesheet" href="./site.css" />
   </head>
   <body>
+    <nav class="site-nav" aria-label="Main navigation">
+      <div class="shell nav-inner">
+        <a class="brand" href="./index.html" aria-label="Loom.js home">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <span>Loom.js</span>
+        </a>
+        <div class="nav-links">
+          <a href="#potential">Potential</a>
+          <a href="./docs.html">Documentation</a>
+          <a href="./install.html">Install</a>
+          <a class="button quiet nav-cta" href="./workbench.html">Open workbench</a>
+        </div>
+      </div>
+    </nav>
+
     <main>
-      <h1>Loom.js Codex authentication experiment</h1>
-      <p class="warning">
-        This is an unsupported interoperability experiment. Authenticate only from the extension's
-        trusted options page. Refresh and ID credentials remain inside the extension.
-      </p>
-      <div class="grid">
-        <label>
-          Experimental extension ID
-          <input id="extension-id" required autocomplete="off" spellcheck="false" />
-        </label>
-        <label>
-          Model
-          <input id="model" value="gpt-5.5" required autocomplete="off" spellcheck="false" />
-        </label>
-        <label>
-          Agent request
-          <textarea id="prompt" required>
-Inspect the selected workspace and summarize source.txt. Use tools only when needed.</textarea>
-        </label>
-      </div>
-      <div class="actions">
-        <button id="check-auth" type="button">Check authentication</button>
-        <button id="run" type="button" disabled>Choose directory and run</button>
-        <button id="logout" type="button" disabled>Log out extension credential</button>
-      </div>
-      <p>
-        To sign in, open <code>chrome://extensions</code>, select the Loom Codex experiment, and
-        open its Extension options page.
-      </p>
-      <p id="status" role="status" aria-live="polite">
-        Enter the extension ID, then check authentication.
-      </p>
-      <pre id="log" role="log" aria-label="Codex experiment event log" aria-live="polite"></pre>
+      <section class="hero">
+        <div class="shell hero-grid">
+          <div>
+            <span class="eyebrow">Composable agent infrastructure</span>
+            <h1>Weave coding agents into <span class="gradient-text">your application.</span></h1>
+            <p class="hero-copy">
+              Loom.js is a provider-neutral TypeScript library for composing models, tools,
+              workspaces, storage, and execution runtimes—without surrendering control of your
+              application boundary.
+            </p>
+            <div class="button-row">
+              <a class="button primary" href="./docs.html#start">Start building</a>
+              <a class="button" href="./workbench.html">Try the browser example</a>
+              <a class="button quiet" data-extension-install href="./install.html"
+                >Install unpacked extension</a
+              >
+            </div>
+            <p class="hero-note">
+              Private preview · ESM · TypeScript · Browser and trusted-host primitives
+            </p>
+          </div>
+
+          <div class="loom-visual" aria-label="Loom orchestration diagram">
+            <span class="thread one" aria-hidden="true"></span>
+            <span class="thread two" aria-hidden="true"></span>
+            <span class="thread three" aria-hidden="true"></span>
+            <div class="visual-card model">
+              <small>provider leaf</small>
+              <strong>Model transport</strong>
+            </div>
+            <div class="visual-card workspace-card">
+              <small>your authority</small>
+              <strong>Project workspace</strong>
+            </div>
+            <div class="visual-card orchestrator">
+              <small>@loom/coding</small>
+              <strong>Coding session</strong>
+            </div>
+            <div class="visual-card runtime-card">
+              <small>isolated adapter</small>
+              <strong>Execution runtime</strong>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="what-is-loom">
+        <div class="shell">
+          <div class="section-heading">
+            <h2>One repository. Two very different things.</h2>
+            <p>
+              The reusable library is the product. The workbench is one deliberately opinionated
+              composition that proves the pieces can cooperate inside a browser.
+            </p>
+          </div>
+          <div class="split-grid">
+            <article class="card accent">
+              <span class="card-label">The library</span>
+              <h3>Infrastructure you assemble</h3>
+              <p>
+                Small packages expose stable contracts for orchestration, models, tools,
+                capabilities, workspaces, credentials, storage, and execution.
+              </p>
+              <ul>
+                <li>Replace providers without changing Core</li>
+                <li>Inject exactly the filesystem authority you intend</li>
+                <li>Register application-specific capabilities as plugins</li>
+                <li>Keep browser, extension, and server concerns at the edges</li>
+              </ul>
+              <a class="card-link" href="./docs.html#mental-model">Understand the architecture</a>
+            </article>
+            <article class="card">
+              <span class="card-label">The example</span>
+              <h3>A browser coding workbench</h3>
+              <p>
+                A visible reference application combining a coding session, project tools, multiple
+                workspace modes, in-browser JavaScript/Python, and an experimental extension-owned
+                ChatGPT transport.
+              </p>
+              <ul>
+                <li>Direct directory, memory, or persistent OPFS projects</li>
+                <li>Folder and ZIP import, editing, diff application, ZIP export</li>
+                <li>QuickJS, WebContainer, and Pyodide adapters</li>
+                <li>Credentials remain outside the page and execution runtimes</li>
+              </ul>
+              <a class="card-link" href="./workbench.html">Open the example</a>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="potential">
+        <div class="shell">
+          <div class="section-heading">
+            <h2>Start with coding. Compose far beyond it.</h2>
+            <p>
+              Loom’s core knows capabilities and lifecycle—not vendors or interfaces. Use the same
+              foundation for a local coding tool, an embedded product assistant, a review agent, or
+              a controlled automation surface.
+            </p>
+          </div>
+          <div class="feature-grid">
+            <article class="card">
+              <span class="card-label">Orchestrate</span>
+              <h3>Stateful coding sessions</h3>
+              <p>
+                Stream events, preserve a transcript, accept follow-ups, cancel work, and dispatch
+                runtimes.
+              </p>
+            </article>
+            <article class="card">
+              <span class="card-label">Adapt</span>
+              <h3>Bring your own model</h3>
+              <p>
+                Inject a model or secure transport. Provider wire formats remain outside the core
+                contracts.
+              </p>
+            </article>
+            <article class="card">
+              <span class="card-label">Authorize</span>
+              <h3>Scope the workspace</h3>
+              <p>
+                Use memory, OPFS, File System Access, or implement the same project interface for
+                another host.
+              </p>
+            </article>
+            <article class="card">
+              <span class="card-label">Extend</span>
+              <h3>Register capabilities</h3>
+              <p>
+                Package tools, models, storage, runtimes, memory, platform services, and UI behind
+                typed keys.
+              </p>
+            </article>
+            <article class="card">
+              <span class="card-label">Execute</span>
+              <h3>Choose the runtime</h3>
+              <p>
+                Run JavaScript or Python in browser adapters, or inject a trusted-host execution
+                implementation.
+              </p>
+            </article>
+            <article class="card">
+              <span class="card-label">Observe</span>
+              <h3>Own every boundary</h3>
+              <p>
+                Events are explicit, configuration is immutable, and ambient credentials are never
+                assumed.
+              </p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="onboarding">
+        <div class="shell">
+          <div class="section-heading">
+            <h2>A deliberate path from zero to extension.</h2>
+            <p>
+              Begin with an in-memory project and an injected model. Once the first session works,
+              move each boundary to the adapter that matches your product.
+            </p>
+          </div>
+          <div class="steps-grid">
+            <article class="card step">
+              <h3>Run the repository</h3>
+              <p>
+                Install, build, and run the deterministic test suite before introducing credentials
+                or live services.
+              </p>
+              <a class="card-link" href="./docs.html#start">Setup instructions</a>
+            </article>
+            <article class="card step">
+              <h3>Create a session</h3>
+              <p>
+                Combine a model, a memory workspace, validated tools, and optional execution
+                runtimes.
+              </p>
+              <a class="card-link" href="./docs.html#first-session">First session</a>
+            </article>
+            <article class="card step">
+              <h3>Add your capability</h3>
+              <p>
+                Define a typed tool, register it during plugin initialization, then resolve it
+                through its canonical key.
+              </p>
+              <a class="card-link" href="./docs.html#custom-tools">Register a tool</a>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="security">
+        <div class="shell">
+          <div class="section-heading">
+            <h2>Credentials are not application data.</h2>
+            <p>
+              Loom treats identity and provider networking as trust-boundary concerns. The browser
+              workbench demonstrates one extension-backed solution; your library composition can use
+              a trusted backend instead.
+            </p>
+          </div>
+          <div class="boundary">
+            <div class="boundary-side">
+              <h3>Application side</h3>
+              <p>
+                Prompts, selected project context, provider response events, runtime snapshots, and
+                explicit user actions. Model request content goes only to the disclosed provider
+                when you request a model turn.
+              </p>
+            </div>
+            <div class="boundary-line">No refresh credentials<br />cross this line</div>
+            <div class="boundary-side">
+              <h3>Trusted transport side</h3>
+              <p>
+                Authentication, credential rotation, account routing, provider headers, and
+                cross-origin requests.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="shell cta">
+          <div>
+            <span class="eyebrow">Build the smallest useful composition</span>
+            <h2>Start with the mental model.</h2>
+            <p>
+              The onboarding guide explains every public boundary before it asks you to extend one.
+            </p>
+          </div>
+          <div class="button-row">
+            <a class="button primary" href="./docs.html">Read documentation</a>
+            <a class="button" href="./workbench.html">Launch example</a>
+          </div>
+        </div>
+      </section>
     </main>
-    <script type="module" src="./dist/main.js"></script>
+
+    <footer class="shell site-footer">
+      <a class="brand" href="./index.html"
+        ><span class="brand-mark" aria-hidden="true"></span>Loom.js</a
+      >
+      <div class="footer-links">
+        <a href="./privacy.html">Privacy</a>
+        <a href="./terms.html">Terms</a>
+        <a href="./legal.html">Legal notice</a>
+        <a href="./support.html">Support</a>
+      </div>
+    </footer>
+    <script src="./deployment-config.js"></script>
+    <script src="./site.js"></script>
   </body>
 </html>

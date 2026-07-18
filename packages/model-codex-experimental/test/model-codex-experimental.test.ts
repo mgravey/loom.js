@@ -93,6 +93,7 @@ describe('experimental Codex Responses model', () => {
     expect(sent).toHaveLength(1);
     expect(sent[0]).not.toHaveProperty('headers');
     expect(sent[0]).not.toHaveProperty('url');
+    expect(sent[0]).toMatchObject({ wireProtocol: 'classic' });
     const body = JSON.parse(sent[0]?.body ?? '') as Record<string, unknown>;
     expect(body).toMatchObject({
       model: 'audited-model-id',
@@ -168,6 +169,36 @@ describe('experimental Codex Responses model', () => {
     await expect(
       collect(parseCodexResponsesSse(chunks('event: custom\ndata: {"a":', '1}\n\n'))),
     ).resolves.toEqual([{ event: 'custom', data: '{"a":1}' }]);
+  });
+
+  it('uses the audited Responses Lite input-item envelope when requested', async () => {
+    const body = createCodexResponsesRequestBody(REQUEST, 'gpt-5.6-sol', 'responses-lite');
+    expect(body).not.toHaveProperty('instructions');
+    expect(body).not.toHaveProperty('tools');
+    expect(body.input).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'additional_tools', role: 'developer' }),
+        {
+          type: 'message',
+          role: 'developer',
+          content: [{ type: 'input_text', text: 'Work carefully.' }],
+        },
+      ]),
+    );
+
+    const requests: CodexResponsesRequest[] = [];
+    const model = createCodexExperimentalModel({
+      model: 'gpt-5.6-sol',
+      wireProtocol: 'responses-lite',
+      transport: {
+        async send(request) {
+          requests.push(request);
+          return response('data: {"type":"response.completed"}\n\n');
+        },
+      },
+    });
+    await collect(model.generate(REQUEST));
+    expect(requests[0]?.wireProtocol).toBe('responses-lite');
   });
 
   it('honors cancellation before authentication and while consuming the stream', async () => {

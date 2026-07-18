@@ -5,6 +5,7 @@ import {
   FSA_WORKSPACE_TOOL_CAPABILITY_IDS,
   FSA_WRITE_FILE_TOOL_KEY,
   FileSystemAccessWorkspaceError,
+  createFileSystemAccessProjectWorkspace,
   createFileSystemAccessTextWorkspace,
   createFileSystemAccessWorkspacePlugin,
 } from '../src/index.js';
@@ -26,7 +27,7 @@ function hostError(name: string): Error {
 
 class FakeFileHandle {
   public readonly kind = 'file' as const;
-  public content: string;
+  private bytes: Uint8Array;
   public writeError: unknown;
   public abortError: unknown;
   public aborted = false;
@@ -35,25 +36,47 @@ class FakeFileHandle {
     public readonly name: string,
     content: string,
   ) {
-    this.content = content;
+    this.bytes = new TextEncoder().encode(content);
+  }
+
+  public get content(): string {
+    return new TextDecoder().decode(this.bytes);
+  }
+
+  public set content(value: string) {
+    this.bytes = new TextEncoder().encode(value);
   }
 
   public getFile(): Promise<File> {
-    const content = this.content;
-    return Promise.resolve({ text: () => Promise.resolve(content) } as File);
+    const bytes = Uint8Array.from(this.bytes);
+    return Promise.resolve({
+      size: bytes.byteLength,
+      lastModified: 123,
+      text: () => Promise.resolve(new TextDecoder().decode(bytes)),
+      arrayBuffer: () => Promise.resolve(bytes.buffer),
+    } as File);
   }
 
   public createWritable(): Promise<FileSystemWritableFileStream> {
-    let pending = this.content;
+    let pending = Uint8Array.from(this.bytes);
     const writable = {
       write: (value: FileSystemWriteChunkType) => {
         if (this.writeError !== undefined) throw this.writeError;
-        if (typeof value !== 'string') throw new TypeError('The fake accepts string writes only.');
-        pending = value;
+        if (typeof value === 'string') {
+          pending = new TextEncoder().encode(value);
+        } else if (value instanceof ArrayBuffer) {
+          pending = new Uint8Array(value.slice(0));
+        } else if (ArrayBuffer.isView(value)) {
+          pending = Uint8Array.from(
+            new Uint8Array(value.buffer, value.byteOffset, value.byteLength),
+          );
+        } else {
+          throw new TypeError('Unsupported fake write.');
+        }
         return Promise.resolve();
       },
       close: () => {
-        this.content = pending;
+        this.bytes = pending;
         return Promise.resolve();
       },
       abort: () => {
@@ -97,6 +120,11 @@ class FakeDirectoryHandle {
   ): Promise<FileSystemDirectoryHandle> {
     this.directoryRequests.push({ name, options });
     const entry = this.children.get(name);
+    if (entry === undefined && options?.create === true) {
+      const created = new FakeDirectoryHandle(name);
+      this.children.set(name, created);
+      return Promise.resolve(created as unknown as FileSystemDirectoryHandle);
+    }
     if (entry === undefined) return Promise.reject(hostError('NotFoundError'));
     if (entry.kind !== 'directory') return Promise.reject(hostError('TypeMismatchError'));
     return Promise.resolve(entry as unknown as FileSystemDirectoryHandle);
@@ -117,6 +145,16 @@ class FakeDirectoryHandle {
       return Promise.resolve(created as unknown as FileSystemFileHandle);
     }
     return Promise.reject(hostError('NotFoundError'));
+  }
+
+  public removeEntry(name: string, options?: FileSystemRemoveOptions): Promise<void> {
+    const entry = this.children.get(name);
+    if (entry === undefined) return Promise.reject(hostError('NotFoundError'));
+    if (entry.kind === 'directory' && entry.children.size > 0 && options?.recursive !== true) {
+      return Promise.reject(hostError('InvalidModificationError'));
+    }
+    this.children.delete(name);
+    return Promise.resolve();
   }
 }
 
@@ -155,6 +193,38 @@ function fixtureRoot(): FakeDirectoryHandle {
 }
 
 describe('File System Access text workspace', () => {
+  it('also exposes binary-safe project workspace operations', async () => {
+    const root = fixtureRoot();
+    const workspace = createFileSystemAccessProjectWorkspace(
+      root as unknown as FileSystemDirectoryHandle,
+    );
+
+    await expect(workspace.stat(workspacePath('source.txt'))).resolves.toMatchObject({
+      kind: 'file',
+      size: 5,
+      modifiedAt: 123,
+    });
+    await workspace.createDirectory(workspacePath('generated/nested'), { recursive: true });
+    await workspace.writeBytes(
+      workspacePath('generated/nested/data.bin'),
+      new Uint8Array([0, 255]),
+    );
+    await expect(workspace.readBytes(workspacePath('generated/nested/data.bin'))).resolves.toEqual(
+      new Uint8Array([0, 255]),
+    );
+    await workspace.move(workspacePath('generated'), workspacePath('renamed'));
+    await expect(workspace.readBytes(workspacePath('renamed/nested/data.bin'))).resolves.toEqual(
+      new Uint8Array([0, 255]),
+    );
+    await expect(workspace.stat(workspacePath('generated'))).rejects.toMatchObject({
+      code: 'ENTRY_NOT_FOUND',
+    });
+    await workspace.remove(workspacePath('renamed'), { recursive: true });
+    await expect(workspace.stat(workspacePath('renamed'))).rejects.toMatchObject({
+      code: 'ENTRY_NOT_FOUND',
+    });
+  });
+
   it('lists immediate entries and reads nested UTF-8 text', async () => {
     const root = fixtureRoot();
     const workspace = createFileSystemAccessTextWorkspace(

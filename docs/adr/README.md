@@ -15,3 +15,5 @@ ADRs document decisions that constrain Loom's stable core. Status values are `Pr
 | [008](./008-extension-credential-boundary.md)  | Extension-owned credential boundary      | Accepted |
 | [009](./009-codex-auth-experiment-boundary.md) | Isolated, gated Codex auth experiment    | Accepted |
 | [010](./010-extension-model-transport.md)      | Extension-owned experimental model path  | Accepted |
+| [011](./011-platform-responses-programs.md)    | Isolated Platform program continuations  | Accepted |
+| [012](./012-browser-coding-workbench.md)       | Browser coding boundaries                | Accepted |

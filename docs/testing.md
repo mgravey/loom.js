@@ -83,15 +83,24 @@ Tests must cover:
 - experimental model request encoding, chunk-safe SSE parsing, streamed text/tool/completion events,
   cancellation, account routing, model Port origin checks, and credential-free page transport;
 - credential status/logout behavior and deletion of extension-owned refresh/routing state.
+- coding-session follow-ups, transcript snapshots, cancellation, runtime dispatch, and disposal;
+- memory/FSA project binary operations, strict patch atomicity, ZIP traversal/size/ratio defenses,
+  folder import, and binary-preserving export;
+- QuickJS, WebContainer, and Pyodide adapter loading, validation, output, timeout/cancellation,
+  snapshot write-back, cleanup, and credential-free request contracts;
+- callback bridge tab isolation, DNR cleanup, state/expiry/replay rejection, credential persistence,
+  browser-login failure cleanup, and retained device-code fallback;
+- classic and Responses Lite body/header separation.
 
 Provider-neutral fakes should cover every capability category while importing only `@loom/types` and
 `@loom/plugin-api`. Compile-time fixtures verify public types and package-boundary failures.
 
 ## Coverage policy
 
-Across `@loom/types`, `@loom/plugin-api`, `@loom/core`, `@loom/tool-workspace`, and
-`@loom/agent-codex`, plus the Phase 3 browser plugins, Phase 4 credential packages, and Phase 5
-experimental authentication and model packages, V8 coverage must meet:
+Across `@loom/types`, `@loom/plugin-api`, `@loom/core`, `@loom/tool-workspace`, `@loom/agent-codex`,
+`@loom/coding`, and `@loom/execution-browser`, plus the Platform Responses adapter, Phase 3 browser
+plugins, Phase 4 credential packages, and Phase 5 experimental authentication and model packages, V8
+coverage must meet:
 
 | Metric     | Minimum |
 | ---------- | ------: |
@@ -102,6 +111,11 @@ experimental authentication and model packages, V8 coverage must meet:
 
 Browser-only service-worker composition entrypoints are excluded from Node V8 instrumentation and
 remain required coverage in the real Chromium extension suites.
+
+Extension callback/options entrypoints, the expanded FSA host adapter, and browser execution engine
+bindings are also excluded from Node V8 totals. Their behavior is covered through browser fixtures,
+adapter tests, and injected backend contracts; loading the real multi-megabyte WASM distributions is
+an opt-in browser smoke check rather than a credential-free unit-suite requirement.
 
 Barrel-only `index.ts` files and test files are excluded. A threshold change requires an explicit
 architecture or testing decision, not a silent configuration edit.
@@ -136,9 +150,9 @@ without leaking stored state. This follows Playwright's
 Phase 5 tests provider behavior against deterministic in-process fakes and a local OAuth fixture. CI
 must never contact the real OpenAI authorization or token endpoints. Chromium loads only the
 separate experimental extension and verifies that authorization is off by default, can be initiated
-only from trusted extension UI, and never returns refresh credentials through the external broker.
-Any live compatibility check is manual, opt-in, unsupported, and must follow the re-audit gate in
-the [experiment guide](./codex-auth-experiment.md).
+only from trusted extension UI, stores refresh state only for the Chrome session, and rejects every
+external access-token request. Any live compatibility check is manual, opt-in, unsupported, and must
+follow the re-audit gate in the [experiment guide](./codex-auth-experiment.md).
 
 Phase 5.5 loads the experimental extension and the built localhost application together. Its local
 fixtures complete device authorization, refresh a synthetic access token, stream two synthetic

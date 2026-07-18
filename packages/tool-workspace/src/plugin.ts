@@ -140,7 +140,7 @@ function compareEntries(left: WorkspaceEntry, right: WorkspaceEntry): number {
   return 0;
 }
 
-function createTools(
+export function createWorkspaceTools(
   workspace: TextWorkspace,
 ): readonly [ListFilesTool, ReadFileTool, WriteFileTool] {
   const listFiles: ListFilesTool = Object.freeze({
@@ -226,7 +226,7 @@ function assertWorkspace(workspace: unknown): asserts workspace is TextWorkspace
 
 export function createWorkspaceToolsPlugin(options: CreateWorkspaceToolsPluginOptions): LoomPlugin {
   assertWorkspace(options.workspace);
-  const [listFiles, readFile, writeFile] = createTools(options.workspace);
+  const [listFiles, readFile, writeFile] = createWorkspaceTools(options.workspace);
 
   return definePlugin({
     manifest: {

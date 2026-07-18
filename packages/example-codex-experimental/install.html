@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Install the Loom Secure Model Bridge for development." />
+    <title>Install the Chrome extension · Loom.js</title>
+    <link rel="stylesheet" href="./site.css" />
+  </head>
+  <body>
+    <nav class="site-nav" aria-label="Main navigation">
+      <div class="shell nav-inner">
+        <a class="brand" href="./index.html"
+          ><span class="brand-mark" aria-hidden="true"></span>Loom.js</a
+        >
+        <div class="nav-links">
+          <a href="./docs.html">Documentation</a>
+          <a href="./support.html">Support</a>
+          <a class="button quiet nav-cta" href="./workbench.html">Open workbench</a>
+        </div>
+      </div>
+    </nav>
+
+    <div class="shell docs-layout">
+      <aside class="docs-sidebar">
+        <strong>Installation</strong>
+        <a href="#current-id">Current ID</a>
+        <a href="#build">Build</a>
+        <a href="#load">Load unpacked</a>
+        <a href="#connect">Connect the site</a>
+        <a href="#store">After publication</a>
+      </aside>
+      <main class="docs-main">
+        <header>
+          <span class="eyebrow">Development installation</span>
+          <h1>Install the secure model bridge</h1>
+          <p>
+            Until the extension is published, Chrome loads it from the repository. The ID below is
+            the current development value observed for this checkout; always trust the value shown
+            by your own <code>chrome://extensions</code> page.
+          </p>
+        </header>
+
+        <section class="doc-section" id="current-id">
+          <h2>Current development ID</h2>
+          <div class="code-block">
+            <pre><code>foofdcgdelahbdgdfgocoeajdodhjbjo</code></pre>
+          </div>
+          <p>
+            This is not the future Chrome Web Store ID. An unpacked ID can vary with packaging or
+            checkout location. The browser site reads its default from
+            <code>deployment-config.js</code>, and the field remains editable in the workbench.
+          </p>
+        </section>
+
+        <section class="doc-section" id="build">
+          <h2>1. Build the extension</h2>
+          <div class="code-block">
+            <pre><code>pnpm install --frozen-lockfile
+pnpm --filter @loom/extension-codex-experimental build</code></pre>
+          </div>
+          <p>The unpacked package is generated at:</p>
+          <div class="code-block">
+            <pre><code>packages/extension-codex-experimental/dist</code></pre>
+          </div>
+        </section>
+
+        <section class="doc-section" id="load">
+          <h2>2. Load it in Chrome</h2>
+          <ol>
+            <li>Open <code>chrome://extensions</code>.</li>
+            <li>Enable <strong>Developer mode</strong>.</li>
+            <li>Select <strong>Load unpacked</strong>.</li>
+            <li>Choose <code>packages/extension-codex-experimental/dist</code>.</li>
+            <li>Copy the ID displayed on the extension card.</li>
+            <li>Open <strong>Details → Extension options</strong>.</li>
+          </ol>
+          <div class="callout warning">
+            <strong>Authentication is disabled by default</strong>
+            <p>
+              Read the disclosure in the options page, explicitly enable the bridge, and then choose
+              browser sign-in or the device-code fallback. Disabling it removes stored
+              authorization.
+            </p>
+          </div>
+        </section>
+
+        <section class="doc-section" id="connect">
+          <h2>3. Connect the workbench</h2>
+          <div class="code-block">
+            <pre><code>pnpm build
+python3 -m http.server 4173 --directory packages</code></pre>
+          </div>
+          <ol>
+            <li>Open <a href="./workbench.html">the browser workbench</a>.</li>
+            <li>
+              Paste the ID from <code>chrome://extensions</code> if the prefilled value differs.
+            </li>
+            <li>Select <strong>Check authentication</strong>.</li>
+          </ol>
+          <p>
+            You may also supply the ID once with
+            <code>?extensionId=&lt;32-character-id&gt;</code>. The page remembers this non-secret ID
+            in local storage. It never stores a provider credential.
+          </p>
+        </section>
+
+        <section class="doc-section" id="store">
+          <h2>4. Switch after Chrome Web Store upload</h2>
+          <ol>
+            <li>Upload the first draft package to allocate the permanent Store item ID.</li>
+            <li>Replace <code>chromeExtensionId</code> in <code>deployment-config.js</code>.</li>
+            <li>Set <code>chromeWebStoreUrl</code> to the final listing URL.</li>
+            <li>Set the production HTTPS origin and verified legal/support details.</li>
+            <li>
+              Build the Store ZIP with the production-origin packaging command documented in the
+              extension README.
+            </li>
+            <li>
+              Retest the installed Store build against the production website before public release.
+            </li>
+          </ol>
+          <p>
+            See the repository’s <code>docs/chrome-web-store-submission.md</code> dossier before
+            uploading. Publishing is blocked until the provider integration is authorized and every
+            legal placeholder is replaced.
+          </p>
+        </section>
+      </main>
+    </div>
+
+    <footer class="shell site-footer">
+      <a class="brand" href="./index.html"
+        ><span class="brand-mark" aria-hidden="true"></span>Loom.js</a
+      >
+      <div class="footer-links">
+        <a href="./privacy.html">Privacy</a><a href="./terms.html">Terms</a
+        ><a href="./legal.html">Legal notice</a><a href="./support.html">Support</a>
+      </div>
+    </footer>
+    <script src="./deployment-config.js"></script>
+    <script src="./site.js"></script>
+  </body>
+</html>

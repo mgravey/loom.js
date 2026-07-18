@@ -5,6 +5,7 @@ playwright-report
 pnpm-lock.yaml
 test-results
 *.tsbuildinfo
+scripts/after-effects/*.jsx
 after-effects-reference-animation/*.jsx
 after-effects-reference-animation/exports/*.json
 after-effects-reference-animation/exports/*.svg

@@ -9,26 +9,23 @@ The current conclusion is deliberately limited:
 - Chrome provides the browser and storage primitives needed to implement an OAuth authorization code
   flow with PKCE inside an extension.
 - The Codex CLI client audited here uses registered localhost callback URIs.
-- `chrome.identity` completes a web auth flow only at an extension-specific
-  `https://<extension-id>.chromiumapp.org/*` redirect.
-- No audited OpenAI source or public documentation confirms that the Codex CLI OAuth client accepts
-  that Chrome redirect URI.
+- A tab-scoped Manifest V3 DNR session rule can preserve the registered localhost redirect and
+  transform the resulting main-frame navigation into a web-accessible extension callback page before
+  localhost is contacted.
 - The audited CLI also implements a device-code flow that does not require a Chrome callback, but
   its Codex-specific endpoints may be disabled and are not documented as a third-party contract.
 
-The redirect registration mismatch is therefore a **hard blocker for the direct browser flow**. Loom
-must not present that flow as working, supported, or production-ready until OpenAI explicitly
-registers and supports a stable extension redirect URI for an appropriate client. Reusing a public
-client ID does not grant permission to invent another redirect URI.
+The implemented browser flow does not invent a `chromiumapp.org` redirect. It uses the audited
+`http://localhost:1455/auth/callback` URI verbatim and transforms only the browser navigation inside
+the authorized extension tab. This removes the need for a localhost server but does not create an
+official third-party client registration or supported OAuth product.
 
-The device-code path is the preferred Phase 5 feasibility experiment because it avoids that redirect
-substitution. It remains disabled by default, manually initiated, and explicitly unsupported. Its
-availability does not remove the blocker from the direct `launchWebAuthFlow()` design.
+Normal browser login is now the primary manual experiment. Device code remains a manually selected,
+disabled-by-default fallback when the browser callback cannot complete.
 
 A user-reported manual device-code run on 2026-07-16 observed successful token issuance. That result
-justifies building the Phase 5.5 vertical slice, but it is not provider support and does not remove
-either the direct-redirect blocker or the need to re-audit undocumented endpoints. No live token
-payload is retained in this repository.
+justifies retaining the fallback, but it is not provider support and does not remove the need to
+re-audit undocumented endpoints. No live token payload is retained in this repository.
 
 ## Evidence snapshot
 
@@ -96,36 +93,27 @@ describes device-code authentication as beta. Loom must therefore expect adminis
 deployment-level disablement. These private-looking endpoint shapes and response fields are audited
 behavior, not permission or a promise that another client may rely on them.
 
-## Chrome feasibility and blocker
+## Chrome callback bridge
 
-Chrome's [`identity` API](https://developer.chrome.com/docs/extensions/reference/api/identity)
-supports non-Google providers through `launchWebAuthFlow()`. `getRedirectURL()` produces a URI in
-the form `https://<extension-id>.chromiumapp.org/*`, and the flow resolves when navigation reaches
-that URI. Chrome also recommends starting interactive authorization from explanatory extension UI,
-not silently at startup.
+The extension does not use `chrome.identity.launchWebAuthFlow()`, because that API requires an
+extension-specific `chromiumapp.org` redirect that the audited client does not register. Instead it
+opens an ordinary authorization tab with PKCE and state while preserving the exact audited
+`http://localhost:1455/auth/callback` redirect URI.
 
-That mechanism can host PKCE, state validation, code exchange, cancellation, and error handling. It
-cannot make an authorization server accept an unregistered redirect URI. The audited Codex source
-explicitly constructs `http://localhost:<port>/auth/callback` and notes that its ports must stay
-synchronized with the Codex CLI redirect allowlist. A Chrome service worker cannot reproduce the
-CLI's local TCP callback server, while `launchWebAuthFlow()` requires the `chromiumapp.org`
-callback.
+Before navigation, the extension installs a `declarativeNetRequest` session rule restricted to that
+single tab and main-frame requests. When the provider returns to the localhost callback, Chrome
+transforms the navigation into the extension's web-accessible `callback.html`, preserving the query.
+The callback consumes a session-stored bridge record, verifies tab binding, state, expiry, and
+single use, exchanges the code inside the extension, then removes the DNR rule and transaction.
+Nothing listens on localhost and no relay receives the code.
 
-The extension ID is part of the Chrome redirect URI. A viable registration would consequently need a
-stable extension ID and an OpenAI-supported redirect entry for that exact origin/path. Until that
-exists, the experiment stops before live authorization. It must not work around the block using an
-open redirect, a relay that receives credentials for the extension, a copied CLI refresh token, or
-an unverified redirect substitution.
+The flow remains disabled by default and starts only from trusted extension UI. It is an observed
+compatibility experiment, not proof that OpenAI supports this extension/client combination. It must
+not use an open redirect, external relay, copied CLI credential, or invented callback URI.
 
-Device-code authentication is documented by OpenAI as an alternative where the localhost callback
-cannot work. Phase 5 may implement it as the preferred, disabled-by-default manual experiment. It
-must never activate as a silent fallback: a trusted extension page must explain that the flow is
-beta, provider-specific, potentially unavailable, and unsupported for third-party use before the
-user starts it.
-
-The direct authorization-code flow remains a separate disabled mode. Even if the device-code
-experiment succeeds, `launchWebAuthFlow()` must remain blocked until the exact Chrome redirect is
-registered and supported.
+Device-code authentication remains an explicit fallback. It never activates silently: the trusted
+extension page explains that the flow is beta, provider-specific, potentially unavailable, and
+unsupported for third-party use before the user starts it.
 
 ## Package boundary
 
@@ -153,11 +141,11 @@ The concrete provider remains outside Loom Core and the provider-neutral broker:
 - `@loom/auth-codex-experimental` contains the audited provider-specific request construction and
   parsing for explicit device-code and direct-browser modes. Secure randomness, SHA-256, HTTP
   transport, clock, redirect launch, polling/sleep, and authorization transaction storage are
-  injected interfaces. Direct-browser mode is unavailable unless the composition root supplies an
-  explicit redirect-registration approval.
-- A leaf extension composition root may bind those interfaces to `crypto`, `fetch`,
-  `chrome.identity`, `chrome.storage.session`, and `chrome.storage.local`. Removing that leaf must
-  leave Loom Core and the shared broker unchanged.
+  injected interfaces. Redirect request creation and callback completion are split so the extension
+  can persist and resume a short-lived transaction safely.
+- A leaf extension composition root may bind those interfaces to `crypto`, `fetch`, `chrome.tabs`,
+  tab-scoped DNR session rules, `chrome.storage.session`, and `chrome.storage.local`. Removing that
+  leaf must leave Loom Core and the shared broker unchanged.
 
 The application page retains the Phase 4 API for provider-neutral status, temporary token access,
 and logout by explicit provider ID. The Phase 5.5 application itself does not request a token: it
@@ -204,14 +192,12 @@ explaining its status and risks.
 - Keep the verifier and transaction state in `chrome.storage.session`, with a short expiry and
   trusted-context access. Chrome documents session storage as in-memory extension storage that is
   cleared on reload, update, disable, and browser restart.
-- Keep refresh credentials only in `chrome.storage.local` after restricting it to
-  `TRUSTED_CONTEXTS`. Chrome's
-  [`storage` API](https://developer.chrome.com/docs/extensions/reference/api/storage) does not
-  constitute OS-keyring, hardware-backed, or at-rest encryption protection.
-- Persist a rotated refresh credential before exposing the associated access token. Deduplicate
-  refresh and interactive authorization per provider.
-- Return only the access token and expiry through the Phase 4 broker. Never place secrets in Loom
-  configuration, sessions, events, IndexedDB, agent/tool inputs, or page logs.
+- Keep refresh credentials and account routing only in trusted `chrome.storage.session`; require
+  sign-in again after Chrome exits. Chrome local/sync storage is not an encrypted secret vault.
+- Persist a rotated session refresh credential before using the associated access token internally.
+  Deduplicate refresh and interactive authorization per provider.
+- Reject external access-token requests. Status/logout may use external messages, while token use
+  remains internal to the extension-owned model Port.
 - For the experimental model Port, resolve the token and `ChatGPT-Account-ID` only in the extension.
   Return authentication state, sanitized status, and response chunks—not credentials—to the page.
 - Parse initial account routing inside trusted extension code. Persist only the account ID needed
@@ -232,23 +218,21 @@ any manual test instructions.
 ## Test and release policy
 
 Automated tests use deterministic injected randomness and digest results plus a local fake OAuth
-authorization/token server. Real Chromium tests may exercise `chrome.identity`, the generated
-callback, state validation, PKCE verification, token rotation, service-worker restart, exact-origin
-broker access, and failure sanitization against that fake server. Device-code tests additionally
-cover user-code issuance, polling intervals, pending responses, timeout, cancellation, disabled
-`404` responses, malformed server PKCE, and token exchange through `/deviceauth/callback`.
+authorization/token server. Real Chromium tests may exercise the tab-scoped DNR callback bridge,
+state validation, PKCE verification, token rotation, service-worker restart, exact-origin broker
+access, and failure sanitization against that fake server. Device-code tests additionally cover
+user-code issuance, polling intervals, pending responses, timeout, cancellation, disabled `404`
+responses, malformed server PKCE, and token exchange through `/deviceauth/callback`.
 
 CI must never contact `auth.openai.com`, use a real OpenAI account, embed a real client secret, copy
 Codex credentials, or record live callback URLs. No test fixture may contain a real access, refresh,
 or ID token.
 
-A live **direct-browser** test is permitted only after the redirect-registration blocker is resolved
-by explicit OpenAI support. A live **device-code** test may be attempted earlier only as a manually
-enabled, disabled-by-default experiment. It must run from trusted extension UI, use a dedicated test
-account, warn that the beta endpoint may be disabled and is not a supported third-party contract,
-avoid persistent artifacts, and provide immediate logout/credential deletion. A successful manual
-device-code run establishes only observed compatibility for the audited date; it neither resolves
-the Chrome redirect blocker nor makes the flow a stable Loom contract.
+A live browser or device-code test may be attempted only as a manually enabled, disabled-by-default
+experiment. It must run from trusted extension UI, use a dedicated test account, warn that the
+integration is not a supported third-party contract, avoid persistent artifacts, and provide
+immediate logout/credential deletion. A successful manual run establishes only observed
+compatibility for the audited date; it does not make either flow a stable Loom contract.
 
 ## Re-audit gate
 
@@ -256,9 +240,9 @@ Before enabling a manual live test, record and review:
 
 1. the new exact Codex source commit;
 2. official OpenAI authorization guidance and permission to use the client/redirect combination;
-3. for direct-browser mode, the registered redirect URI and stable extension ID; for device-code
-   mode, explicit confirmation that the Codex-specific device endpoints may be used by this client;
+3. the exact localhost redirect URI, DNR callback transformation behavior, and for device-code mode,
+   explicit confirmation that the Codex-specific device endpoints may be used by this client;
 4. authorization and token parameters, token response fields, rotation, revocation, and workspace
    enforcement;
-5. Chrome minimum version and `identity`/service-worker behavior;
+5. Chrome minimum version plus tabs, DNR session-rule, and service-worker behavior;
 6. a threat-model update and evidence that no refresh credential crosses the extension boundary.

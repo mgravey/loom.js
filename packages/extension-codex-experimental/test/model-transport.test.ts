@@ -56,7 +56,21 @@ function port(): {
   };
 }
 
-function request(): Readonly<Record<string, unknown>> {
+function request(
+  wireProtocol: 'classic' | 'responses-lite' = 'classic',
+): Readonly<Record<string, unknown>> {
+  const tools: readonly unknown[] = [];
+  const input =
+    wireProtocol === 'classic'
+      ? []
+      : [
+          { type: 'additional_tools', role: 'developer', tools },
+          {
+            type: 'message',
+            role: 'developer',
+            content: [{ type: 'input_text', text: 'Use tools when needed.' }],
+          },
+        ];
   return Object.freeze({
     protocol: CODEX_MODEL_TRANSPORT_PROTOCOL,
     version: CODEX_MODEL_TRANSPORT_VERSION,
@@ -64,11 +78,11 @@ function request(): Readonly<Record<string, unknown>> {
     requestId: 'request-1',
     sessionId: 'session-1',
     threadId: 'thread-1',
+    wireProtocol,
     body: JSON.stringify({
       model: 'gpt-test',
-      instructions: 'Use tools when needed.',
-      input: [],
-      tools: [],
+      ...(wireProtocol === 'classic' ? { instructions: 'Use tools when needed.', tools } : {}),
+      input,
       tool_choice: 'auto',
       parallel_tool_calls: true,
       reasoning: { effort: 'medium' },
@@ -186,6 +200,40 @@ describe('experimental Codex extension model transport', () => {
       }),
     );
     expect(fetchRequest).not.toHaveBeenCalled();
+  });
+
+  it('validates Responses Lite input items and injects only its extension-owned header', async () => {
+    const encoder = new TextEncoder();
+    const fetchRequest = vi.fn<CodexModelFetch>(() =>
+      Promise.resolve({
+        status: 200,
+        body: new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(encoder.encode('data: {"type":"response.completed"}\n\n'));
+            controller.close();
+          },
+        }),
+      }),
+    );
+    const externalPort = port();
+    createCodexModelPortListener({
+      providerId: 'openai/codex-experimental',
+      tokenService: tokenService(),
+      accountRoutingStore: routingStore(),
+      fetchRequest,
+      authorizer: { assertAuthorized: vi.fn() },
+    })(externalPort.value);
+
+    externalPort.send(request('responses-lite'));
+    await vi.waitFor(() => expect(fetchRequest).toHaveBeenCalledOnce());
+    expect(fetchRequest).toHaveBeenCalledWith(
+      CODEX_RESPONSES_ENDPOINT,
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          'x-openai-internal-codex-responses-lite': 'true',
+        }),
+      }),
+    );
   });
 
   it('reports only allowlisted provider error metadata for rejected HTTP responses', async () => {

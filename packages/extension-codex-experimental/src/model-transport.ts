@@ -26,6 +26,7 @@ interface GenerateRequest {
   readonly threadId: string;
   readonly model: string;
   readonly body: string;
+  readonly wireProtocol: 'classic' | 'responses-lite';
 }
 
 export interface CreateCodexModelPortListenerOptions {
@@ -160,7 +161,12 @@ async function readProviderErrorMetadata(
   }
 }
 
-function normalizedRequestBody(value: string, sessionId: string, threadId: string): string {
+function normalizedRequestBody(
+  value: string,
+  sessionId: string,
+  threadId: string,
+  wireProtocol: GenerateRequest['wireProtocol'],
+): string {
   let body: unknown;
   try {
     body = JSON.parse(value);
@@ -186,9 +192,7 @@ function normalizedRequestBody(value: string, sessionId: string, threadId: strin
         ].includes(key),
     ) ||
     !boundedString(body.model, 256) ||
-    typeof body.instructions !== 'string' ||
     !Array.isArray(body.input) ||
-    !Array.isArray(body.tools) ||
     body.tool_choice !== 'auto' ||
     body.parallel_tool_calls !== true ||
     !isRecord(body.reasoning) ||
@@ -205,6 +209,29 @@ function normalizedRequestBody(value: string, sessionId: string, threadId: strin
   ) {
     throw new Error('Invalid experimental model request.');
   }
+  if (wireProtocol === 'classic') {
+    if (typeof body.instructions !== 'string' || !Array.isArray(body.tools)) {
+      throw new Error('Invalid experimental model request.');
+    }
+  } else {
+    if ('instructions' in body || 'tools' in body) {
+      throw new Error('Invalid experimental model request.');
+    }
+    const additionalTools: unknown = body.input[0];
+    const developerMessage: unknown = body.input[1];
+    if (
+      !isRecord(additionalTools) ||
+      additionalTools.type !== 'additional_tools' ||
+      additionalTools.role !== 'developer' ||
+      !Array.isArray(additionalTools.tools) ||
+      !isRecord(developerMessage) ||
+      developerMessage.type !== 'message' ||
+      developerMessage.role !== 'developer' ||
+      !Array.isArray(developerMessage.content)
+    ) {
+      throw new Error('Invalid experimental Responses Lite request.');
+    }
+  }
   return JSON.stringify({
     ...body,
     prompt_cache_key: sessionId,
@@ -217,9 +244,16 @@ function parseGenerateRequest(value: unknown): GenerateRequest {
     !isRecord(value) ||
     Object.keys(value).some(
       (key) =>
-        !['protocol', 'version', 'type', 'requestId', 'sessionId', 'threadId', 'body'].includes(
-          key,
-        ),
+        ![
+          'protocol',
+          'version',
+          'type',
+          'requestId',
+          'sessionId',
+          'threadId',
+          'body',
+          'wireProtocol',
+        ].includes(key),
     )
   ) {
     throw new Error('Invalid experimental model request.');
@@ -231,11 +265,17 @@ function parseGenerateRequest(value: unknown): GenerateRequest {
     !headerIdentifier(value.requestId) ||
     !headerIdentifier(value.sessionId) ||
     !headerIdentifier(value.threadId) ||
+    (value.wireProtocol !== 'classic' && value.wireProtocol !== 'responses-lite') ||
     !boundedString(value.body, MAXIMUM_REQUEST_BODY_LENGTH)
   ) {
     throw new Error('Invalid experimental model request.');
   }
-  const body = normalizedRequestBody(value.body, value.sessionId, value.threadId);
+  const body = normalizedRequestBody(
+    value.body,
+    value.sessionId,
+    value.threadId,
+    value.wireProtocol,
+  );
   const parsedBody: unknown = JSON.parse(body);
   if (!isRecord(parsedBody) || typeof parsedBody.model !== 'string') {
     throw new Error('Invalid experimental model request.');
@@ -249,6 +289,7 @@ function parseGenerateRequest(value: unknown): GenerateRequest {
     threadId: value.threadId,
     model: parsedBody.model,
     body,
+    wireProtocol: value.wireProtocol,
   });
 }
 
@@ -343,6 +384,9 @@ export function createCodexModelPortListener(
               'thread-id': request.threadId,
               'x-client-request-id': request.requestId,
               version: 'loom.js/0.1.0',
+              ...(request.wireProtocol === 'responses-lite'
+                ? { 'x-openai-internal-codex-responses-lite': 'true' }
+                : {}),
             }),
             body: request.body,
             cache: 'no-store',

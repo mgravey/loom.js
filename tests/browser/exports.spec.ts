@@ -12,6 +12,9 @@ test('built packages publish declaration entry points', async () => {
     'core',
     'tool-workspace',
     'agent-codex',
+    'coding',
+    'execution-browser',
+    'model-openai-responses',
     'platform-browser',
     'storage-indexeddb',
     'workspace-fsa',
@@ -34,6 +37,9 @@ test('built packages publish declaration entry points', async () => {
   expect(declarations.get('core')).toContain('createLoomRuntime');
   expect(declarations.get('tool-workspace')).toContain('createWorkspaceToolsPlugin');
   expect(declarations.get('agent-codex')).toContain('createCodexAgentPlugin');
+  expect(declarations.get('coding')).toContain('createCodingSession');
+  expect(declarations.get('execution-browser')).toContain('createQuickJsExecutionRuntime');
+  expect(declarations.get('model-openai-responses')).toContain('createOpenAIResponsesModelPlugin');
   expect(declarations.get('platform-browser')).toContain('createBrowserPlatformPlugin');
   expect(declarations.get('storage-indexeddb')).toContain('createIndexedDbStoragePlugin');
   expect(declarations.get('workspace-fsa')).toContain('createFileSystemAccessWorkspacePlugin');
@@ -59,6 +65,9 @@ test('built extension assets are installable and self-contained', async () => {
   const manifest = JSON.parse(
     await readFile(join(extensionDirectory, 'manifest.json'), 'utf8'),
   ) as {
+    readonly name?: string;
+    readonly description?: string;
+    readonly icons?: Readonly<Record<string, string>>;
     readonly manifest_version?: number;
     readonly background?: { readonly service_worker?: string };
   };
@@ -80,6 +89,9 @@ test('built experimental extension is isolated, installable, and self-contained'
   const manifest = JSON.parse(
     await readFile(join(extensionDirectory, 'manifest.json'), 'utf8'),
   ) as {
+    readonly name?: string;
+    readonly description?: string;
+    readonly icons?: Readonly<Record<string, string>>;
     readonly manifest_version?: number;
     readonly permissions?: readonly string[];
     readonly host_permissions?: readonly string[];
@@ -89,11 +101,26 @@ test('built experimental extension is isolated, installable, and self-contained'
   };
   const serviceWorker = await readFile(join(extensionDirectory, 'service-worker.js'), 'utf8');
   const optionsScript = await readFile(join(extensionDirectory, 'options.js'), 'utf8');
+  const privacyPage = await readFile(join(extensionDirectory, 'privacy.html'), 'utf8');
+  const icon128 = await readFile(join(extensionDirectory, 'icons', 'icon128.png'));
 
   expect(manifest).toMatchObject({
     manifest_version: 3,
-    permissions: ['identity', 'storage'],
-    host_permissions: ['https://auth.openai.com/*', 'https://chatgpt.com/backend-api/codex/*'],
+    name: 'Loom Secure Model Bridge',
+    description:
+      'Authenticates Loom sessions and relays model requests without exposing provider credentials to web pages.',
+    icons: {
+      '16': 'icons/icon16.png',
+      '32': 'icons/icon32.png',
+      '48': 'icons/icon48.png',
+      '128': 'icons/icon128.png',
+    },
+    permissions: ['declarativeNetRequest', 'storage'],
+    host_permissions: [
+      'http://localhost:1455/*',
+      'https://auth.openai.com/*',
+      'https://chatgpt.com/backend-api/codex/*',
+    ],
     incognito: 'not_allowed',
     background: { service_worker: 'service-worker.js' },
     options_ui: { page: 'options.html' },
@@ -102,6 +129,8 @@ test('built experimental extension is isolated, installable, and self-contained'
     expect(bundle).not.toMatch(/\b(?:import|export)\b/u);
     expect(bundle).not.toContain('@loom/');
   }
+  expect(privacyPage).toMatch(/Chrome\s+Web Store User Data Policy/u);
+  expect(icon128.byteLength).toBeGreaterThan(0);
 });
 
 test('built ESM packages expose their public runtime APIs', async ({ page }) => {
@@ -114,6 +143,9 @@ test('built ESM packages expose their public runtime APIs', async ({ page }) => 
       core,
       workspace,
       agent,
+      coding,
+      browserExecution,
+      openAIResponsesModel,
       browserPlatform,
       indexedDbStorage,
       fileSystemWorkspace,
@@ -131,6 +163,9 @@ test('built ESM packages expose their public runtime APIs', async ({ page }) => 
       import(`${origin}/packages/core/dist/index.js`),
       import(`${origin}/packages/tool-workspace/dist/index.js`),
       import(`${origin}/packages/agent-codex/dist/index.js`),
+      import(`${origin}/packages/coding/dist/index.js`),
+      import(`${origin}/packages/execution-browser/dist/index.js`),
+      import(`${origin}/packages/model-openai-responses/dist/index.js`),
       import(`${origin}/packages/platform-browser/dist/index.js`),
       import(`${origin}/packages/storage-indexeddb/dist/index.js`),
       import(`${origin}/packages/workspace-fsa/dist/index.js`),
@@ -149,6 +184,9 @@ test('built ESM packages expose their public runtime APIs', async ({ page }) => 
       core: Object.keys(core),
       workspace: Object.keys(workspace),
       agent: Object.keys(agent),
+      coding: Object.keys(coding),
+      browserExecution: Object.keys(browserExecution),
+      openAIResponsesModel: Object.keys(openAIResponsesModel),
       browserPlatform: Object.keys(browserPlatform),
       indexedDbStorage: Object.keys(indexedDbStorage),
       fileSystemWorkspace: Object.keys(fileSystemWorkspace),
@@ -205,6 +243,23 @@ test('built ESM packages expose their public runtime APIs', async ({ page }) => 
       'CODEX_AGENT_KEY',
       'createCodexAgentFactory',
       'createCodexAgentPlugin',
+    ]),
+  );
+  expect(exportsByPackage.coding).toContain('createCodingSession');
+  expect(exportsByPackage.browserExecution).toEqual(
+    expect.arrayContaining([
+      'createQuickJsExecutionRuntime',
+      'createWebContainerExecutionRuntime',
+      'createPyodideExecutionRuntime',
+      'executeBrowserWorkspace',
+    ]),
+  );
+  expect(exportsByPackage.openAIResponsesModel).toEqual(
+    expect.arrayContaining([
+      'OPENAI_RESPONSES_MODEL_KEY',
+      'createOpenAIResponsesModel',
+      'createOpenAIResponsesModelPlugin',
+      'createOpenAIResponsesRequestBody',
     ]),
   );
   expect(exportsByPackage.browserPlatform).toEqual(

@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Loom ChatGPT sign-in</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: system-ui, sans-serif;
+      }
+      body {
+        margin: 4rem auto;
+        max-width: 38rem;
+        padding: 0 2rem;
+        line-height: 1.5;
+      }
+      .success {
+        color: #16803c;
+      }
+      .error {
+        color: #c53030;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Loom ChatGPT sign-in</h1>
+      <p id="status" role="status" aria-live="polite">Completing sign-in…</p>
+    </main>
+    <script type="module" src="callback.js"></script>
+  </body>
+</html>

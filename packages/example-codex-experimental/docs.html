@@ -1,0 +1,607 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Step-by-step documentation for building with Loom.js." />
+    <title>Documentation · Loom.js</title>
+    <link rel="stylesheet" href="./site.css" />
+  </head>
+  <body>
+    <nav class="site-nav" aria-label="Main navigation">
+      <div class="shell nav-inner">
+        <a class="brand" href="./index.html" aria-label="Loom.js home">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <span>Loom.js</span>
+        </a>
+        <div class="nav-links">
+          <a href="./index.html#potential">Potential</a>
+          <a href="./docs.html" aria-current="page">Documentation</a>
+          <a href="./install.html">Install</a>
+          <a class="button quiet nav-cta" href="./workbench.html">Open workbench</a>
+        </div>
+      </div>
+    </nav>
+
+    <div class="shell docs-layout">
+      <aside class="docs-sidebar" aria-label="Documentation sections">
+        <strong>On this page</strong>
+        <a href="#welcome">Welcome</a>
+        <a href="#start">1. Repository setup</a>
+        <a href="#mental-model">2. Mental model</a>
+        <a href="#workspace">3. First workspace</a>
+        <a href="#first-session">4. First coding session</a>
+        <a href="#plugins">5. Core and plugins</a>
+        <a href="#custom-tools">6. Register a tool</a>
+        <a href="#models">7. Connect a model</a>
+        <a href="#runtimes">8. Execute code</a>
+        <a href="#workbench">9. Run the example</a>
+        <a href="#security">10. Security checklist</a>
+        <a href="#limits">Current limits</a>
+      </aside>
+
+      <main class="docs-main">
+        <header id="welcome">
+          <span class="eyebrow">Step-by-step onboarding</span>
+          <h1>Build with Loom.js</h1>
+          <p>
+            This path begins with a deterministic, credential-free coding session. It then shows how
+            the full plugin runtime, custom capabilities, secure model transports, project adapters,
+            and browser execution fit around that session.
+          </p>
+        </header>
+
+        <section class="doc-section" id="start">
+          <h2>1. Prepare the repository</h2>
+          <p>
+            Loom packages are private workspace packages today; they are not published to npm. Work
+            from this repository until package names, versions, and licensing are released.
+          </p>
+          <h3>Requirements</h3>
+          <ul>
+            <li>Node.js 20.19 or newer</li>
+            <li>pnpm 11.7.0 through Corepack</li>
+            <li>Chromium for the browser and extension integration suite</li>
+          </ul>
+          <div class="code-block">
+            <div class="code-title">Terminal · from a fresh clone</div>
+            <pre><code>git clone &lt;repository-url&gt; loom.js
+cd loom.js
+
+corepack enable
+corepack prepare pnpm@11.7.0 --activate
+pnpm install --frozen-lockfile
+pnpm build
+pnpm check</code></pre>
+          </div>
+          <div class="callout">
+            <strong>Your first success criterion</strong>
+            <p>
+              Keep the complete <code>pnpm check</code> gate green before connecting a credential,
+              browser permission, or live provider. The suite is designed to run against synthetic
+              transports.
+            </p>
+          </div>
+        </section>
+
+        <section class="doc-section" id="mental-model">
+          <h2>2. Learn the five boundaries</h2>
+          <p>
+            Loom Core is intentionally small. It validates plugins, owns lifecycle, and exposes
+            typed capability and service registries. Product behavior comes from independently
+            replaceable packages around it.
+          </p>
+          <table class="package-table">
+            <thead>
+              <tr>
+                <th>Boundary</th>
+                <th>Responsibility</th>
+                <th>Starting package</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Orchestration</td>
+                <td>Prompts, transcript, follow-ups, events, cancellation</td>
+                <td>@loom/coding</td>
+              </tr>
+              <tr>
+                <td>Model</td>
+                <td>Translate the agent protocol to a provider or secure transport</td>
+                <td>@loom/model-openai-responses</td>
+              </tr>
+              <tr>
+                <td>Tools</td>
+                <td>Validate operations and expose the smallest useful authority</td>
+                <td>@loom/tool-workspace</td>
+              </tr>
+              <tr>
+                <td>Workspace</td>
+                <td>Own files in memory, OPFS, a selected directory, or another host</td>
+                <td>@loom/workspace-fsa</td>
+              </tr>
+              <tr>
+                <td>Execution</td>
+                <td>Run a credential-free project snapshot in an injected runtime</td>
+                <td>@loom/execution-browser</td>
+              </tr>
+            </tbody>
+          </table>
+          <p>
+            You can use the lightweight <code>createCodingSession()</code> API directly, or compose
+            packages through <code>@loom/core</code> when your application needs capability
+            discovery, dependency ordering, configuration, and full lifecycle control.
+          </p>
+        </section>
+
+        <section class="doc-section" id="workspace">
+          <h2>3. Create a project workspace</h2>
+          <p>
+            Begin in memory. It is deterministic, requires no permission prompt, and implements the
+            same <code>ProjectWorkspace</code> interface used by browser-backed projects. Declare a
+            parent directory before adding a nested file.
+          </p>
+          <div class="code-block">
+            <div class="code-title">src/getting-started.ts</div>
+            <pre><code>import {
+  createMemoryProjectWorkspace,
+  createProjectWorkspaceTools,
+  createWorkspaceTools,
+  workspacePath,
+  type WorkspaceTool,
+} from '@loom/tool-workspace';
+
+const workspace = createMemoryProjectWorkspace({
+  entries: [
+    { path: workspacePath('src'), kind: 'directory' },
+    {
+      path: workspacePath('src/main.js'),
+      kind: 'file',
+      content: 'console.log("Hello from Loom");\n',
+    },
+  ],
+});
+
+const projectTools = createProjectWorkspaceTools(workspace);
+const modelTools: readonly WorkspaceTool[] = Object.freeze([
+  ...createWorkspaceTools(workspace),
+  projectTools.stat,
+  projectTools.createDirectory,
+  projectTools.move,
+  projectTools.remove,
+  projectTools.applyPatch,
+]);</code></pre>
+          </div>
+          <p>
+            The coding agent receives JSON-safe text and project operations. Binary methods remain
+            available to trusted host code, but are deliberately not exposed as model tools:
+          </p>
+          <div class="code-block">
+            <pre><code>const image = await workspace.readBytes(workspacePath('assets/icon.png'));
+await workspace.writeBytes(workspacePath('assets/icon-copy.png'), image);</code></pre>
+          </div>
+          <h3>Choose a different authority later</h3>
+          <ul>
+            <li><strong>Memory:</strong> disposable tests, uploads, and ZIP round-trips.</li>
+            <li>
+              <strong>OPFS:</strong> persistent browser-owned projects without host-directory
+              access.
+            </li>
+            <li>
+              <strong>File System Access:</strong> immediate writes inside a directory selected by
+              the user.
+            </li>
+            <li>
+              <strong>Custom adapter:</strong> implement <code>ProjectWorkspace</code> for a
+              database, remote repository, or trusted host.
+            </li>
+          </ul>
+        </section>
+
+        <section class="doc-section" id="first-session">
+          <h2>4. Run your first coding session</h2>
+          <p>
+            Use a tiny deterministic model first. It proves session streaming and cleanup without
+            introducing networking. Replace only the model after this path works.
+          </p>
+          <div class="code-block">
+            <div class="code-title">Continue src/getting-started.ts</div>
+            <pre><code>import type { CodexModel } from '@loom/agent-codex';
+import { createCodingSession } from '@loom/coding';
+
+const model: CodexModel = {
+  async *generate() {
+    yield { type: 'text', text: 'The project is ready.' };
+    yield { type: 'completed' };
+  },
+};
+
+const session = createCodingSession({
+  model,
+  tools: modelTools,
+  configuration: {
+    maxTurns: 8,
+    instructions: 'Inspect the project and make only requested changes.',
+  },
+});
+
+try {
+  for await (const event of session.submit('Describe this project.')) {
+    if (event.type === 'text') process.stdout.write(event.text);
+  }
+
+  for await (const event of session.followUp('Now create a README.')) {
+    console.log(event);
+  }
+} finally {
+  await session.dispose();
+}</code></pre>
+          </div>
+          <h3>Session rules</h3>
+          <ul>
+            <li>One operation may run at a time.</li>
+            <li><code>submit()</code> and <code>followUp()</code> stream agent events.</li>
+            <li><code>subscribe()</code> observes state, transcript, agent, and error events.</li>
+            <li>
+              <code>cancel()</code> targets the active model, tool, or adapted runtime operation.
+            </li>
+            <li><code>dispose()</code> is terminal; put it in <code>finally</code>.</li>
+          </ul>
+        </section>
+
+        <section class="doc-section" id="plugins">
+          <h2>5. Move to Core when composition grows</h2>
+          <p>
+            Core gives a fixed plugin graph deterministic initialization and reverse-order cleanup.
+            Register public behavior as capabilities and private implementation collaboration as
+            services.
+          </p>
+          <div class="code-block">
+            <pre><code>import { createCodexAgentPlugin } from '@loom/agent-codex';
+import { createLoomRuntime } from '@loom/core';
+import { createProjectWorkspaceToolsPlugin } from '@loom/tool-workspace';
+
+const runtime = createLoomRuntime({
+  plugins: [
+    createProjectWorkspaceToolsPlugin(workspace),
+    createCodexAgentPlugin(),
+  ],
+});
+
+await runtime.initialize();
+await runtime.start();
+
+try {
+  // Resolve typed capabilities and create application sessions here.
+} finally {
+  await runtime.stop();
+  await runtime.dispose();
+}</code></pre>
+          </div>
+          <table class="package-table">
+            <thead>
+              <tr>
+                <th>Hook</th>
+                <th>Use it for</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>initialize</td>
+                <td>Register capabilities and services. Do not begin work.</td>
+              </tr>
+              <tr>
+                <td>start</td>
+                <td>Resolve optional integrations and begin background work.</td>
+              </tr>
+              <tr>
+                <td>stop</td>
+                <td>Stop work started by the plugin.</td>
+              </tr>
+              <tr>
+                <td>dispose</td>
+                <td>
+                  Release resources; tolerate partial initialization and repeated cleanup paths.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="callout">
+            <strong>The plugin graph is fixed</strong>
+            <p>
+              Version 0.1 does not support hot installation, removal, restart, or dependency version
+              negotiation.
+            </p>
+          </div>
+        </section>
+
+        <section class="doc-section" id="custom-tools">
+          <h2>6. Register an application tool</h2>
+          <p>
+            A generic tool is a typed capability. Give it a namespaced identity, validate all
+            untrusted input, honor cancellation, register it only during <code>initialize</code>,
+            and export one canonical typed key with the package that owns it.
+          </p>
+          <div class="code-block">
+            <div class="code-title">src/echo-plugin.ts</div>
+            <pre><code>import {
+  PLUGIN_API_VERSION,
+  definePlugin,
+  registerTool,
+  toolKey,
+  type Tool,
+} from '@loom/plugin-api';
+import { pluginId, semanticVersion } from '@loom/types';
+
+interface EchoInput { readonly text: string }
+interface EchoOutput { readonly text: string }
+
+export const ECHO_TOOL_KEY =
+  toolKey&lt;EchoInput, EchoOutput&gt;('example/echo');
+
+const echoTool: Tool&lt;EchoInput, EchoOutput&gt; = Object.freeze({
+  name: 'echo',
+  description: 'Return the supplied text.',
+  async execute(input, context) {
+    context?.signal?.throwIfCancelled();
+    if (
+      typeof input !== 'object' ||
+      input === null ||
+      typeof input.text !== 'string'
+    ) {
+      throw new TypeError('echo requires string text.');
+    }
+    return Object.freeze({ text: input.text });
+  },
+});
+
+export const echoPlugin = definePlugin({
+  manifest: {
+    id: pluginId('example/echo-plugin'),
+    version: semanticVersion('0.1.0'),
+    apiVersion: PLUGIN_API_VERSION,
+  },
+  initialize(context) {
+    registerTool(context.capabilities, 'example/echo', echoTool);
+  },
+});</code></pre>
+          </div>
+          <div class="code-block">
+            <div class="code-title">Resolve and execute</div>
+            <pre><code>const runtime = createLoomRuntime({ plugins: [echoPlugin] });
+await runtime.initialize();
+await runtime.start();
+
+try {
+  const echo = runtime.capabilities.get(ECHO_TOOL_KEY);
+  console.log(await echo.execute({ text: 'Hello' }));
+} finally {
+  await runtime.stop();
+  await runtime.dispose();
+}</code></pre>
+          </div>
+          <div class="callout warning">
+            <strong>Generic registration is not automatic model exposure</strong>
+            <p>
+              Core can discover and execute this tool, but the current Codex coding agent accepts a
+              fixed, audited set of workspace operations. Making arbitrary tools model-callable
+              still requires a future schema-bearing tool contract and per-tool authorization
+              policy. Do not add a tool to a prompt and assume it is enforced.
+            </p>
+          </div>
+        </section>
+
+        <section class="doc-section" id="models">
+          <h2>7. Connect a real model securely</h2>
+          <p>
+            Replace the deterministic model with a provider adapter. In browser products, inject a
+            credential-free transport that calls your trusted backend. The page must never receive
+            an API key or refresh credential.
+          </p>
+          <div class="code-block">
+            <pre><code>import { createOpenAIResponsesModel } from '@loom/model-openai-responses';
+
+const model = createOpenAIResponsesModel({
+  model: 'your-supported-model',
+  transport: {
+    async send(request) {
+      // Forward the credential-free body to your trusted backend.
+      // The backend owns the API key and POST /v1/responses.
+      return secureResponsesBackend.send(request);
+    },
+  },
+});</code></pre>
+          </div>
+          <p>
+            The documented Platform Responses adapter and the experimental ChatGPT-authenticated
+            extension are separate integrations. The workbench uses the latter to demonstrate an
+            extension-owned credential and cross-origin transport boundary; the Loom library does
+            not require it.
+          </p>
+          <div class="callout warning">
+            <strong>Browser CORS and credential safety are separate constraints</strong>
+            <p>
+              A browser page cannot make the current ChatGPT Codex request directly. Use the
+              extension transport shown by the example or a trusted server. Device-code login alone
+              does not make cross-origin inference requests possible.
+            </p>
+          </div>
+        </section>
+
+        <section class="doc-section" id="runtimes">
+          <h2>8. Execute code in the browser</h2>
+          <p>
+            Browser runtimes receive only a command and a copied project snapshot. They never accept
+            credentials, cookies, headers, a host <code>fetch</code>, or arbitrary environment
+            variables.
+          </p>
+          <div class="code-block">
+            <pre><code>import { createQuickJsExecutionRuntime } from '@loom/execution-browser';
+
+const quickjs = createQuickJsExecutionRuntime({
+  loadModule: () =&gt; import('quickjs-emscripten'),
+});
+
+try {
+  const result = await quickjs.execute(
+    {
+      command: 'qjs',
+      arguments: ['main.js'],
+      timeoutMs: 10_000,
+      project: {
+        files: [{
+          path: 'main.js',
+          data: new TextEncoder().encode(
+            'console.log("Hello from QuickJS");\n',
+          ),
+        }],
+      },
+    },
+    {
+      onOutput(output) {
+        const method = output.channel === 'stderr' ? 'error' : 'log';
+        console[method](output.chunk);
+      },
+    },
+  );
+  console.log('Exit code:', result.exitCode);
+} finally {
+  await quickjs.dispose();
+}</code></pre>
+          </div>
+          <h3>Available adapters</h3>
+          <ul>
+            <li><strong>QuickJS:</strong> small JavaScript execution with a virtual project.</li>
+            <li>
+              <strong>WebContainer:</strong> Node.js-compatible execution; requires COOP/COEP
+              hosting headers.
+            </li>
+            <li>
+              <strong>Pyodide:</strong> Python/WASM execution; prefer a Worker when hard UI
+              responsiveness matters.
+            </li>
+          </ul>
+          <p>
+            The browser execution API currently runs directly. A reusable adapter between
+            <code>ProjectWorkspace</code> and <code>BrowserExecutionWorkspace</code>, plus an
+            event-stream adapter for <code>CodingSession.runtimes</code>, remain future library
+            work. The workbench contains the application-level synchronization logic used by the
+            example.
+          </p>
+        </section>
+
+        <section class="doc-section" id="workbench">
+          <h2>9. Run the browser workbench</h2>
+          <p>
+            Build the workspace, load the experimental extension, authenticate from its options
+            page, then open the example. The extension is optional for Loom.js itself and required
+            only for this ChatGPT-backed composition.
+          </p>
+          <div class="code-block">
+            <div class="code-title">Terminal</div>
+            <pre><code>pnpm build
+python3 -m http.server 4173 --directory packages</code></pre>
+          </div>
+          <ol>
+            <li>Open <code>chrome://extensions</code> and enable Developer mode.</li>
+            <li>
+              Choose <strong>Load unpacked</strong> and select
+              <code>packages/extension-codex-experimental/dist</code>.
+            </li>
+            <li>
+              Open the extension options, explicitly enable the experiment, and sign in with ChatGPT
+              or use the device-code fallback.
+            </li>
+            <li>Copy the extension ID and open <a href="./workbench.html">the workbench</a>.</li>
+            <li>Choose direct directory, memory, or persistent OPFS workspace mode.</li>
+            <li>
+              Import a folder/ZIP or open a project, run a request, inspect changes, then export a
+              ZIP if needed.
+            </li>
+          </ol>
+          <div class="callout warning">
+            <strong>WebContainer hosting</strong>
+            <p>
+              The Python static server is enough for the workbench shell, QuickJS, and Pyodide. Use
+              a server that adds Cross-Origin-Opener-Policy and Cross-Origin-Embedder-Policy headers
+              before selecting the WebContainer Node.js runtime.
+            </p>
+          </div>
+        </section>
+
+        <section class="doc-section" id="security">
+          <h2>10. Keep the authority narrow</h2>
+          <ul>
+            <li>
+              Never place API keys, refresh tokens, cookies, or account credentials in browser code,
+              files, runtime environments, events, or logs.
+            </li>
+            <li>
+              Treat every model response, extension message, imported folder, and ZIP as untrusted
+              input.
+            </li>
+            <li>
+              Use Loom’s bounded ZIP validators; never extract uploads with an unbounded convenience
+              API.
+            </li>
+            <li>
+              Require explicit confirmation before writing runtime changes back to a selected
+              directory.
+            </li>
+            <li>
+              Keep hosted model programs read-only. Mutations must be direct, validated tool calls.
+            </li>
+            <li>
+              Validate exact custom-tool input shapes, honor cancellation, and return JSON-safe
+              data.
+            </li>
+            <li>Prefer dedicated Workers for generated QuickJS or Pyodide code when practical.</li>
+            <li>Run <code>pnpm check</code> before every integration or release change.</li>
+          </ul>
+        </section>
+
+        <section class="doc-section" id="limits">
+          <h2>Current 0.1 limitations</h2>
+          <p>The documentation is explicit about what is not yet generalized:</p>
+          <ul>
+            <li>Workspace packages are private and unpublished.</li>
+            <li>
+              The Codex coding agent does not yet accept arbitrary schema-bearing model tools.
+            </li>
+            <li>
+              Browser execution and coding-session runtime contracts still need a public bridge.
+            </li>
+            <li>ProjectWorkspace-to-runtime snapshot synchronization is local to the workbench.</li>
+            <li>
+              The ChatGPT/Codex extension integration is unsupported compatibility work, not a
+              documented public OAuth contract.
+            </li>
+            <li>
+              Production extension packaging, release versioning, licensing, and multi-browser CI
+              are pending.
+            </li>
+          </ul>
+          <p>
+            For deeper design rationale, continue in the repository with
+            <code>docs/architecture.md</code>, <code>docs/plugin-authoring.md</code>, and the root
+            <code>DOCUMENTATION.md</code> index.
+          </p>
+        </section>
+      </main>
+    </div>
+
+    <footer class="shell site-footer">
+      <a class="brand" href="./index.html"
+        ><span class="brand-mark" aria-hidden="true"></span>Loom.js</a
+      >
+      <div class="footer-links">
+        <a href="./privacy.html">Privacy</a>
+        <a href="./terms.html">Terms</a>
+        <a href="./legal.html">Legal notice</a>
+        <a href="./support.html">Support</a>
+      </div>
+    </footer>
+    <script src="./deployment-config.js"></script>
+    <script src="./site.js"></script>
+  </body>
+</html>

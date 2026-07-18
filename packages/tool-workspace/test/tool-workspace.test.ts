@@ -92,7 +92,11 @@ describe('workspace tools plugin', () => {
     expect([LIST_FILES_TOOL_KEY.id, READ_FILE_TOOL_KEY.id, WRITE_FILE_TOOL_KEY.id]).toEqual(
       Object.values(WORKSPACE_TOOL_CAPABILITY_IDS),
     );
-    expect(tools.map((tool) => tool.operation)).toEqual(Object.values(WORKSPACE_OPERATIONS));
+    expect(tools.map((tool) => tool.operation)).toEqual([
+      WORKSPACE_OPERATIONS.listFiles,
+      WORKSPACE_OPERATIONS.readFile,
+      WORKSPACE_OPERATIONS.writeFile,
+    ]);
   });
 
   it('lists immediate entries in deterministic order and freezes its output', async () => {

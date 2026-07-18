@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Workbench · Loom.js</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+        background: #0b0d10;
+        color: #e8eaed;
+        line-height: 1.45;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+      }
+      button,
+      input,
+      textarea,
+      select {
+        font: inherit;
+        color: inherit;
+      }
+      button,
+      input,
+      textarea,
+      select {
+        border: 1px solid #343940;
+        border-radius: 0.45rem;
+        background: #15191e;
+        padding: 0.6rem 0.72rem;
+      }
+      button {
+        cursor: pointer;
+        background: #20252c;
+      }
+      button:hover:not(:disabled) {
+        border-color: #737b87;
+      }
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.48;
+      }
+      .primary {
+        background: #dce8ff;
+        color: #111820;
+        border-color: transparent;
+        font-weight: 650;
+      }
+      header {
+        height: 3.5rem;
+        padding: 0 1rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1px solid #272c32;
+      }
+      header h1 {
+        margin: 0;
+        font-size: 1rem;
+        letter-spacing: 0.01em;
+      }
+      .workbench-nav,
+      .workbench-links {
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+      }
+      .workbench-nav a,
+      .workbench-links a {
+        color: #b9c0c9;
+        font-size: 0.8rem;
+        text-decoration: none;
+      }
+      .workbench-nav a:hover,
+      .workbench-links a:hover {
+        color: #fff;
+      }
+      .separator {
+        color: #4c535e;
+      }
+      .badge {
+        color: #f4c46c;
+        border: 1px solid #5b4a2e;
+        padding: 0.2rem 0.5rem;
+        border-radius: 99px;
+        font-size: 0.75rem;
+      }
+      main {
+        display: grid;
+        grid-template-columns: 18rem minmax(0, 1fr);
+        min-height: calc(100vh - 3.5rem);
+      }
+      aside {
+        padding: 1rem;
+        border-right: 1px solid #272c32;
+        background: #0f1216;
+        overflow: auto;
+      }
+      section {
+        min-width: 0;
+      }
+      .group {
+        display: grid;
+        gap: 0.65rem;
+        margin-bottom: 1.35rem;
+      }
+      .group h2,
+      .pane h2 {
+        margin: 0;
+        color: #a9b0ba;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.09em;
+      }
+      label {
+        display: grid;
+        gap: 0.3rem;
+        color: #b9c0c9;
+        font-size: 0.78rem;
+      }
+      input,
+      select {
+        width: 100%;
+      }
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.45rem;
+      }
+      .actions button {
+        flex: 1 1 auto;
+      }
+      .warning {
+        color: #b4bac2;
+        font-size: 0.76rem;
+        margin: 0;
+      }
+      #status {
+        min-height: 2.8rem;
+        margin: 0;
+        color: #c9d8f0;
+        font-size: 0.8rem;
+      }
+      .workspace {
+        display: grid;
+        grid-template-rows: minmax(18rem, 1fr) auto;
+        height: calc(100vh - 3.5rem);
+      }
+      .top {
+        display: grid;
+        grid-template-columns: minmax(12rem, 22%) minmax(0, 1fr) minmax(18rem, 34%);
+        min-height: 0;
+      }
+      .pane {
+        min-width: 0;
+        padding: 0.9rem;
+        border-right: 1px solid #272c32;
+        overflow: auto;
+      }
+      .pane:last-child {
+        border-right: 0;
+      }
+      #file-list {
+        margin: 0.75rem 0;
+        padding: 0;
+        list-style: none;
+        font-family: ui-monospace, monospace;
+        font-size: 0.8rem;
+      }
+      #file-list button {
+        width: 100%;
+        border: 0;
+        background: transparent;
+        text-align: left;
+        padding: 0.35rem;
+      }
+      #editor {
+        width: 100%;
+        min-height: calc(100% - 5rem);
+        resize: none;
+        font-family: ui-monospace, monospace;
+        line-height: 1.55;
+        tab-size: 2;
+      }
+      #prompt {
+        width: 100%;
+        min-height: 7rem;
+        resize: vertical;
+      }
+      pre {
+        margin: 0.75rem 0 0;
+        padding: 0.75rem;
+        min-height: 8rem;
+        max-height: 42vh;
+        overflow: auto;
+        border: 1px solid #272c32;
+        border-radius: 0.45rem;
+        background: #0b0d10;
+        white-space: pre-wrap;
+        font:
+          0.78rem/1.5 ui-monospace,
+          monospace;
+      }
+      .runner {
+        border-top: 1px solid #272c32;
+        padding: 0.75rem 0.9rem;
+        display: grid;
+        grid-template-columns: 10rem minmax(12rem, 1fr) auto;
+        gap: 0.55rem;
+        align-items: end;
+      }
+      #runtime-output {
+        grid-column: 1 / -1;
+        min-height: 4rem;
+        max-height: 12rem;
+      }
+      .hidden-input {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+        pointer-events: none;
+      }
+      @media (max-width: 960px) {
+        main {
+          grid-template-columns: 1fr;
+        }
+        aside {
+          border-right: 0;
+          border-bottom: 1px solid #272c32;
+        }
+        .workspace {
+          height: auto;
+        }
+        .top {
+          grid-template-columns: 1fr;
+        }
+        .pane {
+          border-right: 0;
+          border-bottom: 1px solid #272c32;
+          min-height: 18rem;
+        }
+      }
+    </style>
+    <script type="importmap">
+      {
+        "imports": {
+          "quickjs-emscripten": "https://esm.sh/quickjs-emscripten@0.32.0",
+          "@webcontainer/api": "https://esm.sh/@webcontainer/api@1.6.4",
+          "pyodide": "https://cdn.jsdelivr.net/npm/pyodide@314.0.2/pyodide.mjs"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <header>
+      <div class="workbench-nav">
+        <a href="./index.html">Loom.js</a>
+        <span class="separator" aria-hidden="true">/</span>
+        <h1>Browser coding workbench</h1>
+      </div>
+      <div class="workbench-links">
+        <a href="./docs.html">Documentation</a>
+        <a href="./privacy.html">Privacy</a>
+        <a href="./support.html">Support</a>
+        <span class="badge">Experimental ChatGPT transport</span>
+      </div>
+    </header>
+    <main>
+      <aside>
+        <div class="group">
+          <h2>ChatGPT extension</h2>
+          <label
+            >Experimental extension ID
+            <input id="extension-id" required autocomplete="off" spellcheck="false" />
+          </label>
+          <label
+            >Model
+            <input id="model" value="gpt-5.6-sol" required autocomplete="off" spellcheck="false" />
+          </label>
+          <div class="actions">
+            <button id="check-auth" type="button">Check authentication</button>
+            <button id="logout" type="button" disabled>Log out extension credential</button>
+          </div>
+          <p class="warning">
+            Login, refresh credentials, account routing, and every ChatGPT request stay inside the
+            extension. Project code never receives them.
+          </p>
+        </div>
+        <div class="group">
+          <h2>Workspace</h2>
+          <label
+            >Mode
+            <select id="workspace-mode">
+              <option value="direct">Direct selected directory</option>
+              <option value="memory">Virtual memory project</option>
+              <option value="opfs">Persistent browser project (OPFS)</option>
+            </select>
+          </label>
+          <div class="actions">
+            <button id="open-workspace" type="button">Open workspace</button>
+            <button id="import-folder" type="button">Import folder</button>
+            <button id="import-zip" type="button">Import ZIP</button>
+            <button id="export-zip" type="button" disabled>Export ZIP</button>
+          </div>
+          <input id="folder-input" class="hidden-input" type="file" webkitdirectory multiple />
+          <input id="zip-input" class="hidden-input" type="file" accept=".zip,application/zip" />
+        </div>
+        <p id="status" role="status" aria-live="polite">
+          Enter the extension ID, then check authentication.
+        </p>
+      </aside>
+      <section class="workspace">
+        <div class="top">
+          <div class="pane">
+            <h2>Project files</h2>
+            <ul id="file-list">
+              <li>No workspace open.</li>
+            </ul>
+          </div>
+          <div class="pane">
+            <h2 id="editor-title">Editor</h2>
+            <textarea id="editor" aria-label="File editor" spellcheck="false" disabled></textarea>
+            <div class="actions">
+              <button id="save-file" type="button" disabled>Save file</button>
+            </div>
+          </div>
+          <div class="pane">
+            <h2>Agent</h2>
+            <textarea id="prompt" required>
+Inspect the workspace, implement the requested change, and explain what you changed.</textarea>
+            <div class="actions">
+              <button id="run" class="primary" type="button" disabled>
+                Choose directory and run
+              </button>
+              <button id="cancel-run" type="button" disabled>Cancel</button>
+            </div>
+            <pre
+              id="log"
+              role="log"
+              aria-label="Codex experiment event log"
+              aria-live="polite"
+            ></pre>
+          </div>
+        </div>
+        <div class="runner">
+          <label
+            >Runtime
+            <select id="runtime">
+              <option value="quickjs">QuickJS</option>
+              <option value="node">Node.js (WebContainer)</option>
+              <option value="python">Python (Pyodide)</option>
+            </select>
+          </label>
+          <label
+            >Command
+            <input id="command" value="quickjs main.js" autocomplete="off" spellcheck="false" />
+          </label>
+          <button id="run-command" type="button" disabled>Run command</button>
+          <pre id="runtime-output" role="log" aria-label="Runtime output"></pre>
+        </div>
+      </section>
+    </main>
+    <script src="./deployment-config.js"></script>
+    <script type="module" src="./dist/main.js"></script>
+  </body>
+</html>

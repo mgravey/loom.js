@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Privacy policy for the Loom Secure Model Bridge." />
+    <title>Privacy policy · Loom.js</title>
+    <link rel="stylesheet" href="./site.css" />
+  </head>
+  <body>
+    <nav class="site-nav" aria-label="Main navigation">
+      <div class="shell nav-inner">
+        <a class="brand" href="./index.html"
+          ><span class="brand-mark" aria-hidden="true"></span>Loom.js</a
+        >
+        <div class="nav-links">
+          <a href="./docs.html">Documentation</a><a href="./support.html">Support</a
+          ><a class="button quiet nav-cta" href="./install.html">Install</a>
+        </div>
+      </div>
+    </nav>
+
+    <div class="shell docs-layout">
+      <aside class="docs-sidebar">
+        <strong>Privacy policy</strong>
+        <a href="#scope">Scope</a>
+        <a href="#data">Data handled</a>
+        <a href="#use">Use and sharing</a>
+        <a href="#storage">Storage and retention</a>
+        <a href="#choices">Your choices</a>
+        <a href="#rights">Privacy rights</a>
+        <a href="#contact">Contact</a>
+      </aside>
+      <main class="docs-main">
+        <header>
+          <span class="eyebrow">Last updated 18 July 2026</span>
+          <h1>Privacy policy</h1>
+          <p>
+            This policy describes the Loom Secure Model Bridge Chrome extension and its companion
+            browser workbench. It must be reviewed against the final production deployment and
+            applicable law before publication.
+          </p>
+          <div class="callout warning" data-legal-draft>
+            <strong>Draft—not ready for public submission</strong>
+            <p>
+              The publisher identity, postal address, and contact emails are unresolved
+              placeholders.
+            </p>
+          </div>
+        </header>
+
+        <section class="doc-section" id="scope">
+          <h2>1. Who is responsible</h2>
+          <p>
+            Controller/publisher:
+            <strong data-legal-value="legalName">REPLACE_WITH_PUBLISHING_PERSON_OR_ENTITY</strong>
+          </p>
+          <p>
+            Address: <span data-legal-value="legalAddress">REPLACE_WITH_LEGAL_POSTAL_ADDRESS</span>
+          </p>
+          <p>
+            Privacy contact:
+            <a data-legal-value="supportEmail" href="mailto:support@example.invalid"
+              >support@example.invalid</a
+            >
+          </p>
+        </section>
+
+        <section class="doc-section" id="data">
+          <h2>2. Information the extension handles</h2>
+          <ul>
+            <li>
+              <strong>Authentication information:</strong> OAuth authorization results, a refresh
+              credential, short-lived access credentials, and an account-routing identifier needed
+              to authenticate the user-selected provider account.
+            </li>
+            <li>
+              <strong>User-provided model content:</strong> prompts, conversation context, model
+              settings, selected workspace tool inputs/results, and project text explicitly included
+              in a request.
+            </li>
+            <li>
+              <strong>Operational information:</strong> extension version, enabled/authenticated
+              state, request identifiers, bounded byte counts, and sanitized error codes required to
+              run or troubleshoot the bridge.
+            </li>
+            <li>
+              <strong>Deployment metadata:</strong> the non-secret Chrome extension ID remembered by
+              the companion website.
+            </li>
+          </ul>
+          <p>
+            The extension does not request browsing-history, cookies, geolocation, advertising,
+            analytics, or content-script access. It does not inspect unrelated pages or tabs.
+          </p>
+        </section>
+
+        <section class="doc-section" id="use">
+          <h2>3. Why information is used and where it goes</h2>
+          <p>
+            Information is used only to provide the extension’s single purpose: authenticate a
+            user-initiated Loom session and relay that session’s model requests without exposing
+            provider credentials to the website.
+          </p>
+          <table class="package-table">
+            <thead>
+              <tr>
+                <th>Recipient</th>
+                <th>Information</th>
+                <th>Purpose</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>OpenAI authentication service</td>
+                <td>Authorization/device codes and credential exchange data</td>
+                <td>Complete sign-in and refresh short-lived access</td>
+              </tr>
+              <tr>
+                <td>ChatGPT Codex service</td>
+                <td>Prompt/model request, account routing, tool results, and access credential</td>
+                <td>Produce the model response requested by the user</td>
+              </tr>
+              <tr>
+                <td>Chrome on the user’s device</td>
+                <td>
+                  Extension settings and extension-isolated local storage as provided by Chrome
+                </td>
+                <td>Persist opt-in and authentication state</td>
+              </tr>
+              <tr>
+                <td>Companion Loom website</td>
+                <td>
+                  Authenticated/not-authenticated status, logout acknowledgement, the requested
+                  provider response stream, and sanitized failure metadata
+                </td>
+                <td>Display and control the user-requested coding session</td>
+              </tr>
+            </tbody>
+          </table>
+          <p>
+            No information is sold, used for advertising, credit decisions, or transferred to data
+            brokers. No developer analytics or telemetry endpoint is present in the current build.
+            Human access is not permitted except with the user's specific consent, when required for
+            security or abuse response, or when required by law.
+          </p>
+          <div class="callout">
+            <strong>Chrome Web Store Limited Use</strong>
+            <p>
+              Information obtained through extension APIs is used only to provide or improve the
+              disclosed single purpose. Its use follows the Chrome Web Store User Data Policy,
+              including its Limited Use requirements.
+            </p>
+          </div>
+        </section>
+
+        <section class="doc-section" id="storage">
+          <h2>4. Storage, security, and retention</h2>
+          <ul>
+            <li>
+              The refresh credential and account-routing ID are stored only in trusted extension
+              session storage and are cleared when Chrome exits. Access and ID credentials are not
+              persisted by Loom, and access tokens cannot be requested by the website.
+            </li>
+            <li>
+              Pending browser-login state is stored in Chrome session storage and removed after a
+              completed callback, handled failure, retry, logout, disable, or browser shutdown. An
+              abandoned tab may retain its exact tab-scoped rule until one of those cleanup events.
+            </li>
+            <li>
+              Provider network traffic uses HTTPS. Credentials are never intentionally written to
+              website storage, workspaces, browser runtimes, logs, or diagnostic errors.
+            </li>
+            <li>
+              Authentication state remains until logout, disable, provider revocation, credential
+              rejection, extension-data clearing, or uninstall.
+            </li>
+            <li>
+              The companion website may retain the non-secret extension ID and OPFS project selected
+              by the user; these can be removed through browser site-data controls.
+            </li>
+          </ul>
+          <p>
+            Local deletion does not itself revoke a provider-side authorization grant. Follow the
+            provider's verified account-security instructions if revocation is required.
+          </p>
+        </section>
+
+        <section class="doc-section" id="choices">
+          <h2>5. Your controls</h2>
+          <ul>
+            <li>
+              The bridge is disabled by default and handles authentication only after explicit
+              opt-in and button activation.
+            </li>
+            <li>
+              <strong>Remove stored authorization</strong> and disabling the experiment delete
+              extension-owned authorization state.
+            </li>
+            <li>Uninstalling the extension removes its Chrome storage.</li>
+            <li>
+              The user chooses which project directory or uploaded archive the website may access.
+            </li>
+            <li>
+              Browser runtime write-back to a selected directory requires separate confirmation.
+            </li>
+          </ul>
+        </section>
+
+        <section class="doc-section" id="rights">
+          <h2>6. Privacy rights and international processing</h2>
+          <p>
+            Depending on your location, you may have rights to access, correct, delete, restrict, or
+            object to processing, and to complain to a privacy authority. Contact the publisher to
+            exercise applicable rights. Provider processing and international transfers are also
+            governed by the terms and privacy policy of the provider account you choose.
+          </p>
+          <p>
+            This extension is not directed to children and should not be used by anyone who cannot
+            lawfully agree to the provider and publisher terms.
+          </p>
+        </section>
+
+        <section class="doc-section" id="contact">
+          <h2>7. Contact and policy changes</h2>
+          <p>
+            Privacy/support:
+            <a data-legal-value="supportEmail" href="mailto:support@example.invalid"
+              >support@example.invalid</a
+            >
+          </p>
+          <p>
+            Security:
+            <a data-legal-value="securityEmail" href="mailto:security@example.invalid"
+              >security@example.invalid</a
+            >
+          </p>
+          <p>
+            Material changes to data practices require an updated policy and prominent in-product
+            disclosure before the changed practice begins.
+          </p>
+        </section>
+      </main>
+    </div>
+
+    <footer class="shell site-footer">
+      <a class="brand" href="./index.html"
+        ><span class="brand-mark" aria-hidden="true"></span>Loom.js</a
+      >
+      <div class="footer-links">
+        <a href="./terms.html">Terms</a><a href="./legal.html">Legal notice</a
+        ><a href="./support.html">Support</a><a href="./install.html">Install</a>
+      </div>
+    </footer>
+    <script src="./deployment-config.js"></script>
+    <script src="./site.js"></script>
+  </body>
+</html>

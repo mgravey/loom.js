@@ -12,8 +12,54 @@ Access workspaces. Phase 4 added a provider-neutral Manifest V3 credential broke
 authentication adapter. Phase 5 adds an isolated, disabled-by-default Codex authentication
 experiment based on an audited open-source CLI revision. Phase 5.5 adds a runnable experimental
 vertical slice: a provider-specific model leaf, extension-owned provider transport, status/logout,
-and a localhost browser application. Core and the agent packages remain free of provider, browser,
-and extension APIs. Loom still contains no supported OpenAI OAuth product or execution runtime.
+and a localhost browser application. The current work adds reusable coding sessions, binary project
+workspaces with safe ZIP transfer, and isolated QuickJS, WebContainer, and Pyodide adapters behind a
+multi-mode browser workbench. Core and the agent packages remain free of provider, browser, and
+extension APIs. Loom now also includes a separate adapter for the documented OpenAI Platform
+Responses API; applications must still supply a secure transport or trusted-host credential source.
+Loom contains no supported OpenAI OAuth product or built-in API-key host.
+
+The project now includes a browser-readable front page and onboarding manual. After serving the
+`packages` directory, open `http://localhost:4173/example-codex-experimental/` to learn what the
+library provides, read the guided documentation, and then enter the clearly separated experimental
+workbench. The same onboarding is available as
+[repository documentation](./docs/getting-started.md).
+
+### Install the Chrome extension during development
+
+The unpacked extension ID currently observed for this checkout is
+`foofdcgdelahbdgdfgocoeajdodhjbjo`. It is prefilled in the website deployment configuration, but
+Chrome's value in `chrome://extensions` is authoritative and may differ for another checkout.
+
+```sh
+pnpm --filter @loom/extension-codex-experimental build
+```
+
+Load `packages/extension-codex-experimental/dist` from `chrome://extensions` with Developer mode
+enabled. See the
+[extension installation and packaging README](./packages/extension-codex-experimental/README.md) for
+the complete unpacked workflow, extension-ID transition, permission rationale, production ZIP
+command, and Chrome Web Store blockers.
+
+## Brand
+
+Direction 08 is the selected Loom.js identity: three capability threads compose through a shared
+weave and terminate in plugin endpoints. Transparent lockups are provided for both light and dark
+backgrounds, with a standalone mark for compact placements.
+
+![Loom.js direction 08 on light and dark backgrounds](./docs/assets/brand/loom-logo-08-preview.png)
+
+Brand assets: [adaptive SVG](./docs/assets/brand/loom-logo-08.svg),
+[light-background SVG](./docs/assets/brand/loom-logo-08-light.svg),
+[dark-background SVG](./docs/assets/brand/loom-logo-08-dark.svg),
+[standalone SVG mark](./docs/assets/brand/loom-mark-08.svg),
+[transparent PNG exports](./docs/assets/brand/), and the
+[After Effects and Lottie guide](./docs/brand-animation.md) includes a script that builds a
+transparent square composition containing only the animated three-thread mark, with no text layer.
+The [final After Effects builder](./scripts/after-effects/loom-logo-lottie-smooth.jsx) uses the
+accepted closed ribbon contours from the standalone SVG mark. Centerline Trim Paths reveal those
+fixed silhouettes from left to right, preserving the original S-curves, crossings, and endpoint
+proportions without scaling the logo.
 
 ## Packages
 
@@ -22,11 +68,14 @@ and extension APIs. Loom still contains no supported OpenAI OAuth product or exe
 | `@loom/types`                        | Dependency-free primitives shared across the ecosystem                              |
 | `@loom/plugin-api`                   | Contracts used by plugin authors                                                    |
 | `@loom/core`                         | Runtime composition, lifecycle, registries, DI, events, configuration, and sessions |
-| `@loom/tool-workspace`               | Normalized text-workspace paths and adapter-backed list/read/write tools            |
+| `@loom/tool-workspace`               | Text/binary projects, safe archives, strict patches, and workspace tools            |
 | `@loom/agent-codex`                  | Minimal streamed model/tool orchestration; no provider integration                  |
+| `@loom/coding`                       | Coding sessions, follow-ups, cancellation, transcripts, and runtime dispatch        |
+| `@loom/execution-browser`            | Credential-free QuickJS, WebContainer, and Pyodide execution adapters               |
+| `@loom/model-openai-responses`       | Documented Platform Responses adapter with programmatic tool continuations          |
 | `@loom/platform-browser`             | Explicitly supplied browser host capability                                         |
 | `@loom/storage-indexeddb`            | Namespaced byte storage implemented with IndexedDB                                  |
-| `@loom/workspace-fsa`                | File System Access implementation of the text-workspace tools                       |
+| `@loom/workspace-fsa`                | File System Access and OPFS implementation of binary project workspaces             |
 | `@loom/credential-broker-api`        | Transport-neutral, validated access-token request/response protocol                 |
 | `@loom/credential-provider-api`      | Host-neutral provider, refresh, and interactive-authorization contracts             |
 | `@loom/auth-extension`               | External-message client and Loom `AuthProvider` adapter                             |
@@ -37,7 +86,7 @@ and extension APIs. Loom still contains no supported OpenAI OAuth product or exe
 | `@loom/examples`                     | Provider-neutral examples that use public package exports only                      |
 | `@loom/example-browser`              | Browser application demonstrating explicit Phase 3 composition                      |
 | `@loom/example-extension`            | Browser application demonstrating the Phase 4 extension boundary                    |
-| `@loom/example-codex-experimental`   | Phase 5.5 localhost app joining agent, tools, model transport, and extension        |
+| `@loom/example-codex-experimental`   | Project welcome/docs site plus a separate experimental browser coding workbench     |
 
 Dependency direction is intentional:
 
@@ -56,6 +105,14 @@ Dependency direction is intentional:
              +-- @loom/auth-codex-experimental <- @loom/extension-codex-experimental
 
 @loom/agent-codex <- @loom/model-codex-experimental <- @loom/example-codex-experimental
+        ^
+        +-------------- @loom/model-openai-responses
+        `-------------- @loom/coding
+
+@loom/tool-workspace <- @loom/workspace-fsa
+        ^
+        +-------------- browser workbench
+@loom/execution-browser --------------^
 ```
 
 Plugins may use the public runtime composition API when acting as an application entry point, but
@@ -115,24 +172,45 @@ troubleshooting.
   token is exposed.
 - The experimental browser page receives authentication state and streamed response bytes, never
   extension-owned access, refresh, or ID credentials.
+- Browser runtimes receive project snapshots and command arguments only; credentials, cookies,
+  request headers, and host fetch adapters are absent from their contracts.
+- Folder/ZIP imports reject unsafe paths and bounded-resource violations; patches use exact context
+  without fuzzy offsets.
+- Stateless model continuations preserve opaque reasoning, program, and caller items without moving
+  provider wire formats into Core.
+- Hosted programs may list and read workspace data, while writes remain direct-only and are rejected
+  when attributed to a hosted program.
 
 Start with [the documentation index](./DOCUMENTATION.md), then read
+[the step-by-step onboarding guide](./docs/getting-started.md),
 [the architecture guide](./docs/architecture.md) and
 [the plugin-authoring guide](./docs/plugin-authoring.md). The
 [minimal-agent guide](./docs/minimal-agent.md) covers Phase 2 composition, and the
 [browser-platform guide](./docs/browser-platform.md) covers Phase 3. The
 [credential-broker guide](./docs/credential-broker.md) covers the Phase 4 trust boundary and local
 extension workflow. The [Codex authentication experiment](./docs/codex-auth-experiment.md) records
-the Phase 5 source audit, threat model, test policy, and current feasibility blockers. Architectural
-decisions are recorded in [`docs/adr`](./docs/adr/README.md).
+the Phase 5 source audit, threat model, callback bridge, and test policy. Architectural decisions
+are recorded in [`docs/adr`](./docs/adr/README.md).
+
+The [OpenAI Platform Responses guide](./docs/openai-responses.md) covers the supported API adapter,
+secure transport boundary, stateless continuation, Programmatic Tool Calling, and direct-only write
+policy. It is independent of the ChatGPT-authenticated Codex experiment.
 
 The [Phase 5.5 vertical-slice guide](./docs/phase-5-5-vertical-slice.md) explains how to build, load
 the unpacked extension, serve the browser application, authenticate from trusted extension UI, run
 an agent, inspect secret-safe diagnostics on both sides of the extension boundary, log out, and
-perform the fully local acceptance test. The example currently suggests `gpt-5.5`, the newest
-audited classic Responses model compatible with its ordinary function-tool envelope; the current
-GPT-5.6 Codex models use a distinct Responses Lite protocol that this experiment does not yet
-implement.
+perform the fully local acceptance test. The example supports the classic audited Responses shape
+and the current Responses Lite input-item shape. It defaults to `gpt-5.6-sol`; model availability
+and entitlement remain account-controlled and can change independently of Loom.
+
+The [browser coding workbench guide](./docs/browser-coding-workbench.md) covers the reusable
+`@loom/coding` API, extension callback bridge, project modes, folder/ZIP transfer, and
+QuickJS/WebContainer/Pyodide execution.
+
+The [Chrome Web Store submission dossier](./docs/chrome-web-store-submission.md) contains the draft
+listing, privacy declarations, reviewer instructions, required media, production-origin package
+command, legal/support inventory, and pre-submission gate. The current provider compatibility and
+publisher/legal placeholders are explicit hard blockers.
 
 The interactive [browser example](./packages/example-browser/README.md) composes the scripted agent
 with an application-selected directory using the Phase 3 plugins. The
@@ -145,10 +223,12 @@ browser-to-extension real-provider composition and remains explicitly unsupporte
 
 ## Project status
 
-Loom.js packages remain private at `0.1.0`. The generic Phase 4 extension remains development-only
-and ships a mock provider. The separate Phase 5.5 provider is unsupported, disabled by default, and
-must not be described as production ChatGPT/Codex authentication: the direct Chrome redirect is not
-registered for the audited CLI client, while device authorization can be server-disabled and is not
-a documented third-party contract. Publishing, license selection, Changesets, public namespace
-ownership, hot plugin mutation, version-range negotiation, and multi-browser CI are intentionally
-deferred. See [CHANGES.md](./CHANGES.md) for milestone history.
+Loom.js packages remain private at `0.1.0`. The Platform Responses adapter targets the documented
+API but does not ship credentials, a backend proxy, billing configuration, or a production model
+entitlement. The generic Phase 4 extension remains development-only and ships a mock provider. The
+separate Phase 5.5 provider is unsupported, disabled by default, and must not be described as
+production ChatGPT/Codex authentication. The extension callback bridge reuses the audited localhost
+redirect but remains an undocumented third-party compatibility experiment; device authorization can
+also be server-disabled. Publishing, license selection, Changesets, public namespace ownership, hot
+plugin mutation, version-range negotiation, and multi-browser CI are intentionally deferred. See
+[CHANGES.md](./CHANGES.md) for milestone history.

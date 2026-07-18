@@ -8,6 +8,38 @@ export interface ChromeIdentityApi {
   }): Promise<string | undefined>;
 }
 
+export interface ChromeTab {
+  readonly id?: number;
+}
+
+export interface ChromeTabsApi {
+  create(options: { readonly url: string; readonly active: boolean }): Promise<ChromeTab>;
+  update(tabId: number, options: { readonly url: string }): Promise<ChromeTab>;
+  getCurrent(): Promise<ChromeTab | undefined>;
+  remove(tabId: number): Promise<void>;
+}
+
+export interface ChromeDeclarativeNetRequestRule {
+  readonly id: number;
+  readonly priority: number;
+  readonly action: {
+    readonly type: 'redirect';
+    readonly redirect: { readonly regexSubstitution: string };
+  };
+  readonly condition: {
+    readonly regexFilter: string;
+    readonly resourceTypes: readonly ['main_frame'];
+    readonly tabIds: readonly number[];
+  };
+}
+
+export interface ChromeDeclarativeNetRequestApi {
+  updateSessionRules(options: {
+    readonly removeRuleIds?: readonly number[];
+    readonly addRules?: readonly ChromeDeclarativeNetRequestRule[];
+  }): Promise<void>;
+}
+
 export interface CodexExternalPort {
   readonly name: string;
   readonly sender?: ChromeMessageSender;
@@ -27,11 +59,16 @@ export interface CodexExternalConnectEvent {
 
 export interface CodexChromeExtensionApi extends ChromeExtensionApi {
   readonly identity: ChromeIdentityApi;
+  readonly declarativeNetRequest: ChromeDeclarativeNetRequestApi;
+  readonly tabs: ChromeTabsApi;
   readonly storage: {
     readonly local: ChromeStorageArea;
     readonly session: ChromeStorageArea;
   };
   readonly runtime: ChromeExtensionApi['runtime'] & {
+    readonly id: string;
+    getURL(path: string): string;
+    getManifest?(): unknown;
     readonly onConnectExternal: CodexExternalConnectEvent;
   };
 }

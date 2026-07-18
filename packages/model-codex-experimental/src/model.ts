@@ -18,6 +18,7 @@ import type {
   CodexResponsesRequest,
   CodexResponsesSseMessage,
   CodexResponsesTransport,
+  CodexResponsesWireProtocol,
 } from './contracts.js';
 import { CodexExperimentalModelError } from './errors.js';
 
@@ -26,6 +27,7 @@ const DEFAULT_ORIGINATOR = 'loom_js_experimental';
 interface ValidatedBrokeredOptions {
   readonly kind: 'brokered';
   readonly model: string;
+  readonly wireProtocol: CodexResponsesWireProtocol;
   readonly send: CodexResponsesTransport['send'];
 }
 
@@ -33,6 +35,7 @@ interface ValidatedDirectOptions {
   readonly kind: 'direct';
   readonly endpoint: string;
   readonly model: string;
+  readonly wireProtocol: CodexResponsesWireProtocol;
   readonly getAccessToken: AccessTokenSupplier;
   readonly send: CodexResponsesFetch;
   readonly getAccountId?: AccountIdSupplier;
@@ -101,6 +104,14 @@ function validateOptions(options: CreateCodexExperimentalModelOptions): Validate
     );
   }
   const model = requiredString(options.model, 'model');
+  const wireProtocolCandidate: unknown = options.wireProtocol ?? 'classic';
+  if (wireProtocolCandidate !== 'classic' && wireProtocolCandidate !== 'responses-lite') {
+    throw new CodexExperimentalModelError(
+      'INVALID_CONFIGURATION',
+      'Experimental Codex model wireProtocol must be classic or responses-lite.',
+    );
+  }
+  const wireProtocol = wireProtocolCandidate;
   if (hasTransport) {
     const transport = options.transport as CodexResponsesTransport;
     if (!isRecord(transport) || typeof transport.send !== 'function') {
@@ -112,6 +123,7 @@ function validateOptions(options: CreateCodexExperimentalModelOptions): Validate
     return Object.freeze({
       kind: 'brokered',
       model,
+      wireProtocol,
       send: (request: CodexResponsesRequest) => transport.send(request),
     });
   }
@@ -147,6 +159,7 @@ function validateOptions(options: CreateCodexExperimentalModelOptions): Validate
     kind: 'direct',
     endpoint: requiredString(direct.endpoint, 'endpoint'),
     model,
+    wireProtocol,
     getAccessToken,
     send: direct.fetch,
     ...(getAccountId === undefined ? {} : { getAccountId }),
@@ -239,6 +252,7 @@ function encodeMessage(
 export function createCodexResponsesRequestBody(
   request: CodexModelRequest,
   model: string,
+  wireProtocol: CodexResponsesWireProtocol = 'classic',
 ): JsonObject {
   const candidate: unknown = request;
   if (
@@ -253,17 +267,16 @@ export function createCodexResponsesRequestBody(
     );
   }
   const aliases = operationAliases(request);
-  return {
+  const tools = request.tools.map((tool) => ({
+    type: 'function',
+    name: providerOperation(aliases, tool.operation),
+    description: tool.description,
+    parameters: tool.inputSchema,
+    strict: false,
+  }));
+  const input = request.messages.flatMap((message) => encodeMessage(message, aliases));
+  const common = {
     model,
-    instructions: request.instructions,
-    input: request.messages.flatMap((message) => encodeMessage(message, aliases)),
-    tools: request.tools.map((tool) => ({
-      type: 'function',
-      name: providerOperation(aliases, tool.operation),
-      description: tool.description,
-      parameters: tool.inputSchema,
-      strict: false,
-    })),
     tool_choice: 'auto',
     parallel_tool_calls: true,
     reasoning: { effort: 'medium' },
@@ -272,6 +285,21 @@ export function createCodexResponsesRequestBody(
     include: ['reasoning.encrypted_content'],
     text: { verbosity: 'low' },
   };
+  if (wireProtocol === 'responses-lite') {
+    return {
+      ...common,
+      input: [
+        { type: 'additional_tools', role: 'developer', tools },
+        {
+          type: 'message',
+          role: 'developer',
+          content: [{ type: 'input_text', text: request.instructions }],
+        },
+        ...input,
+      ],
+    };
+  }
+  return { ...common, instructions: request.instructions, input, tools };
 }
 
 async function accessToken(options: ValidatedDirectOptions): Promise<string> {
@@ -573,10 +601,13 @@ export function createCodexExperimentalModel(
     async *generate(request: CodexModelRequest, context?: OperationContext) {
       context?.signal?.throwIfCancelled();
       const aliases = operationAliases(request);
-      const body = JSON.stringify(createCodexResponsesRequestBody(request, validated.model));
+      const body = JSON.stringify(
+        createCodexResponsesRequestBody(request, validated.model, validated.wireProtocol),
+      );
       if (validated.kind === 'brokered') {
         const brokeredRequest: CodexResponsesRequest = {
           body,
+          wireProtocol: validated.wireProtocol,
           ...(context?.signal === undefined ? {} : { signal: context.signal }),
         };
         const response = await sendRequest(
@@ -605,6 +636,9 @@ export function createCodexExperimentalModel(
         Accept: 'text/event-stream',
         originator: validated.originator,
       };
+      if (validated.wireProtocol === 'responses-lite') {
+        headers['x-openai-internal-codex-responses-lite'] = 'true';
+      }
       if (selectedAccountId !== undefined) headers['ChatGPT-Account-ID'] = selectedAccountId;
       const httpRequest: CodexResponsesHttpRequest = {
         method: 'POST',

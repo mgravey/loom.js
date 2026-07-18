@@ -14,13 +14,14 @@ export default tseslint.config(
       '**/playwright-report/**',
       '**/test-results/**',
       '**/*.d.ts',
+      'scripts/after-effects/*.jsx',
     ],
   },
   eslint.configs.recommended,
   ...tseslint.configs.strictTypeChecked,
   ...tseslint.configs.stylisticTypeChecked,
   {
-    files: ['**/*.js', '**/*.config.ts'],
+    files: ['**/*.js', '**/*.mjs', '**/*.config.ts'],
     ...tseslint.configs.disableTypeChecked,
   },
   {
@@ -334,6 +335,28 @@ export default tseslint.config(
     },
   },
   {
+    files: ['packages/model-openai-responses/src/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: [
+                '@loom/*',
+                '!@loom/agent-codex',
+                '!@loom/plugin-api',
+                '!@loom/types',
+                'node:*',
+              ],
+              message: 'The OpenAI Responses adapter may depend only on public agent contracts.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ['packages/model-codex-experimental/src/**/*.ts'],
     rules: {
       'no-restricted-imports': [
@@ -395,6 +418,22 @@ export default tseslint.config(
   },
   {
     files: ['**/*.config.js'],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+      },
+    },
+  },
+  {
+    files: ['packages/example-codex-experimental/*.js'],
+    languageOptions: {
+      globals: {
+        ...globals.browser,
+      },
+    },
+  },
+  {
+    files: ['scripts/**/*.mjs'],
     languageOptions: {
       globals: {
         ...globals.node,

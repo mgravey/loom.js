@@ -7,7 +7,12 @@ export type FileSystemAccessWorkspaceErrorCode =
   | 'EXPECTED_FILE'
   | 'LIST_FAILED'
   | 'READ_FAILED'
-  | 'WRITE_FAILED';
+  | 'WRITE_FAILED'
+  | 'CREATE_DIRECTORY_FAILED'
+  | 'REMOVE_FAILED'
+  | 'MOVE_FAILED'
+  | 'ENTRY_EXISTS'
+  | 'DIRECTORY_NOT_EMPTY';
 
 export class FileSystemAccessWorkspaceError extends Error {
   public readonly code: FileSystemAccessWorkspaceErrorCode;

@@ -13,6 +13,9 @@ const packageEntries = Object.freeze({
   '@loom/core': '/packages/core/dist/index.js',
   '@loom/tool-workspace': '/packages/tool-workspace/dist/index.js',
   '@loom/agent-codex': '/packages/agent-codex/dist/index.js',
+  '@loom/coding': '/packages/coding/dist/index.js',
+  '@loom/execution-browser': '/packages/execution-browser/dist/index.js',
+  '@loom/model-openai-responses': '/packages/model-openai-responses/dist/index.js',
   '@loom/platform-browser': '/packages/platform-browser/dist/index.js',
   '@loom/storage-indexeddb': '/packages/storage-indexeddb/dist/index.js',
   '@loom/workspace-fsa': '/packages/workspace-fsa/dist/index.js',
@@ -30,6 +33,7 @@ const HTML_CONTENT_TYPE = 'text/html; charset=utf-8';
 const JAVASCRIPT_CONTENT_TYPE = 'text/javascript; charset=utf-8';
 
 const contentTypes: Readonly<Record<string, string>> = Object.freeze({
+  '.css': 'text/css; charset=utf-8',
   '.html': HTML_CONTENT_TYPE,
   '.js': JAVASCRIPT_CONTENT_TYPE,
   '.json': 'application/json; charset=utf-8',

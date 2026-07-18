@@ -169,6 +169,131 @@ describe('Codex agent orchestration', () => {
     expect(requests[0]?.instructions).toBe(DEFAULT_CODEX_INSTRUCTIONS);
   });
 
+  it('preserves continuation items and runs nested read-only calls concurrently', async () => {
+    const fixture = createTools();
+    const requests: CodexModelRequest[] = [];
+    let activeReads = 0;
+    let maximumActiveReads = 0;
+    fixture.readFile.execute = vi.fn(async (input) => {
+      activeReads += 1;
+      maximumActiveReads = Math.max(maximumActiveReads, activeReads);
+      await Promise.resolve();
+      activeReads -= 1;
+      return { path: input.path, content: String(input.path) };
+    });
+    const caller = { type: 'program', caller_id: 'call-program' } as const;
+    const program = {
+      type: 'program',
+      id: 'program-1',
+      call_id: 'call-program',
+      code: 'await Promise.all([])',
+      fingerprint: 'opaque',
+    } as const;
+    const model = scriptedModel(
+      [
+        [
+          { type: 'continuation', item: program },
+          {
+            type: 'tool-call',
+            call: {
+              id: 'read-a',
+              operation: WORKSPACE_OPERATIONS.readFile,
+              input: { path: 'a.ts' },
+              caller,
+            },
+          },
+          {
+            type: 'tool-call',
+            call: {
+              id: 'read-b',
+              operation: WORKSPACE_OPERATIONS.readFile,
+              input: { path: 'b.ts' },
+              caller,
+            },
+          },
+          { type: 'completed', final: false },
+        ],
+        [
+          { type: 'text', text: 'Inspected.' },
+          { type: 'completed', final: true },
+        ],
+      ],
+      requests,
+    );
+    const events = await collect(
+      createCodexAgentFactory().create(dependencies(model, fixture.tools)) as CodexAgent,
+    );
+
+    expect(maximumActiveReads).toBe(2);
+    expect(events.map((event) => event.type)).toEqual([
+      'tool-start',
+      'tool-start',
+      'tool-finish',
+      'tool-finish',
+      'text',
+      'completed',
+    ]);
+    const assistant = requests[1]?.messages.find((message) => message.role === 'assistant');
+    expect(assistant).toMatchObject({ continuationItems: [program] });
+    const toolMessages = requests[1]?.messages.filter((message) => message.role === 'tool');
+    expect(toolMessages).toHaveLength(2);
+    expect(toolMessages?.every((message) => message.caller?.caller_id === 'call-program')).toBe(
+      true,
+    );
+  });
+
+  it('continues a completed provider response until a final assistant message exists', async () => {
+    const requests: CodexModelRequest[] = [];
+    const model = scriptedModel(
+      [
+        [
+          {
+            type: 'continuation',
+            item: {
+              type: 'program_output',
+              id: 'output-1',
+              call_id: 'program-1',
+              result: '{}',
+              status: 'completed',
+            },
+          },
+          { type: 'completed', final: false },
+        ],
+        [{ type: 'text', text: 'Final.' }, { type: 'completed' }],
+      ],
+      requests,
+    );
+
+    await expect(
+      collect(createCodexAgentFactory().create(dependencies(model)) as CodexAgent),
+    ).resolves.toEqual([
+      { type: 'text', text: 'Final.' },
+      { type: 'completed', turns: 2 },
+    ]);
+    expect(requests).toHaveLength(2);
+  });
+
+  it('rejects a workspace write attributed to a hosted program', async () => {
+    const model = scriptedModel([
+      [
+        {
+          type: 'tool-call',
+          call: {
+            id: 'write',
+            operation: WORKSPACE_OPERATIONS.writeFile,
+            input: { path: 'file.ts', content: 'unsafe' },
+            caller: { type: 'program', caller_id: 'program-1' },
+          },
+        },
+        { type: 'completed' },
+      ],
+    ]);
+
+    await expect(
+      collect(createCodexAgentFactory().create(dependencies(model)) as CodexAgent),
+    ).rejects.toMatchObject({ code: 'UNAUTHORIZED_TOOL_CALL' });
+  });
+
   it('validates configuration, request, and exactly one tool per operation', async () => {
     const factory = createCodexAgentFactory();
     const model = scriptedModel([[{ type: 'completed' }]]);

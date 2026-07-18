@@ -1,7 +1,9 @@
 export * from './adapters.js';
+export * from './browser-authorization.js';
 export type * from './chrome-contracts.js';
 export * from './composition.js';
 export * from './manual-authorization.js';
+export * from './manifest-origins.js';
 export * from './settings.js';
 export * from './account-routing.js';
 export * from './model-transport.js';

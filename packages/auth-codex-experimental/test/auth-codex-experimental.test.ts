@@ -10,6 +10,8 @@ import {
   createCodexExperimentalCredentialProvider,
   createCodexExperimentalDeviceAuthorization,
   createCodexExperimentalRedirectAuthorization,
+  createCodexExperimentalRedirectAuthorizationRequest,
+  completeCodexExperimentalRedirectAuthorization,
   type AuthorizationTransaction,
   type OAuthHttpRequest,
   type OAuthHttpResponse,
@@ -358,6 +360,66 @@ describe('experimental direct redirect authorization', () => {
     });
     expect(fixture.stored()).toBeUndefined();
     expect(fixture.http.requests).toEqual([]);
+  });
+
+  it('resumes a loopback PKCE transaction once and rejects expired replay', async () => {
+    let stored: AuthorizationTransaction | undefined;
+    const transactions = {
+      put(transaction: AuthorizationTransaction) {
+        stored = transaction;
+        return Promise.resolve();
+      },
+      take() {
+        const value = stored;
+        stored = undefined;
+        return Promise.resolve(value);
+      },
+      delete() {
+        stored = undefined;
+        return Promise.resolve();
+      },
+    };
+    const request = await createCodexExperimentalRedirectAuthorizationRequest(configuration, {
+      digest: { digest: sha256 },
+      random: { randomBytes: (length) => new Uint8Array(length).fill(4) },
+      transactions,
+      redirectUri: 'http://localhost:1455/auth/callback',
+      clock: { now: () => 1_000 },
+      redirectRegistrationApproved: true,
+    });
+    const state = new URL(request.authorizationUrl).searchParams.get('state');
+    expect(new URL(request.authorizationUrl).searchParams.get('redirect_uri')).toBe(
+      'http://localhost:1455/auth/callback',
+    );
+    const http = queuedTransport([]);
+    await expect(
+      completeCodexExperimentalRedirectAuthorization(
+        configuration,
+        `http://localhost:1455/auth/callback?code=x&state=${String(state)}`,
+        {
+          transport: http.transport,
+          transactions,
+          clock: { now: () => 601_001 },
+          transactionTtlMs: 600_000,
+          redirectRegistrationApproved: true,
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'INVALID_STATE' });
+    expect(stored).toBeUndefined();
+    await expect(
+      completeCodexExperimentalRedirectAuthorization(
+        configuration,
+        `http://localhost:1455/auth/callback?code=x&state=${String(state)}`,
+        {
+          transport: http.transport,
+          transactions,
+          clock: { now: () => 1_001 },
+          transactionTtlMs: 600_000,
+          redirectRegistrationApproved: true,
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'INVALID_STATE' });
+    expect(http.requests).toEqual([]);
   });
 });
 

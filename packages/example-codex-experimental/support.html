@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Support and troubleshooting for the Loom Secure Model Bridge."
+    />
+    <title>Support · Loom.js</title>
+    <link rel="stylesheet" href="./site.css" />
+  </head>
+  <body>
+    <nav class="site-nav" aria-label="Main navigation">
+      <div class="shell nav-inner">
+        <a class="brand" href="./index.html"
+          ><span class="brand-mark" aria-hidden="true"></span>Loom.js</a
+        >
+        <div class="nav-links">
+          <a href="./docs.html">Documentation</a><a href="./install.html">Install</a
+          ><a class="button quiet nav-cta" href="./workbench.html">Open workbench</a>
+        </div>
+      </div>
+    </nav>
+
+    <div class="shell docs-layout">
+      <aside class="docs-sidebar">
+        <strong>Support</strong>
+        <a href="#contact">Contact</a>
+        <a href="#authentication">Authentication</a>
+        <a href="#connection">Connection</a>
+        <a href="#delete">Delete local data</a>
+        <a href="#security-report">Security reports</a>
+      </aside>
+      <main class="docs-main">
+        <header>
+          <span class="eyebrow">Help and recovery</span>
+          <h1>Support</h1>
+          <p>
+            The extension is a narrow authentication and model-transport bridge for Loom.js. It does
+            not inspect unrelated tabs, browsing history, or page content.
+          </p>
+          <div class="callout warning" data-legal-draft>
+            <strong>Publication blocker</strong>
+            <p>
+              The support and security contacts below are placeholders and must be replaced before
+              publication.
+            </p>
+          </div>
+        </header>
+
+        <section class="doc-section" id="contact">
+          <h2>Contact</h2>
+          <p>
+            General support:
+            <a data-legal-value="supportEmail" href="mailto:support@example.invalid"
+              >support@example.invalid</a
+            >
+          </p>
+          <p>
+            Include the extension version, Chrome version, non-secret error code, and reproduction
+            steps. Never send access tokens, refresh tokens, authorization codes, cookies, or
+            complete provider responses.
+          </p>
+        </section>
+
+        <section class="doc-section" id="authentication">
+          <h2>Authentication does not complete</h2>
+          <ol>
+            <li>Open the extension options and verify that the experiment is enabled.</li>
+            <li>Select <strong>Remove stored authorization</strong>, then retry sign-in.</li>
+            <li>Confirm Chrome has not disabled the extension.</li>
+            <li>Try the explicit device-code fallback if browser sign-in is unavailable.</li>
+            <li>Record only the sanitized status text and error code.</li>
+          </ol>
+        </section>
+
+        <section class="doc-section" id="connection">
+          <h2>The website cannot reach the extension</h2>
+          <ol>
+            <li>Copy the exact 32-character ID from <code>chrome://extensions</code>.</li>
+            <li>Paste it into the workbench and select <strong>Check authentication</strong>.</li>
+            <li>
+              For production, confirm the website’s exact HTTPS origin appears in the submitted
+              extension’s <code>externally_connectable.matches</code>.
+            </li>
+            <li>
+              Reload both the extension and the workbench after changing deployment configuration.
+            </li>
+          </ol>
+        </section>
+
+        <section class="doc-section" id="delete">
+          <h2>Delete local extension data</h2>
+          <p>
+            Use <strong>Remove stored authorization</strong> or disable the experiment in extension
+            options. Both remove the stored refresh credential, account-routing ID, pending login
+            transaction, and callback rule. Uninstalling the extension removes its Chrome storage.
+          </p>
+          <p>
+            Workspace files live separately in the user-selected directory, memory, or website OPFS
+            storage and are not owned by the extension.
+          </p>
+          <p>
+            Removing local state does not itself revoke a provider-side grant. Use the provider's
+            verified account-security controls if you also need provider-side revocation.
+          </p>
+        </section>
+
+        <section class="doc-section" id="security-report">
+          <h2>Report a vulnerability</h2>
+          <p>
+            Security contact:
+            <a data-legal-value="securityEmail" href="mailto:security@example.invalid"
+              >security@example.invalid</a
+            >
+          </p>
+          <p>
+            Do not include live credentials or exploit other users. Provide a minimal reproduction
+            and allow reasonable time for remediation before public disclosure.
+          </p>
+        </section>
+      </main>
+    </div>
+
+    <footer class="shell site-footer">
+      <a class="brand" href="./index.html"
+        ><span class="brand-mark" aria-hidden="true"></span>Loom.js</a
+      >
+      <div class="footer-links">
+        <a href="./privacy.html">Privacy</a><a href="./terms.html">Terms</a
+        ><a href="./legal.html">Legal notice</a><a href="./install.html">Install</a>
+      </div>
+    </footer>
+    <script src="./deployment-config.js"></script>
+    <script src="./site.js"></script>
+  </body>
+</html>

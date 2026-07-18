@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Loom Codex authentication experiment</title>
+    <title>Loom Secure Model Bridge</title>
     <style>
       :root {
         color-scheme: light dark;
@@ -19,6 +19,11 @@
         border: 1px solid #b7791f;
         border-radius: 0.5rem;
         padding: 1rem;
+      }
+      .disclosure {
+        margin-top: 1rem;
+        border-left: 3px solid #4f8edc;
+        padding: 0.1rem 1rem;
       }
       .actions {
         display: grid;
@@ -41,18 +46,37 @@
   </head>
   <body>
     <main>
-      <h1>Codex authentication experiment</h1>
+      <h1>Loom Secure Model Bridge</h1>
       <p class="warning">
         This integration is unsupported and may stop working without notice. It is not enabled by
         default. Refresh credentials remain inside this extension and are never exposed to Loom
         pages.
       </p>
+      <section class="disclosure" aria-labelledby="data-disclosure-title">
+        <h2 id="data-disclosure-title">Before you enable the bridge</h2>
+        <p>
+          When you explicitly sign in and run Loom, this extension stores a refresh credential and
+          account-routing ID only in extension session storage, which is cleared when Chrome exits.
+          It sends authentication exchanges to
+          <code>auth.openai.com</code> and sends your Loom prompts, selected project context, tool
+          results, and model settings to <code>chatgpt.com</code> to produce the response you
+          request.
+        </p>
+        <p>
+          Credentials are not exposed to the Loom website or browser runtimes. The extension does
+          not inspect unrelated pages, browsing history, or cookies, and it contains no developer
+          analytics. Read the
+          <a href="privacy.html" target="_blank">extension privacy disclosure</a>.
+        </p>
+      </section>
       <div class="actions">
         <label>
           <input id="enabled" type="checkbox" />
-          I understand and want to enable the experimental device-code flow.
+          I understand the data handling above and want to enable the experimental ChatGPT/Codex
+          authentication and model bridge.
         </label>
-        <button id="authorize" type="button" disabled>Start device authorization</button>
+        <button id="browser-authorize" type="button" disabled>Sign in with ChatGPT</button>
+        <button id="device-authorize" type="button" disabled>Use device-code fallback</button>
         <button id="logout" type="button" disabled>Remove stored authorization</button>
       </div>
       <section id="challenge" hidden aria-live="polite">

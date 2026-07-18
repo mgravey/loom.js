@@ -41,17 +41,29 @@ class MemoryStorage implements ChromeStorageArea {
   }
 }
 
-function host(storage: MemoryStorage): CodexChromeExtensionApi {
+function host(
+  storage: MemoryStorage,
+  sessionStorage = new MemoryStorage(),
+): CodexChromeExtensionApi {
   return {
     identity: {
       getRedirectURL: () => 'https://extension-id.chromiumapp.org/codex-auth',
       launchWebAuthFlow: () => Promise.resolve(undefined),
     },
     runtime: {
+      id: 'extension-id',
+      getURL: (path) => `chrome-extension://extension-id/${path}`,
       onMessageExternal: { addListener: vi.fn() },
       onConnectExternal: { addListener: vi.fn() },
     },
-    storage: { local: storage, session: new MemoryStorage() },
+    declarativeNetRequest: { updateSessionRules: vi.fn(() => Promise.resolve()) },
+    tabs: {
+      create: vi.fn(() => Promise.resolve({ id: 1 })),
+      update: vi.fn(() => Promise.resolve({ id: 1 })),
+      getCurrent: vi.fn(() => Promise.resolve({ id: 1 })),
+      remove: vi.fn(() => Promise.resolve()),
+    },
+    storage: { local: storage, session: sessionStorage },
   };
 }
 
@@ -83,6 +95,48 @@ describe('Codex experimental extension composition', () => {
       composition.tokenService.getAccessToken(composition.providerId),
     ).rejects.toMatchObject({ code: 'MISSING_CREDENTIAL' });
     expect(fetchRequest).not.toHaveBeenCalled();
+  });
+
+  it('keeps refresh and routing data in session storage and never returns access tokens externally', async () => {
+    const localStorage = new MemoryStorage();
+    const sessionStorage = new MemoryStorage();
+    const fetchRequest = vi.fn<OAuthFetch>().mockResolvedValue({
+      status: 200,
+      text: () =>
+        Promise.resolve(JSON.stringify({ access_token: 'secret-access-token', expires_in: 3600 })),
+    });
+    const composition = createCodexExperimentalExtension({
+      chromeApi: host(localStorage, sessionStorage),
+      fetchRequest,
+    });
+    await composition.settings.setDeviceAuthorizationEnabled(true);
+    await composition.credentialStore.set(composition.providerId, {
+      value: 'session-refresh-token',
+    });
+    await composition.accountRoutingStore.set('account-test');
+
+    const response = await new Promise<unknown>((resolve) => {
+      composition.externalMessageListener(
+        {
+          protocol: 'loom/credential-broker',
+          version: 1,
+          type: 'getAccessToken',
+          requestId: 'no-token-exfiltration',
+          providerId: composition.providerId,
+        },
+        { origin: 'http://localhost:4173', url: 'http://localhost:4173/workbench.html' },
+        resolve,
+      );
+    });
+
+    expect(response).toMatchObject({
+      ok: false,
+      error: { code: 'UNAUTHORIZED_REQUEST' },
+    });
+    expect(JSON.stringify(response)).not.toContain('secret-access-token');
+    expect(fetchRequest).not.toHaveBeenCalled();
+    expect([...localStorage.entries.values()]).not.toContain('session-refresh-token');
+    expect([...sessionStorage.entries.values()]).toContain('session-refresh-token');
   });
 
   it('does not surface a stale cached token after disable and re-enable', async () => {

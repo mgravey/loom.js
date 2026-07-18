@@ -51,8 +51,8 @@ Keep interactive authorization manual and opt-in from trusted extension UI. CI u
 OAuth server and synthetic credentials; it never contacts live OpenAI authentication endpoints. Use
 PKCE `S256` and state in accordance with [RFC 7636](https://www.rfc-editor.org/rfc/rfc7636) and
 [RFC 9700](https://www.rfc-editor.org/rfc/rfc9700). Keep short-lived transaction material in trusted
-`chrome.storage.session`, refresh credentials in trusted `chrome.storage.local`, and return only a
-temporary access token through the broker.
+`chrome.storage.session`, keep refresh credentials and routing in that same session-only trusted
+area, and reject external access-token requests. The model Port uses access credentials internally.
 
 ## Consequences
 
@@ -61,8 +61,8 @@ provider interoperability. A Codex or OpenAI change can replace or remove the le
 affecting Loom Core, existing auth adapters, or other credential providers.
 
 Direct-browser live feasibility remains unresolved until redirect registration is documented and
-tested with permission. `chrome.storage.local` is a weaker at-rest boundary than an OS credential
-store and does not protect against compromised extension code or a compromised browser profile.
+tested with permission. Session-only authorization avoids persisting a plaintext refresh secret but
+requires sign-in again after Chrome exits and does not protect against compromised extension code.
 Every future live attempt requires a source re-audit, a security review, a stable extension
 identity, and explicit manual activation.
 

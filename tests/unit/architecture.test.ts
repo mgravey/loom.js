@@ -11,6 +11,9 @@ const runtimePackages = [
   'core',
   'tool-workspace',
   'agent-codex',
+  'coding',
+  'execution-browser',
+  'model-openai-responses',
   'platform-browser',
   'storage-indexeddb',
   'workspace-fsa',
@@ -32,6 +35,9 @@ const allowedInternalDependencies: Readonly<
   core: ['@loom/plugin-api', '@loom/types'],
   'tool-workspace': ['@loom/plugin-api', '@loom/types'],
   'agent-codex': ['@loom/plugin-api', '@loom/tool-workspace', '@loom/types'],
+  coding: ['@loom/agent-codex', '@loom/plugin-api', '@loom/tool-workspace', '@loom/types'],
+  'execution-browser': [],
+  'model-openai-responses': ['@loom/agent-codex', '@loom/plugin-api', '@loom/types'],
   'platform-browser': ['@loom/plugin-api', '@loom/types'],
   'storage-indexeddb': ['@loom/plugin-api', '@loom/types'],
   'workspace-fsa': ['@loom/plugin-api', '@loom/tool-workspace', '@loom/types'],
@@ -140,9 +146,10 @@ describe('package architecture', () => {
       new Set([
         '@loom/agent-codex',
         '@loom/auth-extension',
-        '@loom/core',
+        '@loom/coding',
+        '@loom/execution-browser',
         '@loom/model-codex-experimental',
-        '@loom/platform-browser',
+        '@loom/tool-workspace',
         '@loom/types',
         '@loom/workspace-fsa',
       ]),
@@ -342,6 +349,10 @@ describe('package architecture', () => {
     const modelImports = await packageImports('model-codex-experimental');
     expect(modelImports).not.toContain('@loom/core');
     expect(modelImports.filter((value) => value.startsWith('node:'))).toEqual([]);
+
+    const platformModelImports = await packageImports('model-openai-responses');
+    expect(platformModelImports).not.toContain('@loom/core');
+    expect(platformModelImports.filter((value) => value.startsWith('node:'))).toEqual([]);
 
     for (const packageName of [
       'credential-broker-api',

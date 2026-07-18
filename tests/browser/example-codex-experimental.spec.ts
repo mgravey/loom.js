@@ -131,8 +131,8 @@ test('runs the browser app through the credential and model extension boundary',
 
     const options = await context.newPage();
     await options.goto(`chrome-extension://${extensionId}/options.html`);
-    await options.getByLabel(/enable the experimental device-code flow/i).check();
-    await options.getByRole('button', { name: 'Start device authorization' }).click();
+    await options.locator('#enabled').check();
+    await options.getByRole('button', { name: 'Use device-code fallback' }).click();
     await expect(options.locator('#status')).toHaveText(/Authorization complete/);
     await expect(options.locator('#credential-status')).toHaveText(/Authenticated/);
 
@@ -154,16 +154,17 @@ test('runs the browser app through the credential and model extension boundary',
       });
     });
     await openBuiltEsmHarness(application);
-    await application.goto(`${browserOrigin}/example-codex-experimental/index.html`);
+    await application.goto(`${browserOrigin}/example-codex-experimental/workbench.html`);
     await application.getByLabel('Experimental extension ID').fill(extensionId);
     await application.getByRole('button', { name: 'Check authentication' }).click();
     await expect(application.getByRole('status')).toHaveText(/^Authenticated\./u);
     await application.getByRole('button', { name: 'Choose directory and run' }).click();
     await expect(application.getByRole('status')).toHaveText('Run complete.');
-    await expect(application.getByRole('log')).toContainText('Tool started: workspace/list-files');
-    await expect(application.getByRole('log')).toContainText(
-      'The selected workspace contains source.txt.',
-    );
+    const experimentLog = application.getByRole('log', {
+      name: 'Codex experiment event log',
+    });
+    await expect(experimentLog).toContainText('Tool started: workspace/list-files');
+    await expect(experimentLog).toContainText('The selected workspace contains source.txt.');
 
     expect(modelRequests).toHaveLength(2);
     expect(modelRequests[0]?.headers.authorization).toBe('Bearer vertical-refreshed-access');
@@ -183,13 +184,13 @@ test('runs the browser app through the credential and model extension boundary',
           globalThis as typeof globalThis & {
             readonly chrome: {
               readonly storage: {
-                readonly local: {
+                readonly session: {
                   get(keys: readonly string[]): Promise<Record<string, unknown>>;
                 };
               };
             };
           }
-        ).chrome.storage.local;
+        ).chrome.storage.session;
         return storage.get([refreshStorageKey, accountStorageKey]);
       },
       { refreshStorageKey: refreshKey, accountStorageKey: accountKey },

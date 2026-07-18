@@ -21,6 +21,8 @@ import type { ExtensionTokenService } from './token-service.js';
 export interface CreateCredentialBrokerMessageHandlerOptions {
   readonly authorizer: OriginAuthorizer;
   readonly tokenService: ExtensionTokenService;
+  /** Defaults to true for the generic broker. Credential-isolating bridges should disable it. */
+  readonly allowAccessTokenResponses?: boolean;
 }
 
 export interface CredentialBrokerMessageHandler {
@@ -113,6 +115,12 @@ export function createCredentialBrokerMessageHandler(
         if (request.type === LOGOUT_MESSAGE_TYPE) {
           await options.tokenService.logout(request.providerId);
           return createLogoutSuccess(request.requestId);
+        }
+        if (options.allowAccessTokenResponses === false) {
+          throw new CredentialBrokerError(
+            'UNAUTHORIZED_REQUEST',
+            'This extension does not expose access tokens to web pages.',
+          );
         }
         const token = await options.tokenService.getAccessToken(request.providerId);
         return createGetAccessTokenSuccess(request.requestId, token);

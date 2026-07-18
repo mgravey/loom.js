@@ -11,9 +11,10 @@
   "dependencies": {
     "@loom/agent-codex": "workspace:*",
     "@loom/auth-extension": "workspace:*",
-    "@loom/core": "workspace:*",
+    "@loom/coding": "workspace:*",
+    "@loom/execution-browser": "workspace:*",
     "@loom/model-codex-experimental": "workspace:*",
-    "@loom/platform-browser": "workspace:*",
+    "@loom/tool-workspace": "workspace:*",
     "@loom/types": "workspace:*",
     "@loom/workspace-fsa": "workspace:*"
   },

@@ -61,6 +61,20 @@ model path does not change Core, the generic credential broker, or the agent con
 [the vertical-slice guide](./phase-5-5-vertical-slice.md) and
 [ADR-010](./adr/010-extension-model-transport.md).
 
+`@loom/model-openai-responses` is a separate removable leaf for the documented OpenAI Platform
+Responses API. It uses the agent-owned optional continuation and caller fields to replay stateless
+reasoning and hosted-program items without moving provider wire formats into Core. Its preferred
+transport is credential-free from Loom's perspective and implemented by a trusted application
+backend. See [the Platform Responses guide](./openai-responses.md) and
+[ADR-011](./adr/011-platform-responses-programs.md).
+
+The browser workbench adds two more removable layers. `@loom/coding` owns application-level coding
+session lifecycle and composes the existing model, agent, and tool contracts without entering Core.
+`@loom/execution-browser` owns credential-free QuickJS, WebContainer, and Pyodide adapters. Expanded
+`ProjectWorkspace` contracts remain environment-neutral in `@loom/tool-workspace`; memory and FSA/
+OPFS implementations sit above them. See
+[the browser workbench guide](./browser-coding-workbench.md).
+
 Core and portable plugin TypeScript projects compile with `lib: ["ES2022"]`. DOM and Node typings
 are not available to that production source. Browser-leaf packages add only the browser libraries
 they implement. This preserves portable ESM for a browser window, dedicated Web Worker, or a
@@ -140,15 +154,16 @@ owns immutable metadata, a plugin configuration overlay, child service scope, ev
 cancellation state. An explicitly supplied plugin overlay replaces that plugin's runtime value; it
 is not recursively merged. Closing is idempotent and deterministic.
 
-Persistence and conversation history belong in future storage and memory plugins. Active agent runs
-are application-owned operations: session close cancels their signal but does not turn sessions into
-conversation managers.
+Core sessions still do not imply conversation persistence. `@loom/coding` is an application-owned
+conversation manager: it keeps a transcript, contextualizes follow-ups, serializes active work, and
+owns cancellation without changing Core session semantics.
 
 ## Minimal agent composition
 
 The Phase 2 coding agent is resolved by an explicit capability key and constructed outside core from
-an explicitly selected model, the three workspace tools, optional memory, and the agent's immutable
-session configuration. The model and tools receive the same operation context as the agent run.
+an explicitly selected model, the required list/read/write tools, optional project tools, optional
+memory, and the agent's immutable session configuration. The model and tools receive the same
+operation context as the agent run.
 
 The workspace tools operate only through an injected text-workspace adapter. The deterministic
 in-memory adapter and scripted model in `@loom/examples` demonstrate composition; they are not
@@ -179,5 +194,8 @@ Phase 3 supplies browser storage and filesystem access, and Phase 4 supplies moc
 credential brokering, without changing runtime lifecycle or registry semantics. Phase 5 supplies an
 unsupported, disabled-by-default Codex authentication experiment as a separate leaf. Phase 5.5
 proves an experimental vertical slice without promoting its provider contracts into Core. Supported
-OAuth/Codex authentication, production model providers, additional agents, and execution
-environments remain future independent plugins.
+OAuth/Codex authentication, production credential hosting and deployment, and additional agents
+remain future independent plugins. Browser execution is now available as a leaf package, but package
+installation, shell fidelity, Git integration, and hard Worker termination are still application
+concerns. The documented Platform Responses model adapter does not promote its provider contract
+into Core or make the ChatGPT experiment supported.

@@ -104,6 +104,29 @@ export interface CodexRedirectAuthorizationDependencies extends CodexOAuthDepend
   readonly redirectRegistrationApproved: boolean;
 }
 
+export interface CodexRedirectAuthorizationRequest {
+  readonly providerId: string;
+  readonly authorizationUrl: string;
+  readonly redirectUri: string;
+}
+
+export interface CodexRedirectAuthorizationRequestDependencies {
+  readonly digest: Sha256Digest;
+  readonly random: SecureRandomSource;
+  readonly transactions: AuthorizationTransactionStore;
+  readonly redirectUri: string;
+  readonly clock?: OAuthClock;
+  /** Must be supplied only after the exact redirect URI is registered by the provider. */
+  readonly redirectRegistrationApproved: boolean;
+}
+
+export interface CodexRedirectAuthorizationCompletionDependencies extends CodexOAuthDependencies {
+  readonly transactions: AuthorizationTransactionStore;
+  readonly transactionTtlMs?: number;
+  /** Must match the gate used when the authorization request was created. */
+  readonly redirectRegistrationApproved: boolean;
+}
+
 export interface TokenEndpointResult extends AccessTokenResult {
   readonly idToken?: string;
 }

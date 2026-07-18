@@ -89,11 +89,9 @@ test.describe('experimental Codex credential extension', () => {
     try {
       const options = await context.newPage();
       await options.goto(`chrome-extension://${extensionId}/options.html`);
+      await expect(options.locator('#enabled')).not.toBeChecked();
       await expect(
-        options.getByLabel(/enable the experimental device-code flow/i),
-      ).not.toBeChecked();
-      await expect(
-        options.getByRole('button', { name: 'Start device authorization' }),
+        options.getByRole('button', { name: 'Use device-code fallback' }),
       ).toBeDisabled();
       await expect(options.locator('#status')).toHaveText('The experiment is disabled.');
 
@@ -102,7 +100,7 @@ test.describe('experimental Codex credential extension', () => {
       const response = await sendExternalMessage(application, extensionId);
       expect(response).toMatchObject({
         ok: false,
-        error: { code: 'AUTHENTICATION_REQUIRED' },
+        error: { code: 'UNAUTHORIZED_REQUEST' },
       });
       expect(JSON.stringify(response)).not.toMatch(/refresh|verifier|authorization.code/iu);
     } finally {
@@ -167,8 +165,8 @@ test.describe('experimental Codex credential extension', () => {
 
       const options = await context.newPage();
       await options.goto(`chrome-extension://${extensionId}/options.html`);
-      await options.getByLabel(/enable the experimental device-code flow/i).check();
-      await options.getByRole('button', { name: 'Start device authorization' }).click();
+      await options.locator('#enabled').check();
+      await options.getByRole('button', { name: 'Use device-code fallback' }).click();
       await expect(options.locator('#status')).toHaveText(/Authorization complete/);
 
       const stored = await options.evaluate(async (key) => {
@@ -176,11 +174,11 @@ test.describe('experimental Codex credential extension', () => {
           globalThis as typeof globalThis & {
             readonly chrome: {
               readonly storage: {
-                readonly local: { get(key: string): Promise<Record<string, unknown>> };
+                readonly session: { get(key: string): Promise<Record<string, unknown>> };
               };
             };
           }
-        ).chrome.storage.local;
+        ).chrome.storage.session;
         return storage.get(key);
       }, refreshKey);
       expect(stored).toEqual({ [refreshKey]: 'local-refresh-token' });

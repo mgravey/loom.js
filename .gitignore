@@ -24,3 +24,6 @@ packages/*/*.zip
 !.env.example
 .idea/
 .vscode/
+after-effects-reference-animation/*.aep
+after-effects-reference-animation/*.aepx
+after-effects-reference-animation/renders/

@@ -34,15 +34,20 @@ This project follows a lightweight milestone changelog while packages remain pri
   device-code authentication remains an explicit fallback.
 - Classic Responses and Responses Lite request modes. Lite requests carry developer instruction and
   `additional_tools` input items; only the extension adds the internal Lite transport header.
+- An explicit **Remember sign-in on this Chrome profile** option migrates the refresh credential and
+  routing ID between trusted session and local extension storage. Session-only storage remains the
+  default.
 
 ### Security
 
 - The extension owns login, token refresh, account routing, ChatGPT model fetches, and streaming.
   Access, refresh, and ID tokens never enter the workbench, project workspace, browser runtimes,
   OPFS project archive, IndexedDB, configuration, or logs.
-- The experimental bridge rejects external access-token requests, derives its runtime origin
-  authorization from the packaged manifest, and keeps refresh/routing secrets only in trusted
-  session storage so they are cleared when Chrome exits.
+- The experimental bridge rejects external access-token requests and derives its runtime origin
+  authorization from the packaged manifest. Refresh/routing state defaults to trusted session
+  storage; persistent local extension storage is used only after a private-computer warning and
+  explicit user confirmation. Logout, disable, credential rejection, and switching persistence off
+  scrub local copies.
 - Browser runtimes accept no environment map, credentials, headers, cookies, or host fetch adapter.
   Runtime caches such as `node_modules`, `.venv`, and `__pycache__` are excluded from write-back.
 - Direct-directory runtime write-back requires an explicit confirmation. ZIP import is atomic and

@@ -2,16 +2,15 @@ import {
   createCodexExperimentalDeviceAuthorization,
   type DeviceAuthorizationPrompt,
 } from '@loom/auth-codex-experimental';
-import type { RefreshCredentialStore } from '@loom/extension';
-
 import {
   createBrowserDelay,
   createFetchOAuthTransport,
   createWebCryptoSha256Digest,
 } from './adapters.js';
-import { chatGptAccountIdFromIdToken, type CodexAccountRoutingStore } from './account-routing.js';
+import { chatGptAccountIdFromIdToken } from './account-routing.js';
 import type { BrowserCrypto, OAuthFetch } from './chrome-contracts.js';
 import { CODEX_EXPERIMENTAL_CONFIGURATION } from './composition.js';
+import type { CodexCredentialPersistence } from './credential-persistence.js';
 import type { CodexExperimentSettings } from './settings.js';
 
 export interface ManualDeviceAuthorizationHost {
@@ -23,8 +22,7 @@ export interface ManualDeviceAuthorizationHost {
 
 export interface RunManualDeviceAuthorizationOptions {
   readonly settings: CodexExperimentSettings;
-  readonly credentialStore: RefreshCredentialStore;
-  readonly accountRoutingStore: CodexAccountRoutingStore;
+  readonly credentialPersistence: CodexCredentialPersistence;
   readonly host: ManualDeviceAuthorizationHost;
 }
 
@@ -56,11 +54,9 @@ export async function runManualDeviceAuthorization(
     throw new Error('Authorization completed without account routing metadata.');
   }
   const accountId = chatGptAccountIdFromIdToken(result.idToken);
-  await options.accountRoutingStore.set(accountId);
-  try {
-    await options.credentialStore.set(authorization.providerId, result.nextRefreshCredential);
-  } catch (error) {
-    await options.accountRoutingStore.delete();
-    throw error;
-  }
+  await options.credentialPersistence.saveAuthorization(
+    authorization.providerId,
+    result.nextRefreshCredential,
+    accountId,
+  );
 }

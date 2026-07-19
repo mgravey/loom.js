@@ -207,7 +207,9 @@ the unpacked extension, serve the browser application, authenticate from trusted
 an agent, inspect secret-safe diagnostics on both sides of the extension boundary, log out, and
 perform the fully local acceptance test. The example supports the classic audited Responses shape
 and the current Responses Lite input-item shape. It defaults to `gpt-5.6-sol`; model availability
-and entitlement remain account-controlled and can change independently of Loom.
+and entitlement remain account-controlled and can change independently of Loom. Authorization
+normally ends when Chrome closes; the extension options provide an explicit, warned private-computer
+option to remember the refresh credential and routing ID in the current Chrome profile.
 
 The [browser coding workbench guide](./docs/browser-coding-workbench.md) covers the reusable
 `@loom/coding` API, extension callback bridge, project modes, folder/ZIP transfer, and

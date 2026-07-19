@@ -139,6 +139,54 @@ describe('Codex experimental extension composition', () => {
     expect([...sessionStorage.entries.values()]).toContain('session-refresh-token');
   });
 
+  it('persists opted-in authorization across a browser restart and removes it on logout', async () => {
+    const localStorage = new MemoryStorage();
+    const firstSession = new MemoryStorage();
+    const fetchRequest = vi.fn<OAuthFetch>().mockResolvedValue({
+      status: 200,
+      text: () =>
+        Promise.resolve(
+          JSON.stringify({
+            access_token: 'temporary-access-token',
+            refresh_token: 'rotated-persistent-refresh',
+            expires_in: 3600,
+          }),
+        ),
+    });
+    const first = createCodexExperimentalExtension({
+      chromeApi: host(localStorage, firstSession),
+      fetchRequest,
+    });
+    await first.settings.setDeviceAuthorizationEnabled(true);
+    await first.credentialPersistence.setMode('local');
+    await first.credentialPersistence.saveAuthorization(
+      first.providerId,
+      { value: 'initial-persistent-refresh' },
+      'account-persistent',
+    );
+    await expect(first.tokenService.getAccessToken(first.providerId)).resolves.toEqual(
+      expect.objectContaining({ accessToken: 'temporary-access-token' }),
+    );
+    expect([...localStorage.entries.values()]).toEqual(
+      expect.arrayContaining(['local', 'rotated-persistent-refresh', 'account-persistent']),
+    );
+    expect([...firstSession.entries.values()]).not.toContain('rotated-persistent-refresh');
+
+    const restartedSession = new MemoryStorage();
+    const restarted = createCodexExperimentalExtension({
+      chromeApi: host(localStorage, restartedSession),
+      fetchRequest: vi.fn<OAuthFetch>(),
+    });
+    await expect(restarted.tokenService.getStatus(restarted.providerId)).resolves.toEqual({
+      authenticated: true,
+    });
+
+    await restarted.tokenService.logout(restarted.providerId);
+    expect([...localStorage.entries.values()]).not.toContain('rotated-persistent-refresh');
+    expect([...localStorage.entries.values()]).not.toContain('account-persistent');
+    expect([...restartedSession.entries.values()]).not.toContain('rotated-persistent-refresh');
+  });
+
   it('does not surface a stale cached token after disable and re-enable', async () => {
     const storage = new MemoryStorage();
     const fetchRequest = vi.fn<OAuthFetch>().mockResolvedValue({
@@ -256,8 +304,7 @@ describe('Codex experimental extension composition', () => {
     await expect(
       runManualDeviceAuthorization({
         settings: composition.settings,
-        credentialStore: composition.credentialStore,
-        accountRoutingStore: composition.accountRoutingStore,
+        credentialPersistence: composition.credentialPersistence,
         host: {
           fetchRequest,
           cryptoApi,
@@ -271,8 +318,7 @@ describe('Codex experimental extension composition', () => {
     await composition.settings.setDeviceAuthorizationEnabled(true);
     await runManualDeviceAuthorization({
       settings: composition.settings,
-      credentialStore: composition.credentialStore,
-      accountRoutingStore: composition.accountRoutingStore,
+      credentialPersistence: composition.credentialPersistence,
       host: {
         fetchRequest,
         cryptoApi,
@@ -348,8 +394,7 @@ describe('Codex experimental extension composition', () => {
     await expect(
       runManualDeviceAuthorization({
         settings: composition.settings,
-        credentialStore: composition.credentialStore,
-        accountRoutingStore: composition.accountRoutingStore,
+        credentialPersistence: composition.credentialPersistence,
         host: {
           fetchRequest,
           cryptoApi,

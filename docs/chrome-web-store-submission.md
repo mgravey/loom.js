@@ -30,8 +30,8 @@ Do not upload for public review until every item is resolved.
 - [ ] Produce and review the required Store images and listing copy.
 - [ ] Decide distribution: trusted testers/unlisted first is recommended; public only after the
       compatibility and legal blockers are closed.
-- [ ] Confirm that session-only authorization (sign in again after Chrome exits) meets the product
-      requirement. Never move refresh credentials to unencrypted `chrome.storage.local`.
+- [ ] Confirm that the default session-only authorization and the separately confirmed
+      private-computer persistence option meet the product requirement and Store disclosures.
 
 Store packaging, privacy pages, and this dossier are readiness infrastructure. They do not resolve
 the unsupported provider contract.
@@ -77,12 +77,13 @@ productivity/developer category shown by the current dashboard.
 > Loom Secure Model Bridge is the credential and network boundary for the Loom.js browser coding
 > workbench.
 >
-> After you explicitly enable it and sign in, the extension stores authorization only in trusted
-> extension session storage until Chrome exits. The Loom website can ask whether you are
-> authenticated, request a model stream, cancel a request, or log out. It cannot read or request
-> your refresh, access, or ID credentials. Prompts, selected project excerpts, tool results,
-> account-routing metadata, and provider authentication are sent to OpenAI/ChatGPT only to produce
-> the model response you request.
+> After you explicitly enable it and sign in, the extension stores authorization in trusted
+> extension session storage until Chrome exits. A separate “Remember sign-in on this Chrome profile”
+> control can retain the refresh credential and routing ID locally after a private-computer warning.
+> The Loom website can ask whether you are authenticated, request a model stream, cancel a request,
+> or log out. It cannot read or request your refresh, access, or ID credentials. Prompts, selected
+> project excerpts, tool results, account-routing metadata, and provider authentication are sent to
+> OpenAI/ChatGPT only to produce the model response you request.
 >
 > The bridge accepts messages only from the declared Loom website origin. It does not inspect
 > unrelated tabs, browsing history, cookies, or page content. It contains no ads or developer
@@ -103,15 +104,15 @@ These answers must match the final code and public privacy policy exactly.
 
 ### Permissions justifications
 
-| Dashboard permission/host                  | Reviewer justification                                                                                                                                                                                                                                        |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `storage`                                  | Stores explicit enablement in trusted local extension storage. Refresh, routing, and pending authorization state use trusted session storage and are cleared when Chrome exits. The website cannot read either area or request an access token.               |
-| `declarativeNetRequest`                    | Creates one session rule scoped to the user-initiated login tab. It transforms only `http://localhost:1455/auth/callback` into the packaged callback and is removed after a completed callback, handled failure, retry, logout, disable, or browser shutdown. |
-| `http://localhost:1455/*`                  | Required solely for the registered provider loopback callback. The rule intercepts the main-frame navigation before a localhost server is contacted.                                                                                                          |
-| `https://auth.openai.com/*`                | Required for user-initiated authorization/device flows and token refresh.                                                                                                                                                                                     |
-| `https://chatgpt.com/backend-api/codex/*`  | Required to relay the model request selected by the user because the website cannot perform this authenticated cross-origin request directly.                                                                                                                 |
-| `externally_connectable` production origin | Restricts external broker/model messages to one exact HTTPS Loom website origin. The production packager removes development website origins.                                                                                                                 |
-| web-accessible `callback.html`             | The exact authentication callback transformation must reach the packaged callback page. No executable remote resource is loaded.                                                                                                                              |
+| Dashboard permission/host                  | Reviewer justification                                                                                                                                                                                                                                                                                                                 |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `storage`                                  | Stores explicit enablement and the persistence preference in trusted local extension storage. Refresh/routing state uses trusted session storage by default and moves to trusted local storage only after explicit confirmation. Pending authorization state always remains session-only. The website cannot read either storage area. |
+| `declarativeNetRequest`                    | Creates one session rule scoped to the user-initiated login tab. It transforms only `http://localhost:1455/auth/callback` into the packaged callback and is removed after a completed callback, handled failure, retry, logout, disable, or browser shutdown.                                                                          |
+| `http://localhost:1455/*`                  | Required solely for the registered provider loopback callback. The rule intercepts the main-frame navigation before a localhost server is contacted.                                                                                                                                                                                   |
+| `https://auth.openai.com/*`                | Required for user-initiated authorization/device flows and token refresh.                                                                                                                                                                                                                                                              |
+| `https://chatgpt.com/backend-api/codex/*`  | Required to relay the model request selected by the user because the website cannot perform this authenticated cross-origin request directly.                                                                                                                                                                                          |
+| `externally_connectable` production origin | Restricts external broker/model messages to one exact HTTPS Loom website origin. The production packager removes development website origins.                                                                                                                                                                                          |
+| web-accessible `callback.html`             | The exact authentication callback transformation must reach the packaged callback page. No executable remote resource is loaded.                                                                                                                                                                                                       |
 
 ### Remote code
 

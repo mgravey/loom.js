@@ -159,9 +159,11 @@
           <h2>4. Storage, security, and retention</h2>
           <ul>
             <li>
-              The refresh credential and account-routing ID are stored only in trusted extension
-              session storage and are cleared when Chrome exits. Access and ID credentials are not
-              persisted by Loom, and access tokens cannot be requested by the website.
+              The refresh credential and account-routing ID use trusted extension session storage by
+              default and are cleared when Chrome exits. If you explicitly choose “Remember sign-in
+              on this Chrome profile” after the private-computer warning, that pair remains in
+              trusted local extension storage. Access and ID credentials are not persisted by Loom,
+              and access tokens cannot be requested by the website.
             </li>
             <li>
               Pending browser-login state is stored in Chrome session storage and removed after a
@@ -174,7 +176,9 @@
             </li>
             <li>
               Authentication state remains until logout, disable, provider revocation, credential
-              rejection, extension-data clearing, or uninstall.
+              rejection, browser shutdown when remembrance is off, extension-data clearing, or
+              uninstall. Persistent local storage is not an encrypted credential vault; anyone able
+              to use the same unlocked Chrome profile may be able to use the connected account.
             </li>
             <li>
               The companion website may retain the non-secret extension ID and OPFS project selected
@@ -196,7 +200,11 @@
             </li>
             <li>
               <strong>Remove stored authorization</strong> and disabling the experiment delete
-              extension-owned authorization state.
+              extension-owned authorization state from both session and persistent storage.
+            </li>
+            <li>
+              Turning off <strong>Remember sign-in on this Chrome profile</strong> removes the local
+              copy and keeps any current authorization only until Chrome exits.
             </li>
             <li>Uninstalling the extension removes its Chrome storage.</li>
             <li>

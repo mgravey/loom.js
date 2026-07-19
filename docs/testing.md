@@ -82,7 +82,8 @@ Tests must cover:
   gates.
 - experimental model request encoding, chunk-safe SSE parsing, streamed text/tool/completion events,
   cancellation, account routing, model Port origin checks, and credential-free page transport;
-- credential status/logout behavior and deletion of extension-owned refresh/routing state.
+- credential status/logout behavior, session-to-local migration and restart reconstruction, and
+  deletion of extension-owned refresh/routing state from both storage areas.
 - coding-session follow-ups, transcript snapshots, cancellation, runtime dispatch, and disposal;
 - memory/FSA project binary operations, strict patch atomicity, ZIP traversal/size/ratio defenses,
   folder import, and binary-preserving export;

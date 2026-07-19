@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { chromium, expect, test, type BrowserContext, type Page } from '@playwright/test';
@@ -8,6 +10,8 @@ import { openBuiltEsmHarness, workspaceRoot } from './built-esm-harness.js';
 const extensionPath = join(workspaceRoot, 'packages', 'extension-codex-experimental', 'dist');
 const providerId = 'openai/codex-experimental';
 const refreshKey = `loom.refresh-credential.${encodeURIComponent(providerId)}`;
+const accountKey = 'loom.codex-experimental.chatgpt-account-id';
+const enabledKey = 'loom.codex-experimental.device-authorization-enabled';
 
 function idToken(accountId = 'account-browser-test'): string {
   const payload = Buffer.from(
@@ -26,11 +30,12 @@ interface ExternalResponse {
 
 async function launchExtension(
   reducedMotion: 'no-preference' | 'reduce' = 'no-preference',
+  userDataDirectory = '',
 ): Promise<{
   readonly context: BrowserContext;
   readonly extensionId: string;
 }> {
-  const context = await chromium.launchPersistentContext('', {
+  const context = await chromium.launchPersistentContext(userDataDirectory, {
     channel: 'chromium',
     headless: true,
     reducedMotion,
@@ -225,6 +230,91 @@ test.describe('experimental Codex credential extension', () => {
       expect(requests[2]?.body).not.toContain('client_secret');
     } finally {
       await context.close();
+    }
+  });
+
+  test('remembers an opted-in authorization across a Chrome profile restart', async () => {
+    const userDataDirectory = await mkdtemp(join(tmpdir(), 'loom-persistent-auth-'));
+    let context: BrowserContext | undefined;
+    try {
+      const first = await launchExtension('no-preference', userDataDirectory);
+      context = first.context;
+      const options = await context.newPage();
+      await options.goto(`chrome-extension://${first.extensionId}/options.html`);
+      await options.evaluate(
+        async ({ accountStorageKey, experimentEnabledKey, refreshStorageKey }) => {
+          const chromeApi = (
+            globalThis as typeof globalThis & {
+              readonly chrome: {
+                readonly storage: {
+                  readonly local: {
+                    set(items: Readonly<Record<string, unknown>>): Promise<void>;
+                  };
+                  readonly session: {
+                    set(items: Readonly<Record<string, unknown>>): Promise<void>;
+                  };
+                };
+              };
+            }
+          ).chrome;
+          await chromeApi.storage.local.set({ [experimentEnabledKey]: true });
+          await chromeApi.storage.session.set({
+            [refreshStorageKey]: 'restart-refresh-token',
+            [accountStorageKey]: 'restart-account',
+          });
+        },
+        {
+          accountStorageKey: accountKey,
+          experimentEnabledKey: enabledKey,
+          refreshStorageKey: refreshKey,
+        },
+      );
+      await options.reload();
+      options.once('dialog', (dialog) => dialog.accept());
+      await options
+        .getByRole('button', { name: 'Remember sign-in on this Chrome profile' })
+        .click();
+      await expect(options.locator('#credential-status')).toHaveText(
+        /remembered on this Chrome profile/i,
+      );
+
+      await context.close();
+      context = undefined;
+
+      const restarted = await launchExtension('no-preference', userDataDirectory);
+      context = restarted.context;
+      const restartedOptions = await context.newPage();
+      await restartedOptions.goto(`chrome-extension://${restarted.extensionId}/options.html`);
+      await expect(restartedOptions.locator('#credential-status')).toHaveText(
+        /remembered on this Chrome profile/i,
+      );
+      await expect(
+        restartedOptions.getByRole('button', { name: 'Stop remembering after Chrome closes' }),
+      ).toHaveAttribute('aria-pressed', 'true');
+
+      await restartedOptions.getByRole('button', { name: 'Remove stored authorization' }).click();
+      await expect(restartedOptions.locator('#credential-status')).toHaveText(/Not authenticated/);
+      const stored = await restartedOptions.evaluate(
+        async ({ accountStorageKey, refreshStorageKey }) => {
+          const storage = (
+            globalThis as typeof globalThis & {
+              readonly chrome: {
+                readonly storage: {
+                  readonly local: {
+                    get(keys: readonly string[]): Promise<Record<string, unknown>>;
+                  };
+                };
+              };
+            }
+          ).chrome.storage.local;
+          return storage.get([refreshStorageKey, accountStorageKey]);
+        },
+        { accountStorageKey: accountKey, refreshStorageKey: refreshKey },
+      );
+      expect(stored).toEqual({});
+    } finally {
+      await context?.close();
+      await rm(userDataDirectory, { recursive: true, force: true });
     }
   });
 });

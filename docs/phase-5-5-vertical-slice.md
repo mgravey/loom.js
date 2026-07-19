@@ -46,9 +46,11 @@ Keep the server running. In Chrome:
 5. Copy the generated extension ID.
 6. Open the extension's **Details**, then **Extension options**.
 7. Read the warning and enable the experimental authentication flows.
-8. Select **Sign in with ChatGPT** for the browser/PKCE callback bridge, or choose **Use device-code
+8. Optional, on a private computer only: select **Remember sign-in on this Chrome profile** and
+   confirm the warning. Otherwise authorization ends when Chrome closes.
+9. Select **Sign in with ChatGPT** for the browser/PKCE callback bridge, or choose **Use device-code
    fallback**, open the displayed provider URL, enter the displayed code, and finish sign-in.
-9. Confirm that the options page says a refresh credential is stored.
+10. Confirm that the options page reports either browser-session or remembered-profile storage.
 
 Do not paste any token response into Loom. The extension completes the exchange itself. If a
 provider endpoint rejects the request, treat that as an unsupported experiment result; do not copy
@@ -70,7 +72,7 @@ profile, then choose **Open workbench**. The runnable application is
    runner can execute QuickJS, WebContainer Node.js, or Pyodide Python against the same project
    snapshot.
 6. Select **Log out extension credential** when finished. Logout removes both the refresh credential
-   and saved account-routing ID.
+   and saved account-routing ID from session and persistent extension storage.
 
 The extension authorizes only `http://localhost:4173` and `http://127.0.0.1:4173` in development.
 Serving the page from another origin or port is expected to fail.

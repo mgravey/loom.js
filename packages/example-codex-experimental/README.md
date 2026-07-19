@@ -47,9 +47,12 @@ command arguments. Credentials never enter a runtime. See the
 [browser workbench guide](../../docs/browser-coding-workbench.md) for runtime hosting headers,
 isolation constraints, project synchronization, and security limits.
 
-Disabling the experiment or selecting logout deletes the extension-owned session refresh credential.
-It is also cleared when Chrome exits. Local deletion does not itself revoke a provider-side grant.
-The application cannot start authorization or read/request provider credentials.
+By default, the refresh credential and routing ID are cleared when Chrome exits. The extension
+options offer **Remember sign-in on this Chrome profile** after a private-computer warning; this
+moves that pair to trusted local extension storage until the option is disabled, logout/experiment
+disable occurs, the provider rejects it, extension data is cleared, or the extension is uninstalled.
+Local deletion does not itself revoke a provider-side grant. The application cannot start
+authorization or read/request provider credentials.
 
 For complete step-by-step instructions, automated verification, trust boundaries, and current
 limitations, see the [Phase 5.5 vertical-slice guide](../../docs/phase-5-5-vertical-slice.md).

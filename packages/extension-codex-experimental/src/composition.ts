@@ -7,23 +7,22 @@ import {
 import type { AccessTokenResult, StoredRefreshCredential } from '@loom/credential-provider-api';
 import {
   createChromeExternalMessageListener,
-  createChromeRefreshCredentialStore,
   createCredentialBrokerMessageHandler,
   createExtensionTokenService,
   createOriginAuthorizer,
   ExtensionBrokerError,
-  initializeTrustedCredentialStorage,
   type ChromeExternalMessageListener,
   type ExtensionTokenService,
   type RefreshCredentialStore,
 } from '@loom/extension';
 
 import { createFetchOAuthTransport } from './adapters.js';
-import {
-  createCodexAccountRoutingStore,
-  type CodexAccountRoutingStore,
-} from './account-routing.js';
+import type { CodexAccountRoutingStore } from './account-routing.js';
 import type { CodexChromeExtensionApi, OAuthFetch } from './chrome-contracts.js';
+import {
+  createCodexCredentialPersistence,
+  type CodexCredentialPersistence,
+} from './credential-persistence.js';
 import { createCodexExperimentSettings, type CodexExperimentSettings } from './settings.js';
 
 export const CODEX_EXPERIMENTAL_CONFIGURATION = Object.freeze({
@@ -53,6 +52,7 @@ export interface CodexExperimentalExtensionComposition {
   readonly providerId: string;
   readonly credentialStore: RefreshCredentialStore;
   readonly accountRoutingStore: CodexAccountRoutingStore;
+  readonly credentialPersistence: CodexCredentialPersistence;
   readonly settings: CodexExperimentSettings;
   readonly tokenService: ExtensionTokenService;
   readonly externalMessageListener: ChromeExternalMessageListener;
@@ -63,21 +63,64 @@ export function createCodexExperimentalExtension(
 ): CodexExperimentalExtensionComposition {
   const settings = createCodexExperimentSettings(options.chromeApi.storage.local);
   const sessionStorage = options.chromeApi.storage.session;
-  const credentialStore = createChromeRefreshCredentialStore(sessionStorage);
-  const accountRoutingStore = createCodexAccountRoutingStore(sessionStorage);
-  const ready = initializeTrustedCredentialStorage(sessionStorage, () => Promise.resolve());
+  const credentialPersistence = createCodexCredentialPersistence({
+    settings,
+    localStorage: options.chromeApi.storage.local,
+    sessionStorage,
+    providerId: CODEX_EXPERIMENTAL_CONFIGURATION.providerId,
+  });
+  const ready = credentialPersistence.initialize();
   const initializedStore: RefreshCredentialStore = Object.freeze({
     async get(providerId: string) {
       await ready;
-      return credentialStore.get(providerId);
+      return credentialPersistence.credentialStore.get(providerId);
     },
     async set(providerId: string, credential: StoredRefreshCredential) {
       await ready;
-      await credentialStore.set(providerId, credential);
+      await credentialPersistence.credentialStore.set(providerId, credential);
     },
     async delete(providerId: string) {
       await ready;
-      await credentialStore.delete(providerId);
+      await credentialPersistence.credentialStore.delete(providerId);
+    },
+  });
+  const accountRoutingStore: CodexAccountRoutingStore = Object.freeze({
+    async get() {
+      await ready;
+      return credentialPersistence.accountRoutingStore.get();
+    },
+    async set(accountId: string) {
+      await ready;
+      await credentialPersistence.accountRoutingStore.set(accountId);
+    },
+    async delete() {
+      await ready;
+      await credentialPersistence.accountRoutingStore.delete();
+    },
+  });
+  const initializedPersistence: CodexCredentialPersistence = Object.freeze({
+    credentialStore: initializedStore,
+    accountRoutingStore,
+    initialize: () => ready,
+    async getAuthorization() {
+      await ready;
+      return credentialPersistence.getAuthorization();
+    },
+    async saveAuthorization(
+      providerId: string,
+      credential: StoredRefreshCredential,
+      accountId: string,
+    ) {
+      await ready;
+      await credentialPersistence.saveAuthorization(providerId, credential, accountId);
+    },
+    async setMode(mode: Parameters<CodexCredentialPersistence['setMode']>[0]) {
+      await ready;
+      await credentialPersistence.setMode(mode);
+    },
+    async clearAll(providerId: string) {
+      await ready;
+      await credentialPersistence.clearAll(providerId);
     },
   });
   const provider = createCodexExperimentalCredentialProvider(CODEX_EXPERIMENTAL_CONFIGURATION, {
@@ -154,6 +197,7 @@ export function createCodexExperimentalExtension(
     providerId: provider.id,
     credentialStore: initializedStore,
     accountRoutingStore,
+    credentialPersistence: initializedPersistence,
     settings,
     tokenService: gatedTokenService,
     externalMessageListener: createChromeExternalMessageListener(handler),

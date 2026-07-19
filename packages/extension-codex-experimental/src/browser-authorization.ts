@@ -2,9 +2,9 @@ import {
   completeCodexExperimentalRedirectAuthorization,
   createCodexExperimentalRedirectAuthorizationRequest,
 } from '@loom/auth-codex-experimental';
-import type { ChromeStorageArea, RefreshCredentialStore } from '@loom/extension';
+import type { ChromeStorageArea } from '@loom/extension';
 
-import { chatGptAccountIdFromIdToken, type CodexAccountRoutingStore } from './account-routing.js';
+import { chatGptAccountIdFromIdToken } from './account-routing.js';
 import {
   createChromeSessionAuthorizationTransactionStore,
   createFetchOAuthTransport,
@@ -18,6 +18,7 @@ import type {
   OAuthFetch,
 } from './chrome-contracts.js';
 import { CODEX_EXPERIMENTAL_CONFIGURATION } from './composition.js';
+import type { CodexCredentialPersistence } from './credential-persistence.js';
 import type { CodexExperimentSettings } from './settings.js';
 
 export const CODEX_LOCALHOST_CALLBACK_URI = 'http://localhost:1455/auth/callback' as const;
@@ -96,8 +97,7 @@ export function createBrowserAuthorizationBridgeStore(
 
 interface BrowserAuthorizationCommonOptions {
   readonly settings: CodexExperimentSettings;
-  readonly credentialStore: RefreshCredentialStore;
-  readonly accountRoutingStore: CodexAccountRoutingStore;
+  readonly credentialPersistence: CodexCredentialPersistence;
   readonly transactionStorage: ChromeStorageArea;
   readonly bridgeStore: BrowserAuthorizationBridgeStore;
   readonly declarativeNetRequest: ChromeDeclarativeNetRequestApi;
@@ -252,16 +252,11 @@ export async function completeBrowserAuthorization(
       throw new Error('The experimental ChatGPT browser login was disabled before completion.');
     }
     const accountId = chatGptAccountIdFromIdToken(result.idToken);
-    await options.accountRoutingStore.set(accountId);
-    try {
-      await options.credentialStore.set(
-        CODEX_EXPERIMENTAL_CONFIGURATION.providerId,
-        result.nextRefreshCredential,
-      );
-    } catch (error) {
-      await options.accountRoutingStore.delete();
-      throw error;
-    }
+    await options.credentialPersistence.saveAuthorization(
+      CODEX_EXPERIMENTAL_CONFIGURATION.providerId,
+      result.nextRefreshCredential,
+      accountId,
+    );
   } finally {
     await Promise.all([
       removeRule(options.declarativeNetRequest, bridge.ruleId),

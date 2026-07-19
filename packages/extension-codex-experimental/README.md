@@ -42,6 +42,14 @@ Then:
 6. Open **Details → Extension options**.
 7. Read the data disclosure, explicitly enable the bridge, and authenticate.
 
+Authorization uses trusted session storage by default and is lost when Chrome closes. On a private
+computer, select **Remember sign-in on this Chrome profile** and confirm the warning to migrate the
+refresh credential and account-routing ID to trusted local extension storage. The setting is tied to
+the current Chrome profile, not a Loom website login or operating-system unlock. Turning it off
+moves a current sign-in back to session storage; logout and disabling the bridge clear both areas.
+Access tokens remain memory-only, ID tokens are not retained, and login transaction state always
+remains session-only.
+
 The build copies only local extension HTML, JavaScript, manifest, privacy disclosure, and icon
 assets. The extension package contains no remotely hosted scripts, `eval`, or dynamic code loader.
 Provider HTTPS requests carry data; they do not supply executable extension logic.
@@ -121,14 +129,14 @@ website's `deployment-config.js` is the place that must consume it. The packager
 
 ## Permissions and hosts
 
-| Declaration                               | Why it exists                                                                                                                  |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `storage`                                 | Persist explicit opt-in locally; keep refresh, routing, and pending transaction state only in trusted session storage.         |
-| `declarativeNetRequest`                   | Install one exact, temporary, tab-scoped redirect from the registered localhost OAuth callback to the extension callback page. |
-| `http://localhost:1455/*`                 | Match only the provider's registered loopback callback target. No localhost server is contacted.                               |
-| `https://auth.openai.com/*`               | User-initiated authorization, device-code exchange, and token refresh.                                                         |
-| `https://chatgpt.com/backend-api/codex/*` | Relay the user-requested Codex model stream from the trusted extension boundary.                                               |
-| `externally_connectable`                  | Accept the versioned broker/model protocol only from the exact development or production Loom website origin.                  |
+| Declaration                               | Why it exists                                                                                                                                                                            |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `storage`                                 | Keep refresh/routing state in trusted session storage by default; persist it locally only after explicit private-computer confirmation. Pending login state always remains session-only. |
+| `declarativeNetRequest`                   | Install one exact, temporary, tab-scoped redirect from the registered localhost OAuth callback to the extension callback page.                                                           |
+| `http://localhost:1455/*`                 | Match only the provider's registered loopback callback target. No localhost server is contacted.                                                                                         |
+| `https://auth.openai.com/*`               | User-initiated authorization, device-code exchange, and token refresh.                                                                                                                   |
+| `https://chatgpt.com/backend-api/codex/*` | Relay the user-requested Codex model stream from the trusted extension boundary.                                                                                                         |
+| `externally_connectable`                  | Accept the versioned broker/model protocol only from the exact development or production Loom website origin.                                                                            |
 
 The extension does not request `history`, `cookies`, `scripting`, `activeTab`, broad website access,
 or background analytics.

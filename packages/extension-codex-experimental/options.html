@@ -65,6 +65,14 @@
         justify-self: start;
         padding: 0.6rem 1rem;
       }
+      #remember[aria-pressed='true'] {
+        border-color: #b7791f;
+      }
+      .storage-note {
+        margin: 0;
+        max-width: 42rem;
+        font-size: 0.92rem;
+      }
       #challenge[hidden] {
         display: none;
       }
@@ -100,9 +108,9 @@
       <section class="disclosure" aria-labelledby="data-disclosure-title">
         <h2 id="data-disclosure-title">Before you enable the bridge</h2>
         <p>
-          When you explicitly sign in and run Loom, this extension stores a refresh credential and
-          account-routing ID only in extension session storage, which is cleared when Chrome exits.
-          It sends authentication exchanges to
+          When you explicitly sign in and run Loom, this extension normally stores a refresh
+          credential and account-routing ID only until Chrome exits. You may separately choose to
+          remember them in this Chrome profile. It sends authentication exchanges to
           <code>auth.openai.com</code> and sends your Loom prompts, selected project context, tool
           results, and model settings to <code>chatgpt.com</code> to produce the response you
           request.
@@ -120,6 +128,13 @@
           I understand the data handling above and want to enable the experimental ChatGPT/Codex
           authentication and model bridge.
         </label>
+        <button id="remember" type="button" aria-pressed="false" disabled>
+          Remember sign-in on this Chrome profile
+        </button>
+        <p class="storage-note">
+          Private computers only. Persistent extension storage is not an encrypted credential vault,
+          and anyone using this unlocked Chrome profile may be able to use the connected account.
+        </p>
         <button id="browser-authorize" type="button" disabled>Sign in with ChatGPT</button>
         <button id="device-authorize" type="button" disabled>Use device-code fallback</button>
         <button id="logout" type="button" disabled>Remove stored authorization</button>

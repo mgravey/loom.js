@@ -1,10 +1,4 @@
-import {
-  createChromeRefreshCredentialStore,
-  initializeTrustedCredentialStorage,
-} from '@loom/extension';
-
 import type { BrowserCrypto, CodexChromeExtensionApi, OAuthFetch } from './chrome-contracts.js';
-import { createCodexAccountRoutingStore } from './account-routing.js';
 import {
   clearBrowserAuthorization,
   CODEX_EXTENSION_CALLBACK_PATH,
@@ -12,8 +6,9 @@ import {
   startBrowserAuthorization,
 } from './browser-authorization.js';
 import { CODEX_EXPERIMENTAL_CONFIGURATION } from './composition.js';
+import { createCodexCredentialPersistence } from './credential-persistence.js';
 import { runManualDeviceAuthorization } from './manual-authorization.js';
-import { createCodexExperimentSettings } from './settings.js';
+import { createCodexExperimentSettings, type CodexCredentialPersistenceMode } from './settings.js';
 
 function requiredElement<T extends Element>(root: Document, id: string): T {
   const element = root.querySelector(`#${id}`);
@@ -26,15 +21,20 @@ const host = globalThis as unknown as {
   readonly crypto: BrowserCrypto;
   readonly document: Document;
   readonly fetch: OAuthFetch;
+  readonly confirm: (message: string) => boolean;
   readonly setTimeout: (callback: () => void, milliseconds: number) => unknown;
 };
 const settings = createCodexExperimentSettings(host.chrome.storage.local);
-const storage = host.chrome.storage.session;
-const credentialStore = createChromeRefreshCredentialStore(storage);
-const accountRoutingStore = createCodexAccountRoutingStore(storage);
+const credentialPersistence = createCodexCredentialPersistence({
+  settings,
+  localStorage: host.chrome.storage.local,
+  sessionStorage: host.chrome.storage.session,
+  providerId: CODEX_EXPERIMENTAL_CONFIGURATION.providerId,
+});
 const bridgeStore = createBrowserAuthorizationBridgeStore(host.chrome.storage.session);
-const ready = initializeTrustedCredentialStorage(storage, () => Promise.resolve());
+const ready = credentialPersistence.initialize();
 const enabled = requiredElement<HTMLInputElement>(host.document, 'enabled');
+const remember = requiredElement<HTMLButtonElement>(host.document, 'remember');
 const browserAuthorize = requiredElement<HTMLButtonElement>(host.document, 'browser-authorize');
 const deviceAuthorize = requiredElement<HTMLButtonElement>(host.document, 'device-authorize');
 const logout = requiredElement<HTMLButtonElement>(host.document, 'logout');
@@ -52,23 +52,36 @@ function clearChallenge(): void {
 }
 
 async function refreshCredentialStatus(): Promise<void> {
-  const [credential, accountId] = await Promise.all([
-    credentialStore.get(CODEX_EXPERIMENTAL_CONFIGURATION.providerId),
-    accountRoutingStore.get(),
+  const [authorization, mode] = await Promise.all([
+    credentialPersistence.getAuthorization(),
+    settings.getCredentialPersistenceMode(),
   ]);
-  const authenticated = credential !== undefined && accountId !== undefined;
-  const incomplete = (credential === undefined) !== (accountId === undefined);
-  logout.disabled = credential === undefined && accountId === undefined;
-  credentialStatus.textContent = authenticated
-    ? 'Authenticated for this browser session. Refresh and routing state remain inside the extension.'
-    : incomplete
-      ? 'Incomplete authorization. Remove stored authorization, then sign in again.'
-      : 'Not authenticated. No authorization state is stored.';
+  logout.disabled = authorization === undefined;
+  credentialStatus.textContent =
+    authorization === undefined
+      ? 'Not authenticated. No authorization state is stored.'
+      : mode === 'local'
+        ? 'Authenticated and remembered on this Chrome profile. Refresh and routing state remain inside the extension.'
+        : 'Authenticated for this browser session. Refresh and routing state remain inside the extension.';
+}
+
+function updateRememberButton(mode: CodexCredentialPersistenceMode): void {
+  const persistent = mode === 'local';
+  remember.setAttribute('aria-pressed', String(persistent));
+  remember.textContent = persistent
+    ? 'Stop remembering after Chrome closes'
+    : 'Remember sign-in on this Chrome profile';
 }
 
 async function initialize(): Promise<void> {
   await ready;
-  enabled.checked = await settings.isDeviceAuthorizationEnabled();
+  const [experimentEnabled, mode] = await Promise.all([
+    settings.isDeviceAuthorizationEnabled(),
+    settings.getCredentialPersistenceMode(),
+  ]);
+  enabled.checked = experimentEnabled;
+  updateRememberButton(mode);
+  remember.disabled = !enabled.checked;
   browserAuthorize.disabled = !enabled.checked;
   deviceAuthorize.disabled = !enabled.checked;
   await refreshCredentialStatus();
@@ -82,6 +95,7 @@ enabled.addEventListener('change', () => {
     await settings.setDeviceAuthorizationEnabled(enabled.checked);
     browserAuthorize.disabled = !enabled.checked;
     deviceAuthorize.disabled = !enabled.checked;
+    remember.disabled = !enabled.checked;
     clearChallenge();
     if (!enabled.checked) {
       await Promise.all([
@@ -90,9 +104,10 @@ enabled.addEventListener('change', () => {
           transactionStorage: host.chrome.storage.session,
           declarativeNetRequest: host.chrome.declarativeNetRequest,
         }),
-        credentialStore.delete(CODEX_EXPERIMENTAL_CONFIGURATION.providerId),
-        accountRoutingStore.delete(),
+        credentialPersistence.clearAll(CODEX_EXPERIMENTAL_CONFIGURATION.providerId),
       ]);
+      await settings.setCredentialPersistenceMode('session');
+      updateRememberButton('session');
       await refreshCredentialStatus();
       status.textContent = 'The experiment is disabled and its refresh credential was removed.';
     } else {
@@ -102,8 +117,38 @@ enabled.addEventListener('change', () => {
     enabled.checked = false;
     browserAuthorize.disabled = true;
     deviceAuthorize.disabled = true;
+    remember.disabled = true;
     status.textContent = 'The trusted extension settings could not be updated.';
   });
+});
+
+remember.addEventListener('click', () => {
+  remember.disabled = true;
+  void (async () => {
+    const currentMode = await settings.getCredentialPersistenceMode();
+    const nextMode: CodexCredentialPersistenceMode = currentMode === 'local' ? 'session' : 'local';
+    if (
+      nextMode === 'local' &&
+      !host.confirm(
+        'Keep this sign-in after Chrome closes? Use this only on a private computer. Anyone with access to this unlocked Chrome profile may be able to use the connected account.',
+      )
+    ) {
+      return;
+    }
+    await credentialPersistence.setMode(nextMode);
+    updateRememberButton(nextMode);
+    await refreshCredentialStatus();
+    status.textContent =
+      nextMode === 'local'
+        ? 'Future and current authorization will be remembered on this Chrome profile.'
+        : 'Persistent authorization was removed. The current sign-in will end when Chrome closes.';
+  })()
+    .catch(() => {
+      status.textContent = 'The credential storage preference could not be updated.';
+    })
+    .finally(() => {
+      remember.disabled = !enabled.checked;
+    });
 });
 
 logout.addEventListener('click', () => {
@@ -114,8 +159,7 @@ logout.addEventListener('click', () => {
       transactionStorage: host.chrome.storage.session,
       declarativeNetRequest: host.chrome.declarativeNetRequest,
     }),
-    credentialStore.delete(CODEX_EXPERIMENTAL_CONFIGURATION.providerId),
-    accountRoutingStore.delete(),
+    credentialPersistence.clearAll(CODEX_EXPERIMENTAL_CONFIGURATION.providerId),
   ])
     .then(refreshCredentialStatus)
     .then(() => {
@@ -132,8 +176,7 @@ browserAuthorize.addEventListener('click', () => {
   status.textContent = 'Opening ChatGPT sign-in…';
   void startBrowserAuthorization({
     settings,
-    credentialStore,
-    accountRoutingStore,
+    credentialPersistence,
     transactionStorage: host.chrome.storage.session,
     bridgeStore,
     declarativeNetRequest: host.chrome.declarativeNetRequest,
@@ -160,8 +203,7 @@ deviceAuthorize.addEventListener('click', () => {
   status.textContent = 'Requesting a device authorization code…';
   void runManualDeviceAuthorization({
     settings,
-    credentialStore,
-    accountRoutingStore,
+    credentialPersistence,
     host: {
       fetchRequest: host.fetch.bind(globalThis),
       cryptoApi: host.crypto,
@@ -180,9 +222,12 @@ deviceAuthorize.addEventListener('click', () => {
       clearChallenge();
       return refreshCredentialStatus();
     })
-    .then(() => {
+    .then(() => settings.getCredentialPersistenceMode())
+    .then((mode) => {
       status.textContent =
-        'Authorization complete for this browser session. The temporary access token was discarded; Loom will refresh on demand.';
+        mode === 'local'
+          ? 'Authorization complete and remembered on this Chrome profile. The temporary access token was discarded; Loom will refresh on demand.'
+          : 'Authorization complete for this browser session. The temporary access token was discarded; Loom will refresh on demand.';
     })
     .catch(() => {
       clearChallenge();
@@ -203,5 +248,6 @@ void initialize().catch(() => {
   enabled.disabled = true;
   browserAuthorize.disabled = true;
   deviceAuthorize.disabled = true;
+  remember.disabled = true;
   status.textContent = 'Trusted credential storage could not be initialized.';
 });

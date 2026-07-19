@@ -1,9 +1,8 @@
 import { createHash } from 'node:crypto';
 
-import { createChromeRefreshCredentialStore, type ChromeStorageArea } from '@loom/extension';
+import type { ChromeStorageArea } from '@loom/extension';
 import { describe, expect, it, vi } from 'vitest';
 
-import { createCodexAccountRoutingStore } from '../src/account-routing.js';
 import {
   CODEX_BROWSER_AUTHORIZATION_TTL_MS,
   CODEX_CALLBACK_RULE_ID,
@@ -18,6 +17,7 @@ import type {
   OAuthFetch,
 } from '../src/chrome-contracts.js';
 import { CODEX_EXPERIMENTAL_CONFIGURATION } from '../src/composition.js';
+import { createCodexCredentialPersistence } from '../src/credential-persistence.js';
 import { createCodexExperimentSettings } from '../src/settings.js';
 
 class MemoryStorage implements ChromeStorageArea {
@@ -83,8 +83,12 @@ function fixture(now = 1_000) {
   const local = new MemoryStorage();
   const session = new MemoryStorage();
   const settings = createCodexExperimentSettings(local);
-  const credentialStore = createChromeRefreshCredentialStore(local);
-  const accountRoutingStore = createCodexAccountRoutingStore(local);
+  const credentialPersistence = createCodexCredentialPersistence({
+    settings,
+    localStorage: local,
+    sessionStorage: session,
+    providerId: CODEX_EXPERIMENTAL_CONFIGURATION.providerId,
+  });
   const bridgeStore = createBrowserAuthorizationBridgeStore(session);
   const rules = new Map<number, ChromeDeclarativeNetRequestRule>();
   const ruleCalls: unknown[] = [];
@@ -104,8 +108,7 @@ function fixture(now = 1_000) {
   const tabsApi = tabs();
   const common = {
     settings,
-    credentialStore,
-    accountRoutingStore,
+    credentialPersistence,
     transactionStorage: session,
     bridgeStore,
     declarativeNetRequest,
@@ -182,11 +185,17 @@ describe('extension-owned ChatGPT browser authorization', () => {
       }),
     );
     await expect(
-      state.common.credentialStore.get(CODEX_EXPERIMENTAL_CONFIGURATION.providerId),
+      state.common.credentialPersistence.credentialStore.get(
+        CODEX_EXPERIMENTAL_CONFIGURATION.providerId,
+      ),
     ).resolves.toEqual({ value: 'private-refresh' });
-    await expect(state.common.accountRoutingStore.get()).resolves.toBe('account-browser');
+    await expect(state.common.credentialPersistence.accountRoutingStore.get()).resolves.toBe(
+      'account-browser',
+    );
     expect([...state.local.entries.values()]).not.toContain('temporary-access');
     expect([...state.local.entries.values()]).not.toContain(idToken());
+    expect([...state.session.entries.values()]).not.toContain('temporary-access');
+    expect([...state.session.entries.values()]).not.toContain(idToken());
     expect(state.rules.size).toBe(0);
 
     await expect(

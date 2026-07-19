@@ -53,6 +53,7 @@ PKCE `S256` and state in accordance with [RFC 7636](https://www.rfc-editor.org/r
 [RFC 9700](https://www.rfc-editor.org/rfc/rfc9700). Keep short-lived transaction material in trusted
 `chrome.storage.session`, keep refresh credentials and routing in that same session-only trusted
 area, and reject external access-token requests. The model Port uses access credentials internally.
+ADR-014 later supersedes only the session-only retention rule with an explicit persistent option.
 
 ## Consequences
 
@@ -61,10 +62,11 @@ provider interoperability. A Codex or OpenAI change can replace or remove the le
 affecting Loom Core, existing auth adapters, or other credential providers.
 
 Direct-browser live feasibility remains unresolved until redirect registration is documented and
-tested with permission. Session-only authorization avoids persisting a plaintext refresh secret but
-requires sign-in again after Chrome exits and does not protect against compromised extension code.
-Every future live attempt requires a source re-audit, a security review, a stable extension
-identity, and explicit manual activation.
+tested with permission. Session-only authorization avoids persisting a refresh secret across Chrome
+restarts, while ADR-014 permits a warned, explicit profile-local exception. Neither mode protects
+against compromised extension code or a compromised Chrome profile. Every future live attempt
+requires a source re-audit, a security review, a stable extension identity, and explicit manual
+activation.
 
 The device-code experiment can be tested manually before Chrome redirect registration only to record
 whether the audited beta endpoints accept the client at that moment. Such a result is not a support

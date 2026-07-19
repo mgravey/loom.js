@@ -1,14 +1,10 @@
 import {
-  createChromeRefreshCredentialStore,
-  initializeTrustedCredentialStorage,
-} from '@loom/extension';
-
-import { createCodexAccountRoutingStore } from './account-routing.js';
-import {
   completeBrowserAuthorization,
   createBrowserAuthorizationBridgeStore,
 } from './browser-authorization.js';
 import type { BrowserCrypto, CodexChromeExtensionApi, OAuthFetch } from './chrome-contracts.js';
+import { CODEX_EXPERIMENTAL_CONFIGURATION } from './composition.js';
+import { createCodexCredentialPersistence } from './credential-persistence.js';
 import { createCodexExperimentSettings } from './settings.js';
 
 const host = globalThis as unknown as {
@@ -23,17 +19,20 @@ const status = host.document.querySelector('#status');
 if (!(status instanceof HTMLElement)) throw new Error('Callback page is missing its status.');
 
 const settings = createCodexExperimentSettings(host.chrome.storage.local);
-const storage = host.chrome.storage.session;
-const credentialStore = createChromeRefreshCredentialStore(storage);
-const accountRoutingStore = createCodexAccountRoutingStore(storage);
+const credentialPersistence = createCodexCredentialPersistence({
+  settings,
+  localStorage: host.chrome.storage.local,
+  sessionStorage: host.chrome.storage.session,
+  providerId: CODEX_EXPERIMENTAL_CONFIGURATION.providerId,
+});
 const bridgeStore = createBrowserAuthorizationBridgeStore(host.chrome.storage.session);
 
-void initializeTrustedCredentialStorage(storage, () => Promise.resolve())
+void credentialPersistence
+  .initialize()
   .then(() =>
     completeBrowserAuthorization({
       settings,
-      credentialStore,
-      accountRoutingStore,
+      credentialPersistence,
       transactionStorage: host.chrome.storage.session,
       bridgeStore,
       declarativeNetRequest: host.chrome.declarativeNetRequest,

@@ -85,8 +85,9 @@
       <h2>Information handled</h2>
       <ul>
         <li>
-          A refresh credential and account-routing ID stored only in extension session storage,
-          cleared when Chrome exits.
+          A refresh credential and account-routing ID stored in trusted extension session storage by
+          default. If you explicitly select “Remember sign-in on this Chrome profile,” that pair
+          remains in local extension storage after Chrome exits.
         </li>
         <li>Short-lived credentials used only for provider requests and not persisted by Loom.</li>
         <li>
@@ -98,6 +99,12 @@
           origin.
         </li>
       </ul>
+      <p>
+        Persistent local extension storage is not an encrypted credential vault. Use the remember
+        option only on a private computer; someone able to use the same unlocked Chrome profile may
+        be able to use the connected account. Logout and disabling the experiment remove session and
+        persistent authorization copies.
+      </p>
       <h2>Not collected</h2>
       <p>
         The extension does not request or inspect browsing history, unrelated page content, cookies,

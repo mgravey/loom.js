@@ -6,4 +6,5 @@ export * from './manual-authorization.js';
 export * from './manifest-origins.js';
 export * from './settings.js';
 export * from './account-routing.js';
+export * from './credential-persistence.js';
 export * from './model-transport.js';

@@ -192,10 +192,16 @@ explaining its status and risks.
 - Keep the verifier and transaction state in `chrome.storage.session`, with a short expiry and
   trusted-context access. Chrome documents session storage as in-memory extension storage that is
   cleared on reload, update, disable, and browser restart.
-- Keep refresh credentials and account routing only in trusted `chrome.storage.session`; require
-  sign-in again after Chrome exits. Chrome local/sync storage is not an encrypted secret vault.
-- Persist a rotated session refresh credential before using the associated access token internally.
-  Deduplicate refresh and interactive authorization per provider.
+- Keep refresh credentials and account routing in trusted `chrome.storage.session` by default. An
+  explicit, confirmed private-computer option may move that pair to trusted `chrome.storage.local`,
+  scoped to the current Chrome profile. Never use page storage or `chrome.storage.sync`; local
+  extension storage is not an encrypted secret vault.
+- Persist a rotated refresh credential to the selected extension storage area before using the
+  associated access token. Deduplicate refresh and interactive authorization per provider.
+- Treat the persistence preference and authorization pair as coordinated state. Migrate by writing
+  the destination before changing the preference, remove inactive or incomplete copies during
+  initialization, and scrub both storage areas on logout, experiment disable, or credential
+  rejection.
 - Reject external access-token requests. Status/logout may use external messages, while token use
   remains internal to the extension-owned model Port.
 - For the experimental model Port, resolve the token and `ChatGPT-Account-ID` only in the extension.

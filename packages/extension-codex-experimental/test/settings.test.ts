@@ -2,6 +2,7 @@ import type { ChromeStorageArea } from '@loom/extension';
 import { describe, expect, it } from 'vitest';
 
 import {
+  CODEX_CREDENTIAL_PERSISTENCE_KEY,
   CODEX_DEVICE_EXPERIMENT_ENABLED_KEY,
   createCodexExperimentSettings,
 } from '../src/settings.js';
@@ -43,5 +44,10 @@ describe('Codex experiment settings', () => {
 
     await settings.setDeviceAuthorizationEnabled(false);
     await expect(settings.isDeviceAuthorizationEnabled()).resolves.toBe(false);
+
+    await expect(settings.getCredentialPersistenceMode()).resolves.toBe('session');
+    await settings.setCredentialPersistenceMode('local');
+    await expect(settings.getCredentialPersistenceMode()).resolves.toBe('local');
+    expect(storage.entries.get(CODEX_CREDENTIAL_PERSISTENCE_KEY)).toBe('local');
   });
 });

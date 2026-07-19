@@ -132,6 +132,6 @@ pnpm check
 ## Provider-specific leaves
 
 Phase 5 investigated Codex CLI OAuth and PKCE as an experimental credential-provider implementation.
-Phase 5.5 adds a separate provider-specific model Port because inference does not belong in the
-credential broker. Both remain removable leaves without changing Loom Core. See the
-[Phase 5.5 guide](./phase-5-5-vertical-slice.md).
+Phase 5.5 adds a separate provider-specific direct-auth message because account routing and this
+weaker experimental credential handoff do not belong in the generic broker. Both remain removable
+leaves without changing Loom Core. See the [Phase 5.5 guide](./phase-5-5-vertical-slice.md).

@@ -278,8 +278,11 @@ export function createCodexResponsesRequestBody(
   const common = {
     model,
     tool_choice: 'auto',
-    parallel_tool_calls: true,
-    reasoning: { effort: 'medium' },
+    parallel_tool_calls: wireProtocol !== 'responses-lite',
+    reasoning:
+      wireProtocol === 'responses-lite'
+        ? { effort: 'medium', context: 'all_turns' }
+        : { effort: 'medium' },
     stream: true,
     store: false,
     include: ['reasoning.encrypted_content'],

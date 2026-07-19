@@ -9,16 +9,30 @@ and not a supported OpenAI integration.
 ```text
 workbench page                        experimental extension
   project files ─┐                       PKCE state + callback bridge
-  coding session ├─ credential-free ───> refresh/access/ID credentials
-  browser runtime┘   model envelope      ChatGPT account routing
-                      <── SSE chunks ─── authenticated provider fetch
+  coding session ├─ origin approval ───> exact-origin grant
+  browser runtime┤─ direct-auth ───────> refresh/access/ID credentials
+                 └ <─ short-lived token  ChatGPT account routing
+         └──────── direct model fetch ───────────────────────> chatgpt.com
+                 └─ pre-response failure ─> extension relay ─> chatgpt.com
 ```
 
 The extension owns normal ChatGPT login, the localhost callback transformation, token exchange and
-refresh, account routing, every request to the ChatGPT Codex backend, and response streaming. The
-page receives status, sanitized errors, and model bytes. It never receives access, refresh, or ID
-tokens. A public HTTPS deployment must replace the development entries in `externally_connectable`
-with its exact origin; owning a domain does not make direct page fetches pass provider CORS.
+refresh, and account-routing persistence. The page receives a short-lived access token plus routing
+ID and starts non-auth provider requests directly. It asks the extension for a replacement shortly
+before expiry and never receives refresh or ID tokens. On first contact, Chrome opens trusted
+extension UI where the user must approve the exact page origin. A public HTTPS deployment must also
+replace the development entries in `externally_connectable` with its exact origin; owning a domain
+does not make direct page fetches pass provider CORS.
+
+If direct `fetch` rejects before an HTTP response, the page retries the credential-free body over an
+authorized extension Port and keeps that transport for the remaining tab session, including page
+reloads. Browser APIs cannot distinguish CORS from other connection failures, so both use this
+fallback. HTTP errors, response-stream failures, and cancellation are never retried. The configured
+extension is checked automatically on page load.
+
+The primary surface is a conversation view. Workspace operations appear as compact collapsed
+activity rows, while the editor and manually invoked browser runtimes remain in a closed utility
+drawer until the user opens it.
 
 The browser login creates an authorization tab with PKCE and state, installs one session-scoped DNR
 rule limited to that tab, and asks the provider to return to the audited
@@ -93,7 +107,9 @@ Load `packages/extension-codex-experimental/dist` as an unpacked extension, open
 enable the experiment, and choose **Sign in with ChatGPT** or **Use device-code fallback**. Then
 open <http://localhost:4173/example-codex-experimental/>, review the library introduction and
 onboarding guide, then launch <http://localhost:4173/example-codex-experimental/workbench.html> and
-enter the extension ID.
+enter the extension ID. The page checks it automatically; select **Reconnect** only when needed,
+approve `http://localhost:4173` in the extension options page, then reload. The origin grant
+survives browser restarts until revoked; disabling the experiment clears it.
 
 The included simple Python server is sufficient for workspace/model testing but does not emit the
 COOP/COEP headers WebContainers require. Use an HTTPS server configured with

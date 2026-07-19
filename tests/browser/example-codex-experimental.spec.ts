@@ -32,13 +32,15 @@ async function launchExtension(): Promise<{
   return { context, extensionId: new URL(worker.url()).hostname };
 }
 
-test('runs the browser app through the credential and model extension boundary', async () => {
+test('keeps using the extension relay after one direct connection failure', async () => {
   const verifier = Buffer.alloc(64, 11).toString('base64url');
   const challenge = createHash('sha256').update(verifier, 'ascii').digest('base64url');
   const modelRequests: {
     readonly body: string;
     readonly headers: Readonly<Record<string, string>>;
+    readonly frameUrl: string;
   }[] = [];
+  let directFailures = 0;
   const { context, extensionId } = await launchExtension();
 
   try {
@@ -96,8 +98,29 @@ test('runs the browser app through the credential and model extension boundary',
 
     await context.route('https://chatgpt.com/backend-api/codex/responses', async (route) => {
       const request = route.request();
+      const corsHeaders = {
+        'access-control-allow-origin': browserOrigin,
+        'access-control-allow-methods': 'POST, OPTIONS',
+        'access-control-allow-headers':
+          'authorization, chatgpt-account-id, content-type, originator, session-id, thread-id, version, x-openai-internal-codex-responses-lite',
+      };
+      if (request.method() === 'OPTIONS') {
+        await route.fulfill({ status: 204, headers: corsHeaders });
+        return;
+      }
+      let frameUrl = 'extension-service-worker';
+      try {
+        frameUrl = request.frame().url();
+      } catch {
+        // Extension service-worker fetches are intentionally frameless.
+      }
+      if (frameUrl.includes('/workbench.html') && directFailures === 0) {
+        directFailures += 1;
+        await route.abort('failed');
+        return;
+      }
       const body = request.postData() ?? '';
-      modelRequests.push({ body, headers: request.headers() });
+      modelRequests.push({ body, headers: request.headers(), frameUrl });
       const turn = modelRequests.length;
       const events =
         turn === 1
@@ -124,7 +147,10 @@ test('runs the browser app through the credential and model extension boundary',
             ];
       await route.fulfill({
         status: 200,
-        headers: { 'content-type': 'text/event-stream; charset=utf-8' },
+        headers: {
+          ...corsHeaders,
+          'content-type': 'text/event-stream; charset=utf-8',
+        },
         body: `${events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join('')}data: [DONE]\n\n`,
       });
     });
@@ -156,27 +182,55 @@ test('runs the browser app through the credential and model extension boundary',
     await openBuiltEsmHarness(application);
     await application.goto(`${browserOrigin}/example-codex-experimental/workbench.html`);
     await application.getByLabel('Experimental extension ID').fill(extensionId);
-    await application.getByRole('button', { name: 'Check authentication' }).click();
+    await application.getByRole('button', { name: 'Reconnect' }).click();
+    await expect(application.getByRole('status')).toHaveText(/Approve this exact website origin/u);
+    await expect(options.locator('#pending-origins')).toContainText(browserOrigin);
+    await options.getByRole('button', { name: 'Approve' }).click();
+    await expect(options.locator('#approved-origins')).toContainText(browserOrigin);
+    await application.bringToFront();
+    await application.reload();
     await expect(application.getByRole('status')).toHaveText(/^Authenticated\./u);
-    await application.getByRole('button', { name: 'Choose directory and run' }).click();
+    await application.getByRole('button', { name: 'Choose directory and send' }).click();
     await expect(application.getByRole('status')).toHaveText('Run complete.');
     const experimentLog = application.getByRole('log', {
-      name: 'Codex experiment event log',
+      name: 'Coding conversation',
     });
-    await expect(experimentLog).toContainText('Tool started: workspace/list-files');
+    await expect(experimentLog).toContainText('Inspecting workspace — done');
     await expect(experimentLog).toContainText('The selected workspace contains source.txt.');
+    await expect(application.locator('#transport-status')).toHaveText('Extension relay');
+    await expect(experimentLog).not.toContainText('Retrying through the extension');
 
+    expect(directFailures).toBe(1);
     expect(modelRequests).toHaveLength(2);
     expect(modelRequests[0]?.headers.authorization).toBe('Bearer vertical-refreshed-access');
     expect(modelRequests[0]?.headers['chatgpt-account-id']).toBe('vertical-account');
     expect(modelRequests[0]?.headers.originator).toBe('loom_extension_experiment');
+    expect(modelRequests[0]?.frameUrl).toBe('extension-service-worker');
+    expect(modelRequests[1]?.headers.originator).toBe('loom_extension_experiment');
+    expect(modelRequests[1]?.frameUrl).toBe('extension-service-worker');
+    expect(JSON.parse(modelRequests[0]?.body ?? '{}')).toMatchObject({
+      parallel_tool_calls: false,
+      reasoning: { effort: 'medium', context: 'all_turns' },
+    });
     expect(modelRequests[1]?.body).toContain('function_call_output');
     expect(modelRequests[1]?.body).toContain('source.txt');
     expect(await application.locator('body').innerText()).not.toMatch(
       /vertical-(?:refresh|initial|refreshed)-/u,
     );
 
-    await application.getByRole('button', { name: 'Log out extension credential' }).click();
+    await application.reload();
+    await expect(application.getByRole('status')).toHaveText(/^Authenticated\./u);
+    await expect(application.locator('#transport-status')).toHaveText('Extension relay');
+    await application.getByLabel('Message').fill('Check the workspace once more.');
+    await application.getByRole('button', { name: 'Choose directory and send' }).click();
+    await expect(application.getByRole('status')).toHaveText('Run complete.');
+    expect(modelRequests).toHaveLength(3);
+    expect(modelRequests[2]?.frameUrl).toBe('extension-service-worker');
+    expect(
+      modelRequests.filter((request) => request.frameUrl === 'extension-service-worker'),
+    ).toHaveLength(3);
+
+    await application.getByRole('button', { name: 'Log out' }).click();
     await expect(application.getByRole('status')).toHaveText(/^Not authenticated\./u);
     const stored = await options.evaluate(
       async ({ refreshStorageKey, accountStorageKey }) => {

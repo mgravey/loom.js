@@ -1,8 +1,12 @@
 # Loom Secure Model Bridge
 
-This Manifest V3 extension has one purpose: authenticate a user-initiated Loom session and relay
-that session's model requests without exposing provider credentials to the website. External
-messages can query status or log out, but cannot request an access token.
+This Manifest V3 extension authenticates a user-initiated Loom session. External messages can query
+status or log out. A separate provider-specific message lets the exact authorized experimental
+workbench request a short-lived access token and account-routing ID for direct non-auth provider
+requests; refresh and ID tokens remain extension-only. A page must match the manifest and receive a
+one-time exact-origin approval from trusted extension UI before any auth message is accepted. Model
+requests are direct-first. A pre-response browser failure retries the credential-free request body
+through the same origin-authorized extension, which then handles the prompt and response stream.
 
 It remains an unsupported ChatGPT/Codex compatibility experiment. Chrome Web Store packaging does
 not make the provider integration supported or authorized. Do not submit it publicly until the
@@ -52,7 +56,7 @@ remains session-only.
 
 The build copies only local extension HTML, JavaScript, manifest, privacy disclosure, and icon
 assets. The extension package contains no remotely hosted scripts, `eval`, or dynamic code loader.
-Provider HTTPS requests carry data; they do not supply executable extension logic.
+Authentication HTTPS requests carry data; they do not supply executable extension logic.
 
 The manifest icons use a compact square crop of the standalone Direction 08 Loom mark. Shortening
 the long input tails lets the weave and endpoint rings occupy almost the full height of Chrome's
@@ -72,6 +76,11 @@ Open:
 ```text
 http://localhost:4173/example-codex-experimental/workbench.html
 ```
+
+Enter the extension ID. The page checks it automatically; select **Reconnect** only when needed. The
+extension opens its options page on first contact; approve the displayed exact origin, return to the
+workbench, and reload. The approval is remembered in trusted local extension storage until revoked
+or the bridge is disabled.
 
 The development ID is supplied in three descending-priority ways:
 
@@ -129,14 +138,14 @@ website's `deployment-config.js` is the place that must consume it. The packager
 
 ## Permissions and hosts
 
-| Declaration                               | Why it exists                                                                                                                                                                            |
-| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `storage`                                 | Keep refresh/routing state in trusted session storage by default; persist it locally only after explicit private-computer confirmation. Pending login state always remains session-only. |
-| `declarativeNetRequest`                   | Install one exact, temporary, tab-scoped redirect from the registered localhost OAuth callback to the extension callback page.                                                           |
-| `http://localhost:1455/*`                 | Match only the provider's registered loopback callback target. No localhost server is contacted.                                                                                         |
-| `https://auth.openai.com/*`               | User-initiated authorization, device-code exchange, and token refresh.                                                                                                                   |
-| `https://chatgpt.com/backend-api/codex/*` | Relay the user-requested Codex model stream from the trusted extension boundary.                                                                                                         |
-| `externally_connectable`                  | Accept the versioned broker/model protocol only from the exact development or production Loom website origin.                                                                            |
+| Declaration                               | Why it exists                                                                                                                                                                                                                        |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `storage`                                 | Keep refresh/routing state in trusted session storage by default; persist it locally only after explicit private-computer confirmation. Store approved exact origins locally and pending login/origin requests only for the session. |
+| `declarativeNetRequest`                   | Install one exact, temporary, tab-scoped redirect from the registered localhost OAuth callback to the extension callback page.                                                                                                       |
+| `http://localhost:1455/*`                 | Match only the provider's registered loopback callback target. No localhost server is contacted.                                                                                                                                     |
+| `https://auth.openai.com/*`               | User-initiated authorization, device-code exchange, and token refresh.                                                                                                                                                               |
+| `https://chatgpt.com/backend-api/codex/*` | Direct-first fallback only: relay a model request when the page receives no HTTP response.                                                                                                                                           |
+| `externally_connectable`                  | Let Chrome route origin-access and auth messages only from the exact development or production Loom origin; extension storage then enforces the user's separate exact-origin grant.                                                  |
 
 The extension does not request `history`, `cookies`, `scripting`, `activeTab`, broad website access,
 or background analytics.

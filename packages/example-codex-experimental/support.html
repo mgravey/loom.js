@@ -38,8 +38,8 @@
           <span class="eyebrow">Help and recovery</span>
           <h1>Support</h1>
           <p>
-            The extension is a narrow authentication and model-transport bridge for Loom.js. It does
-            not inspect unrelated tabs, browsing history, or page content.
+            The extension is a narrow authentication and short-lived-token bridge for Loom.js. It
+            does not inspect unrelated tabs, browsing history, or page content.
           </p>
           <div class="callout warning" data-legal-draft>
             <strong>Publication blocker</strong>
@@ -71,6 +71,10 @@
             <li>Open the extension options and verify that the experiment is enabled.</li>
             <li>Select <strong>Remove stored authorization</strong>, then retry sign-in.</li>
             <li>Confirm Chrome has not disabled the extension.</li>
+            <li>
+              Select <strong>Reconnect</strong>, then approve the exact website origin shown in the
+              trusted extension options page.
+            </li>
             <li>Try the explicit device-code fallback if browser sign-in is unavailable.</li>
             <li>Record only the sanitized status text and error code.</li>
           </ol>
@@ -80,7 +84,10 @@
           <h2>The website cannot reach the extension</h2>
           <ol>
             <li>Copy the exact 32-character ID from <code>chrome://extensions</code>.</li>
-            <li>Paste it into the workbench and select <strong>Check authentication</strong>.</li>
+            <li>
+              Paste it into the workbench. It connects automatically; select
+              <strong>Reconnect</strong> only if needed.
+            </li>
             <li>
               For production, confirm the website’s exact HTTPS origin appears in the submitted
               extension’s <code>externally_connectable.matches</code>.

@@ -16,9 +16,8 @@ import {
 } from '@loom/execution-browser';
 import {
   createCodexExperimentalModel,
+  type CodexResponsesFetch,
   type CodexResponsesHttpResponse,
-  type CodexResponsesRequest,
-  type CodexResponsesTransport,
 } from '@loom/model-codex-experimental';
 import {
   createMemoryProjectWorkspace,
@@ -38,6 +37,11 @@ import { createCancellationSource, sessionId, type CancellationSource } from '@l
 import { createFileSystemAccessProjectWorkspace } from '@loom/workspace-fsa';
 
 const PROVIDER_ID = 'openai/codex-experimental';
+const CODEX_RESPONSES_ENDPOINT = 'https://chatgpt.com/backend-api/codex/responses';
+const DIRECT_AUTH_PROTOCOL = 'loom/codex-direct-auth-experimental';
+const DIRECT_AUTH_VERSION = 1;
+const ORIGIN_ACCESS_PROTOCOL = 'loom/codex-origin-access-experimental';
+const ORIGIN_ACCESS_VERSION = 1;
 const MODEL_PORT_NAME = 'loom/codex-model-experimental/v1';
 const MODEL_PROTOCOL = 'loom/codex-model-experimental';
 const MODEL_PROTOCOL_VERSION = 1;
@@ -46,6 +50,7 @@ const OPFS_DIRECTORY = 'loom-workbench';
 const OPFS_ARCHIVE = 'project.zip';
 const EXTENSION_ID_PATTERN = /^[a-p]{32}$/u;
 const EXTENSION_ID_STORAGE_KEY = 'loom.chrome-extension-id';
+const MODEL_TRANSPORT_STORAGE_PREFIX = 'loom.codex-model-transport.';
 
 interface LoomDeploymentConfig {
   readonly chromeExtensionId?: string;
@@ -55,6 +60,12 @@ interface DirectoryPickerHost {
   showDirectoryPicker(options?: {
     readonly mode?: 'read' | 'readwrite';
   }): Promise<FileSystemDirectoryHandle>;
+}
+
+interface DirectCredentials {
+  readonly accessToken: string;
+  readonly accountId: string;
+  readonly expiresAt: number;
 }
 
 interface PortEvent<T> {
@@ -68,8 +79,15 @@ interface ExternalPort {
   disconnect(): void;
 }
 
-interface CodexExternalRuntime extends ExternalMessageRuntime {
+interface RelayRuntime extends ExternalMessageRuntime {
   connect(extensionId: string, options: { readonly name: string }): ExternalPort;
+}
+
+class DirectProviderConnectionError extends Error {
+  constructor(cause: unknown) {
+    super('The direct provider request failed before an HTTP response.', { cause });
+    this.name = 'DirectProviderConnectionError';
+  }
 }
 
 function requiredElement<ElementType extends HTMLElement>(
@@ -89,7 +107,8 @@ const runButton = requiredElement('#run', HTMLButtonElement);
 const cancelRunButton = requiredElement('#cancel-run', HTMLButtonElement);
 const logoutButton = requiredElement('#logout', HTMLButtonElement);
 const statusElement = requiredElement('#status', HTMLParagraphElement);
-const logElement = requiredElement('#log', HTMLPreElement);
+const logElement = requiredElement('#log', HTMLDivElement);
+const transportStatusElement = requiredElement('#transport-status', HTMLSpanElement);
 const workspaceMode = requiredElement('#workspace-mode', HTMLSelectElement);
 const openWorkspaceButton = requiredElement('#open-workspace', HTMLButtonElement);
 const importFolderButton = requiredElement('#import-folder', HTMLButtonElement);
@@ -141,9 +160,17 @@ function setStatus(message: string): void {
   statusElement.textContent = message;
 }
 
-function appendLog(message: string): void {
-  logElement.textContent = `${logElement.textContent}${message}\n`;
+function appendLog(message: string, tone: 'assistant' | 'error' | 'system' = 'system'): void {
+  const entry = globalThis.document.createElement('div');
+  entry.className = `chat-message ${tone}`;
+  entry.textContent = message;
+  logElement.append(entry);
   logElement.scrollTop = logElement.scrollHeight;
+}
+
+function appendUserMessage(message: string): void {
+  appendLog(message, 'assistant');
+  logElement.lastElementChild?.classList.add('user');
 }
 
 function appendRuntimeOutput(chunk: string): void {
@@ -168,24 +195,16 @@ function pageDiagnostic(
   globalThis.console.info('[loom:page-extension]', Object.freeze({ event, ...details }));
 }
 
-function diagnosticCode(value: unknown, fallback: string): string {
-  return typeof value === 'string' && /^[A-Z_]{1,64}$/u.test(value) ? value : fallback;
-}
-
 function providerDiagnostic(value: unknown): string {
   return typeof value === 'string' && /^[a-zA-Z0-9._:[\]-]{1,256}$/u.test(value)
     ? value
     : 'unclassified';
 }
 
-function diagnosticStage(value: unknown): string {
-  return typeof value === 'string' && /^[a-z-]{1,32}$/u.test(value) ? value : 'unknown';
-}
-
-function extensionRuntime(): CodexExternalRuntime {
+function extensionRuntime(): RelayRuntime {
   const runtime = (
     globalThis as typeof globalThis & {
-      readonly chrome?: { readonly runtime?: CodexExternalRuntime };
+      readonly chrome?: { readonly runtime?: RelayRuntime };
     }
   ).chrome?.runtime;
   if (
@@ -218,6 +237,273 @@ function directoryPicker(): DirectoryPickerHost['showDirectoryPicker'] {
     throw new Error('This browser does not support directory selection.');
   return picker.bind(globalThis);
 }
+
+let nextDirectAuthRequest = 0;
+let nextOriginAccessRequest = 0;
+let nextRelayRequest = 0;
+let cachedDirectCredentials: Promise<DirectCredentials> | undefined;
+let modelTransportMode: 'direct' | 'relay' = 'direct';
+
+function setTransportMode(mode: 'direct' | 'relay'): void {
+  modelTransportMode = mode;
+  transportStatusElement.textContent = mode === 'direct' ? 'Direct preferred' : 'Extension relay';
+  transportStatusElement.dataset.mode = mode;
+  const extensionId = extensionIdInput.value.trim();
+  if (!EXTENSION_ID_PATTERN.test(extensionId)) return;
+  try {
+    const key = `${MODEL_TRANSPORT_STORAGE_PREFIX}${extensionId}`;
+    if (mode === 'relay') globalThis.sessionStorage.setItem(key, mode);
+    else globalThis.sessionStorage.removeItem(key);
+  } catch {
+    // Tab-scoped transport affinity is an optimization; storage availability is optional.
+  }
+}
+
+function storedTransportMode(): 'direct' | 'relay' {
+  const extensionId = extensionIdInput.value.trim();
+  if (!EXTENSION_ID_PATTERN.test(extensionId)) return 'direct';
+  try {
+    return globalThis.sessionStorage.getItem(`${MODEL_TRANSPORT_STORAGE_PREFIX}${extensionId}`) ===
+      'relay'
+      ? 'relay'
+      : 'direct';
+  } catch {
+    return 'direct';
+  }
+}
+
+function sendExtensionMessage(message: unknown): Promise<unknown> {
+  const runtime = extensionRuntime();
+  const extensionId = selectedExtensionId();
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const resolveOnce = (value: unknown): void => {
+      if (!settled) {
+        settled = true;
+        resolve(value);
+      }
+    };
+    const rejectOnce = (error: unknown): void => {
+      if (!settled) {
+        settled = true;
+        reject(error instanceof Error ? error : new Error('Extension request failed.'));
+      }
+    };
+    try {
+      const returned = runtime.sendMessage(extensionId, message, undefined, (response) => {
+        if (runtime.lastError !== undefined) {
+          rejectOnce(new Error(runtime.lastError.message ?? 'Extension request failed.'));
+        } else {
+          resolveOnce(response);
+        }
+      });
+      if (
+        returned !== null &&
+        (typeof returned === 'object' || typeof returned === 'function') &&
+        typeof (returned as PromiseLike<unknown>).then === 'function'
+      ) {
+        void Promise.resolve(returned as PromiseLike<unknown>).then(resolveOnce, rejectOnce);
+      } else if (returned !== undefined) {
+        resolveOnce(returned);
+      }
+    } catch (error) {
+      rejectOnce(error);
+    }
+  });
+}
+
+async function requestDirectCredentials(): Promise<DirectCredentials> {
+  nextDirectAuthRequest += 1;
+  const requestId = `loom-direct-auth-${String(nextDirectAuthRequest)}`;
+  pageDiagnostic('auth.credentials.request', { requestId });
+  const response = await sendExtensionMessage({
+    protocol: DIRECT_AUTH_PROTOCOL,
+    version: DIRECT_AUTH_VERSION,
+    type: 'getDirectCredentials',
+    requestId,
+    providerId: PROVIDER_ID,
+  });
+  if (
+    !isRecord(response) ||
+    response.protocol !== DIRECT_AUTH_PROTOCOL ||
+    response.version !== DIRECT_AUTH_VERSION ||
+    response.type !== 'getDirectCredentialsResult' ||
+    response.requestId !== requestId ||
+    response.ok !== true ||
+    typeof response.accessToken !== 'string' ||
+    response.accessToken.trim() === '' ||
+    typeof response.accountId !== 'string' ||
+    !/^[a-zA-Z0-9._-]{1,256}$/u.test(response.accountId)
+  ) {
+    const code =
+      isRecord(response) && isRecord(response.error)
+        ? providerDiagnostic(response.error.code)
+        : 'INVALID_EXTENSION_RESPONSE';
+    pageDiagnostic('auth.credentials.rejected', { requestId, code });
+    throw new Error(`Extension direct authentication failed (${code}).`);
+  }
+  pageDiagnostic('auth.credentials.response', { requestId });
+  return Object.freeze({
+    accessToken: response.accessToken,
+    accountId: response.accountId,
+    expiresAt:
+      typeof response.expiresAt === 'number' && Number.isFinite(response.expiresAt)
+        ? response.expiresAt
+        : Date.now() + 30_000,
+  });
+}
+
+async function ensureOriginAccess(): Promise<void> {
+  nextOriginAccessRequest += 1;
+  const requestId = `loom-origin-access-${String(nextOriginAccessRequest)}`;
+  pageDiagnostic('origin.access.request', { requestId });
+  const response = await sendExtensionMessage({
+    protocol: ORIGIN_ACCESS_PROTOCOL,
+    version: ORIGIN_ACCESS_VERSION,
+    type: 'requestOriginAccess',
+    requestId,
+  });
+  if (
+    !isRecord(response) ||
+    response.protocol !== ORIGIN_ACCESS_PROTOCOL ||
+    response.version !== ORIGIN_ACCESS_VERSION ||
+    response.type !== 'originAccessResult' ||
+    response.requestId !== requestId ||
+    response.ok !== true ||
+    typeof response.approved !== 'boolean'
+  ) {
+    const code =
+      isRecord(response) && isRecord(response.error)
+        ? providerDiagnostic(response.error.code)
+        : 'INVALID_EXTENSION_RESPONSE';
+    pageDiagnostic('origin.access.rejected', { requestId, code });
+    throw new Error(`Extension website authorization failed (${code}).`);
+  }
+  pageDiagnostic('origin.access.response', { requestId, approved: response.approved });
+  if (!response.approved) {
+    throw new Error(
+      'Approve this exact website origin in the extension options page, then check authentication again.',
+    );
+  }
+}
+
+async function directCredentials(): Promise<DirectCredentials> {
+  if (cachedDirectCredentials !== undefined) {
+    const cached = await cachedDirectCredentials;
+    if (cached.expiresAt > Date.now() + 10_000) return cached;
+  }
+  cachedDirectCredentials = requestDirectCredentials();
+  try {
+    return await cachedDirectCredentials;
+  } catch (error) {
+    cachedDirectCredentials = undefined;
+    throw error;
+  }
+}
+
+async function providerErrorMetadata(
+  response: Response,
+): Promise<Readonly<Record<string, string>>> {
+  let envelope: unknown;
+  try {
+    const text = (await response.text()).slice(0, 16 * 1024);
+    envelope = JSON.parse(text);
+  } catch {
+    return Object.freeze({});
+  }
+  const error = isRecord(envelope) && isRecord(envelope.error) ? envelope.error : undefined;
+  if (error === undefined) return Object.freeze({});
+  return Object.freeze({
+    providerCode: providerDiagnostic(error.code),
+    providerType: providerDiagnostic(error.type),
+    providerParam: providerDiagnostic(error.param),
+  });
+}
+
+function decodedResponseBody(
+  body: ReadableStream<Uint8Array>,
+  unsubscribe: () => void,
+): AsyncIterable<string> {
+  return {
+    async *[Symbol.asyncIterator]() {
+      const reader = body.getReader();
+      const decoder = new TextDecoder();
+      try {
+        for (;;) {
+          const result = await reader.read();
+          if (result.done) break;
+          const chunk = decoder.decode(result.value, { stream: true });
+          if (chunk !== '') yield chunk;
+        }
+        const tail = decoder.decode();
+        if (tail !== '') yield tail;
+      } finally {
+        unsubscribe();
+        reader.releaseLock();
+      }
+    },
+  };
+}
+
+const EMPTY_RESPONSE_BODY: AsyncIterable<string> = Object.freeze({
+  [Symbol.asyncIterator](): AsyncIterator<string> {
+    return {
+      next: () => Promise.resolve({ done: true, value: undefined }),
+    };
+  },
+});
+
+const directModelFetch: CodexResponsesFetch = async (
+  request,
+): Promise<CodexResponsesHttpResponse> => {
+  const controller = new AbortController();
+  const unsubscribe = request.signal?.onCancel(() => controller.abort()) ?? (() => undefined);
+  pageDiagnostic('model.fetch.started', { target: 'chatgpt.com', direct: true });
+  const parsedBody: unknown = JSON.parse(request.body);
+  if (!isRecord(parsedBody)) throw new Error('Direct model request body is invalid.');
+  const body = JSON.stringify({
+    ...parsedBody,
+    prompt_cache_key: RUN_SESSION_ID,
+    client_metadata: { session_id: RUN_SESSION_ID, thread_id: RUN_SESSION_ID },
+  });
+  let response: Response;
+  try {
+    response = await globalThis.fetch(request.url, {
+      method: request.method,
+      headers: request.headers,
+      body,
+      cache: 'no-store',
+      credentials: 'omit',
+      redirect: 'error',
+      mode: 'cors',
+      signal: controller.signal,
+    });
+  } catch (error) {
+    unsubscribe();
+    if (controller.signal.aborted) throw error;
+    throw new DirectProviderConnectionError(error);
+  }
+  pageDiagnostic('model.fetch.response', { status: response.status, direct: true });
+  if (!response.ok) {
+    const metadata = await providerErrorMetadata(response);
+    unsubscribe();
+    appendLog(
+      `Provider rejected the request (${String(response.status)}): ${metadata.providerCode ?? 'unclassified'}; type ${metadata.providerType ?? 'unclassified'}; parameter ${metadata.providerParam ?? 'unclassified'}.`,
+    );
+    return Object.freeze({
+      status: response.status,
+      body: EMPTY_RESPONSE_BODY,
+    });
+  }
+  if (response.body === null) {
+    unsubscribe();
+    throw new Error('Provider response body is unavailable.');
+  }
+  return Object.freeze({
+    status: response.status,
+    body: decodedResponseBody(response.body, unsubscribe),
+  });
+};
 
 function createChunkStream(): {
   readonly body: AsyncIterable<string>;
@@ -262,86 +548,93 @@ function createChunkStream(): {
   };
 }
 
-function createExtensionModelTransport(
-  runtime: CodexExternalRuntime,
-  extensionId: string,
-): CodexResponsesTransport {
-  let nextRequest = 0;
-  return Object.freeze({
-    send(request: CodexResponsesRequest): Promise<CodexResponsesHttpResponse> {
-      nextRequest += 1;
-      const requestId = `loom-model-${String(nextRequest)}`;
-      const port = runtime.connect(extensionId, { name: MODEL_PORT_NAME });
-      const stream = createChunkStream();
-      let started = false;
-      let ended = false;
-      let settled = false;
-      let unsubscribe = (): void => undefined;
-      return new Promise((resolve, reject) => {
-        const rejectOnce = (error: Error): void => {
-          if (settled) stream.fail(error);
-          else {
-            settled = true;
-            reject(error);
-          }
-        };
-        port.onMessage.addListener((message) => {
-          if (!isRecord(message) || message.requestId !== requestId) return;
-          if (message.type === 'start' && typeof message.status === 'number' && !started) {
-            started = true;
-            settled = true;
-            resolve(Object.freeze({ status: message.status, body: stream.body }));
-            return;
-          }
-          if (message.type === 'chunk' && typeof message.chunk === 'string' && started) {
-            stream.push(message.chunk);
-            return;
-          }
-          if (message.type === 'end') {
-            ended = true;
-            unsubscribe();
-            stream.finish();
-            return;
-          }
-          if (message.type === 'provider-error' && typeof message.status === 'number') {
-            appendLog(
-              `Provider rejected the request (${String(message.status)}): ${providerDiagnostic(message.providerCode)}; type ${providerDiagnostic(message.providerType)}; parameter ${providerDiagnostic(message.providerParam)}.`,
-            );
-            return;
-          }
-          if (message.type === 'error') {
-            appendLog(
-              `Extension transport error: ${diagnosticCode(message.code, 'UNKNOWN_EXTENSION_ERROR')} at ${diagnosticStage(message.stage)}.`,
-            );
-            unsubscribe();
-            rejectOnce(new Error('Experimental extension model request failed.'));
-          }
-        });
-        port.onDisconnect.addListener(() => {
-          pageDiagnostic('model.port.disconnect', { requestId, ended });
-          unsubscribe();
-          if (!ended) rejectOnce(new Error('Experimental extension model port disconnected.'));
-        });
-        if (request.signal !== undefined) {
-          unsubscribe = request.signal.onCancel(() => {
-            stream.fail(new Error('Experimental extension model request was cancelled.'));
-            port.disconnect();
-          });
-        }
-        port.postMessage({
-          protocol: MODEL_PROTOCOL,
-          version: MODEL_PROTOCOL_VERSION,
-          type: 'generate',
-          requestId,
-          sessionId: RUN_SESSION_ID,
-          threadId: RUN_SESSION_ID,
-          body: request.body,
-          wireProtocol: request.wireProtocol,
-        });
+const relayModelFetch: CodexResponsesFetch = (request) => {
+  nextRelayRequest += 1;
+  const requestId = `loom-relay-${String(nextRelayRequest)}`;
+  const port = extensionRuntime().connect(selectedExtensionId(), { name: MODEL_PORT_NAME });
+  const stream = createChunkStream();
+  let started = false;
+  let ended = false;
+  let settled = false;
+  let unsubscribe = (): void => undefined;
+  pageDiagnostic('model.relay.started', { requestId, target: 'chatgpt.com' });
+  return new Promise((resolve, reject) => {
+    const rejectOnce = (error: Error): void => {
+      if (settled) stream.fail(error);
+      else {
+        settled = true;
+        reject(error);
+      }
+    };
+    port.onMessage.addListener((message) => {
+      if (!isRecord(message) || message.requestId !== requestId) return;
+      if (message.type === 'start' && typeof message.status === 'number' && !started) {
+        started = true;
+        settled = true;
+        pageDiagnostic('model.relay.response', { requestId, status: message.status });
+        resolve(Object.freeze({ status: message.status, body: stream.body }));
+        return;
+      }
+      if (message.type === 'chunk' && typeof message.chunk === 'string' && started) {
+        stream.push(message.chunk);
+        return;
+      }
+      if (message.type === 'end') {
+        ended = true;
+        unsubscribe();
+        stream.finish();
+        return;
+      }
+      if (message.type === 'provider-error' && typeof message.status === 'number') {
+        appendLog(
+          `Provider rejected the relayed request (${String(message.status)}): ${providerDiagnostic(message.providerCode)}; type ${providerDiagnostic(message.providerType)}; parameter ${providerDiagnostic(message.providerParam)}.`,
+        );
+        return;
+      }
+      if (message.type === 'error') {
+        unsubscribe();
+        rejectOnce(new Error('Experimental extension relay failed.'));
+      }
+    });
+    port.onDisconnect.addListener(() => {
+      pageDiagnostic('model.relay.disconnect', { requestId, ended });
+      unsubscribe();
+      if (!ended) rejectOnce(new Error('Experimental extension relay disconnected.'));
+    });
+    if (request.signal !== undefined) {
+      unsubscribe = request.signal.onCancel(() => {
+        stream.fail(new Error('Experimental extension relay was cancelled.'));
+        port.disconnect();
       });
-    },
+    }
+    port.postMessage({
+      protocol: MODEL_PROTOCOL,
+      version: MODEL_PROTOCOL_VERSION,
+      type: 'generate',
+      requestId,
+      sessionId: RUN_SESSION_ID,
+      threadId: RUN_SESSION_ID,
+      body: request.body,
+      wireProtocol:
+        request.headers['x-openai-internal-codex-responses-lite'] === 'true'
+          ? 'responses-lite'
+          : 'classic',
+    });
   });
-}
+};
+
+const directFirstModelFetch: CodexResponsesFetch = async (request) => {
+  if (modelTransportMode === 'relay') return relayModelFetch(request);
+  try {
+    return await directModelFetch(request);
+  } catch (error) {
+    request.signal?.throwIfCancelled();
+    if (!(error instanceof DirectProviderConnectionError)) throw error;
+    setTransportMode('relay');
+    pageDiagnostic('model.fetch.fallback', { reason: 'pre-response-failure' });
+    return relayModelFetch(request);
+  }
+};
 
 function authProvider() {
   const broker = createExternalCredentialBroker({
@@ -374,12 +667,17 @@ function updateControls(): void {
   runCommandButton.disabled = !hasWorkspace;
   editor.disabled = selectedFile === undefined;
   saveFileButton.disabled = selectedFile === undefined;
-  runButton.textContent = hasWorkspace ? 'Run agent' : 'Choose directory and run';
+  runButton.setAttribute(
+    'aria-label',
+    hasWorkspace ? 'Send coding request' : 'Choose directory and send',
+  );
 }
 
 async function refreshAuthenticationStatus(updateStatus = true): Promise<boolean> {
+  await ensureOriginAccess();
   pageDiagnostic('auth.status.request');
   authenticated = await authProvider().isAuthenticated();
+  if (!authenticated) cachedDirectCredentials = undefined;
   pageDiagnostic('auth.status.response', { authenticated });
   updateControls();
   if (updateStatus) {
@@ -392,11 +690,72 @@ async function refreshAuthenticationStatus(updateStatus = true): Promise<boolean
   return authenticated;
 }
 
-function describeEvent(event: CodexAgentEvent): string {
-  if (event.type === 'text') return event.text;
-  if (event.type === 'tool-start') return `\nTool started: ${event.operation}`;
-  if (event.type === 'tool-finish') return `Tool finished: ${event.operation}`;
-  return `\nAgent completed after ${String(event.turns)} turns.`;
+const activeToolRows = new Map<string, HTMLDetailsElement>();
+let activeAssistantMessage: HTMLDivElement | undefined;
+
+function toolLabel(operation: string, input: Readonly<Record<string, unknown>>): string {
+  const path = typeof input.path === 'string' ? ` ${input.path}` : '';
+  if (operation === 'workspace/list-files') return `Inspecting workspace${path}`;
+  if (operation === 'workspace/read-file') return `Reading${path}`;
+  if (operation === 'workspace/write-file') return `Writing${path}`;
+  if (operation === 'workspace/apply-patch') return `Applying changes${path}`;
+  if (operation === 'workspace/stat') return `Inspecting${path}`;
+  if (operation === 'workspace/create-directory') return `Creating folder${path}`;
+  if (operation === 'workspace/move') return 'Moving workspace item';
+  if (operation === 'workspace/remove') return `Removing${path}`;
+  return 'Using workspace tool';
+}
+
+function isFailedToolResult(value: unknown): boolean {
+  return isRecord(value) && value.ok === false;
+}
+
+function renderAgentEvent(event: CodexAgentEvent): void {
+  if (event.type === 'text') {
+    if (activeAssistantMessage === undefined) {
+      activeAssistantMessage = globalThis.document.createElement('div');
+      activeAssistantMessage.className = 'chat-message assistant';
+      logElement.append(activeAssistantMessage);
+    }
+    activeAssistantMessage.textContent = `${activeAssistantMessage.textContent}${event.text}`;
+    logElement.scrollTop = logElement.scrollHeight;
+    return;
+  }
+  activeAssistantMessage = undefined;
+  if (event.type === 'tool-start') {
+    const row = globalThis.document.createElement('details');
+    row.className = 'tool-activity';
+    const summary = globalThis.document.createElement('summary');
+    summary.textContent = toolLabel(event.operation, event.input);
+    const detail = globalThis.document.createElement('pre');
+    detail.textContent = JSON.stringify(
+      { operation: event.operation, input: event.input },
+      null,
+      2,
+    );
+    row.append(summary, detail);
+    activeToolRows.set(event.callId, row);
+    logElement.append(row);
+    logElement.scrollTop = logElement.scrollHeight;
+    return;
+  }
+  if (event.type === 'tool-finish') {
+    const row = activeToolRows.get(event.callId);
+    if (row !== undefined) {
+      row.classList.add(isFailedToolResult(event.result) ? 'failed' : 'complete');
+      const summary = row.querySelector('summary');
+      if (summary !== null) {
+        summary.textContent = `${summary.textContent} ${
+          isFailedToolResult(event.result) ? '— retrying' : '— done'
+        }`;
+      }
+      const detail = row.querySelector('pre');
+      if (detail !== null) {
+        detail.textContent = `${detail.textContent}\n\nResult\n${JSON.stringify(event.result, null, 2)}`;
+      }
+      activeToolRows.delete(event.callId);
+    }
+  }
 }
 
 async function disposeCodingSession(): Promise<void> {
@@ -528,13 +887,22 @@ function sessionFor(workspace: ProjectWorkspace): CodingSession {
     model: createCodexExperimentalModel({
       model,
       wireProtocol: model.startsWith('gpt-5.6') ? 'responses-lite' : 'classic',
-      transport: createExtensionModelTransport(extensionRuntime(), selectedExtensionId()),
+      endpoint: CODEX_RESPONSES_ENDPOINT,
+      authentication: async () => (await directCredentials()).accessToken,
+      accountId: async () => (await directCredentials()).accountId,
+      fetch: directFirstModelFetch,
+      originator: 'loom_page_experiment',
+      headers: {
+        'session-id': RUN_SESSION_ID,
+        'thread-id': RUN_SESSION_ID,
+        version: 'loom.js/0.1.0',
+      },
     }),
     tools: workspaceTools(workspace),
     configuration: {
       maxTurns: 12,
       instructions:
-        'Complete the coding request accurately. Inspect files before editing. Prefer exact unified patches for existing text files. Never remove directories recursively unless the user explicitly requested it.',
+        'Complete the coding request accurately. Inspect files before editing. Prefer exact unified patches for existing text files. Tool failures are returned as structured results: inspect the error, re-read current content when needed, and retry with corrected input. Never remove directories recursively unless the user explicitly requested it.',
     },
   });
   return codingSession;
@@ -549,16 +917,19 @@ async function runAgent(): Promise<void> {
     const prompt = promptInput.value.trim();
     if (prompt === '') throw new Error('Agent request is required.');
     const session = sessionFor(workspace);
-    setStatus('Running the model through the extension…');
+    appendUserMessage(prompt);
+    promptInput.value = '';
+    activeAssistantMessage = undefined;
+    setStatus('Working…');
     const events =
       session.transcript.length === 0 ? session.submit(prompt) : session.followUp(prompt);
-    for await (const event of events) appendLog(describeEvent(event));
+    for await (const event of events) renderAgentEvent(event);
     await persistOpfsWorkspace();
     await renderFiles();
     setStatus('Run complete.');
   } catch (error) {
-    appendLog(`Error: ${errorMessage(error)}`);
-    setStatus('Run failed. See the sanitized event log.');
+    appendLog(errorMessage(error), 'error');
+    setStatus('Run failed. You can revise the request and try again.');
   } finally {
     checkAuthButton.disabled = false;
     cancelRunButton.disabled = true;
@@ -681,6 +1052,7 @@ logoutButton.addEventListener('click', () => {
   void authProvider()
     .logout()
     .then(async () => {
+      cachedDirectCredentials = undefined;
       await disposeCodingSession();
       return refreshAuthenticationStatus();
     })
@@ -688,6 +1060,11 @@ logoutButton.addEventListener('click', () => {
 });
 
 runButton.addEventListener('click', () => void runAgent());
+promptInput.addEventListener('keydown', (event) => {
+  if (event.key !== 'Enter' || event.shiftKey || event.isComposing || runButton.disabled) return;
+  event.preventDefault();
+  void runAgent();
+});
 cancelRunButton.addEventListener('click', () => {
   codingSession?.cancel(new Error('Cancelled by user.'));
   runtimeCancellation?.cancel(new Error('Cancelled by user.'));
@@ -768,6 +1145,27 @@ runtimeSelect.addEventListener('change', () => {
         : 'quickjs main.js';
 });
 modelInput.addEventListener('change', () => void disposeCodingSession());
-extensionIdInput.addEventListener('change', () => void disposeCodingSession());
+extensionIdInput.addEventListener('change', () => {
+  cachedDirectCredentials = undefined;
+  setTransportMode(storedTransportMode());
+  void disposeCodingSession();
+  if (EXTENSION_ID_PATTERN.test(extensionIdInput.value.trim())) {
+    setStatus('Connecting to extension…');
+    void refreshAuthenticationStatus().catch((error: unknown) => {
+      authenticated = false;
+      updateControls();
+      setStatus(`Connection failed: ${errorMessage(error)}`);
+    });
+  }
+});
 
+setTransportMode(storedTransportMode());
 updateControls();
+if (EXTENSION_ID_PATTERN.test(extensionIdInput.value.trim())) {
+  setStatus('Connecting to extension…');
+  void refreshAuthenticationStatus().catch((error: unknown) => {
+    authenticated = false;
+    updateControls();
+    setStatus(`Connection failed: ${errorMessage(error)}`);
+  });
+}

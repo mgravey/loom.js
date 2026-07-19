@@ -79,8 +79,9 @@
       </p>
       <h2>Single purpose</h2>
       <p>
-        Authenticate a user-initiated Loom session and relay its model requests without exposing
-        provider credentials to the website.
+        Authenticate a user-initiated Loom session and provide its authorized workbench with the
+        short-lived credentials required for a direct model request and relay that request only when
+        direct browser access fails before an HTTP response.
       </p>
       <h2>Information handled</h2>
       <ul>
@@ -89,14 +90,21 @@
           default. If you explicitly select “Remember sign-in on this Chrome profile,” that pair
           remains in local extension storage after Chrome exits.
         </li>
-        <li>Short-lived credentials used only for provider requests and not persisted by Loom.</li>
         <li>
-          User prompts, selected project context, model settings, and tool results sent to the
-          configured ChatGPT model endpoint.
+          Short-lived credentials returned to the authorized workbench and not persisted by Loom.
         </li>
         <li>
-          Sanitized status, streaming output, and error codes returned to the authorized Loom
-          origin.
+          Model prompts, selected project context, tool traffic, and response streams only during a
+          fallback relay after the direct browser request fails before an HTTP response.
+        </li>
+        <li>
+          Authentication status, logout acknowledgement, access token, and account-routing ID
+          returned to the authorized Loom origin.
+        </li>
+        <li>
+          Exact website origins approved by the user in trusted extension UI. Approved origins
+          remain in local extension storage until revoked or the experiment is disabled; pending
+          first-contact requests remain session-only.
         </li>
       </ul>
       <p>

@@ -99,9 +99,9 @@
         <section class="doc-section" id="use">
           <h2>3. Why information is used and where it goes</h2>
           <p>
-            Information is used only to provide the extension’s single purpose: authenticate a
-            user-initiated Loom session and relay that session’s model requests without exposing
-            provider credentials to the website.
+            Information is used only to authenticate a user-initiated Loom session and let the
+            authorized workbench perform a direct-first model request with a short-lived credential
+            and relay it through the extension only after a pre-response browser failure.
           </p>
           <table class="package-table">
             <thead>
@@ -132,8 +132,8 @@
               <tr>
                 <td>Companion Loom website</td>
                 <td>
-                  Authenticated/not-authenticated status, logout acknowledgement, the requested
-                  provider response stream, and sanitized failure metadata
+                  Authenticated/not-authenticated status, logout acknowledgement, a short-lived
+                  access token, and the account-routing ID
                 </td>
                 <td>Display and control the user-requested coding session</td>
               </tr>
@@ -162,13 +162,24 @@
               The refresh credential and account-routing ID use trusted extension session storage by
               default and are cleared when Chrome exits. If you explicitly choose “Remember sign-in
               on this Chrome profile” after the private-computer warning, that pair remains in
-              trusted local extension storage. Access and ID credentials are not persisted by Loom,
-              and access tokens cannot be requested by the website.
+              trusted local extension storage. The authorized workbench can request a short-lived
+              access token for its direct-first model fetch; it cannot request the refresh or ID
+              token, and access and ID tokens are not persisted by Loom.
+            </li>
+            <li>
+              If direct browser access fails before an HTTP response, the extension relay processes
+              the prompt, selected project context, tool traffic, and response stream. HTTP errors,
+              stream failures, and cancellation are not retried through the relay.
             </li>
             <li>
               Pending browser-login state is stored in Chrome session storage and removed after a
               completed callback, handled failure, retry, logout, disable, or browser shutdown. An
               abandoned tab may retain its exact tab-scoped rule until one of those cleanup events.
+            </li>
+            <li>
+              Exact website origins approved by the user are stored in trusted local extension
+              storage until revoked or the experiment is disabled. Pending origin requests remain
+              session-only. A manifest match alone does not authorize credential delivery.
             </li>
             <li>
               Provider network traffic uses HTTPS. Credentials are never intentionally written to

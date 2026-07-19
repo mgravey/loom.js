@@ -55,11 +55,14 @@ protocol. See [the experiment guide](./codex-auth-experiment.md) and
 [ADR-009](./adr/009-codex-auth-experiment-boundary.md).
 
 Phase 5.5 adds `@loom/model-codex-experimental` as another removable leaf above the Phase 2 model
-protocol. A localhost application injects a credential-free transport; a separate versioned Port in
-the experimental extension performs the provider fetch and returns streamed response bytes. The
-model path does not change Core, the generic credential broker, or the agent contract. See
-[the vertical-slice guide](./phase-5-5-vertical-slice.md) and
-[ADR-010](./adr/010-extension-model-transport.md).
+protocol. The experimental extension owns login and refresh state, while an explicitly approved
+localhost origin receives only short-lived direct credentials and performs every non-auth provider
+request itself when browser CORS permits. A pre-response failure falls back to a credential-free
+request over an authorized extension Port. The model path does not change Core, the generic
+credential broker, or the agent contract. See
+[the vertical-slice guide](./phase-5-5-vertical-slice.md),
+[ADR-013](./adr/013-direct-experimental-model-fetch.md), and
+[ADR-015](./adr/015-cors-relay-fallback.md).
 
 `@loom/model-openai-responses` is a separate removable leaf for the documented OpenAI Platform
 Responses API. It uses the agent-owned optional continuation and caller fields to replay stateless

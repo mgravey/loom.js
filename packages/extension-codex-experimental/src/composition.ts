@@ -18,12 +18,20 @@ import {
 
 import { createFetchOAuthTransport } from './adapters.js';
 import type { CodexAccountRoutingStore } from './account-routing.js';
-import type { CodexChromeExtensionApi, OAuthFetch } from './chrome-contracts.js';
+import type { CodexChromeExtensionApi, CodexModelFetch, OAuthFetch } from './chrome-contracts.js';
 import {
   createCodexCredentialPersistence,
   type CodexCredentialPersistence,
 } from './credential-persistence.js';
+import { createCodexDirectAuthListener } from './direct-auth.js';
+import {
+  createCodexOriginAccessListener,
+  createCodexOriginAccessStore,
+  createGrantedOriginAuthorizer,
+  type CodexOriginAccessStore,
+} from './origin-access.js';
 import { createCodexExperimentSettings, type CodexExperimentSettings } from './settings.js';
+import { createCodexModelPortListener } from './model-transport.js';
 
 export const CODEX_EXPERIMENTAL_CONFIGURATION = Object.freeze({
   issuer: CODEX_CLI_OAUTH_AUDIT_SNAPSHOT.issuer,
@@ -45,6 +53,8 @@ export const DEVELOPMENT_ALLOWED_ORIGINS = Object.freeze([
 export interface CreateCodexExperimentalExtensionOptions {
   readonly chromeApi: CodexChromeExtensionApi;
   readonly fetchRequest: OAuthFetch;
+  /** Required by the runtime service worker; optional only for auth-only composition tests. */
+  readonly modelFetchRequest?: CodexModelFetch;
   readonly allowedOrigins?: readonly string[];
 }
 
@@ -56,6 +66,10 @@ export interface CodexExperimentalExtensionComposition {
   readonly settings: CodexExperimentSettings;
   readonly tokenService: ExtensionTokenService;
   readonly externalMessageListener: ChromeExternalMessageListener;
+  readonly directAuthExternalMessageListener: ChromeExternalMessageListener;
+  readonly originAccessStore: CodexOriginAccessStore;
+  readonly originAccessExternalMessageListener: ChromeExternalMessageListener;
+  readonly modelPortListener: ReturnType<typeof createCodexModelPortListener>;
 }
 
 export function createCodexExperimentalExtension(
@@ -63,6 +77,10 @@ export function createCodexExperimentalExtension(
 ): CodexExperimentalExtensionComposition {
   const settings = createCodexExperimentSettings(options.chromeApi.storage.local);
   const sessionStorage = options.chromeApi.storage.session;
+  const originAccessStore = createCodexOriginAccessStore({
+    localStorage: options.chromeApi.storage.local,
+    sessionStorage,
+  });
   const credentialPersistence = createCodexCredentialPersistence({
     settings,
     localStorage: options.chromeApi.storage.local,
@@ -187,10 +205,19 @@ export function createCodexExperimentalExtension(
       if (providerId === provider.id) await accountRoutingStore.delete();
     },
   });
+  const manifestAuthorizer = createOriginAuthorizer(
+    options.allowedOrigins ?? DEVELOPMENT_ALLOWED_ORIGINS,
+  );
+  const authorizer = createGrantedOriginAuthorizer(manifestAuthorizer, originAccessStore);
   const handler = createCredentialBrokerMessageHandler({
-    authorizer: createOriginAuthorizer(options.allowedOrigins ?? DEVELOPMENT_ALLOWED_ORIGINS),
+    authorizer,
     tokenService: gatedTokenService,
     allowAccessTokenResponses: false,
+  });
+  const originAccessExternalMessageListener = createCodexOriginAccessListener({
+    manifestAuthorizer,
+    store: originAccessStore,
+    openOptionsPage: () => options.chromeApi.runtime.openOptionsPage(),
   });
 
   return Object.freeze({
@@ -201,5 +228,22 @@ export function createCodexExperimentalExtension(
     settings,
     tokenService: gatedTokenService,
     externalMessageListener: createChromeExternalMessageListener(handler),
+    originAccessStore,
+    originAccessExternalMessageListener,
+    directAuthExternalMessageListener: createCodexDirectAuthListener({
+      providerId: provider.id,
+      authorizer,
+      tokenService: gatedTokenService,
+      accountRoutingStore,
+    }),
+    modelPortListener: createCodexModelPortListener({
+      providerId: provider.id,
+      authorizer,
+      tokenService: gatedTokenService,
+      accountRoutingStore,
+      fetchRequest:
+        options.modelFetchRequest ??
+        (() => Promise.reject(new Error('The extension model relay is unavailable.'))),
+    }),
   });
 }

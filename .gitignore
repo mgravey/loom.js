@@ -35,6 +35,7 @@ openai-response-dumps/
 # Local working files for brand exploration; reviewed exports remain tracked.
 docs/assets/brand/.scratch/
 packages/extension-codex-experimental/icons/.scratch/
+packages/example-codex-experimental/.direct-request-debug/
 packages/extension-codex-experimental/.persistent-auth-debug/
 
 # Adobe After Effects autosaves and local render previews.

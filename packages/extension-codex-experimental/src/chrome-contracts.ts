@@ -43,12 +43,8 @@ export interface ChromeDeclarativeNetRequestApi {
 export interface CodexExternalPort {
   readonly name: string;
   readonly sender?: ChromeMessageSender;
-  readonly onMessage: {
-    addListener(listener: (message: unknown) => void): void;
-  };
-  readonly onDisconnect: {
-    addListener(listener: () => void): void;
-  };
+  readonly onMessage: { addListener(listener: (message: unknown) => void): void };
+  readonly onDisconnect: { addListener(listener: () => void): void };
   postMessage(message: unknown): void;
   disconnect(): void;
 }
@@ -64,11 +60,17 @@ export interface CodexChromeExtensionApi extends ChromeExtensionApi {
   readonly storage: {
     readonly local: ChromeStorageArea;
     readonly session: ChromeStorageArea;
+    readonly onChanged?: {
+      addListener(
+        listener: (changes: Readonly<Record<string, unknown>>, areaName: string) => void,
+      ): void;
+    };
   };
   readonly runtime: ChromeExtensionApi['runtime'] & {
     readonly id: string;
     getURL(path: string): string;
     getManifest?(): unknown;
+    openOptionsPage(): Promise<void>;
     readonly onConnectExternal: CodexExternalConnectEvent;
   };
 }

@@ -3,18 +3,20 @@
 ADRs document decisions that constrain Loom's stable core. Status values are `Proposed`, `Accepted`,
 `Superseded`, or `Deprecated`.
 
-| ADR                                             | Decision                                 | Status   |
-| ----------------------------------------------- | ---------------------------------------- | -------- |
-| [001](./001-one-shot-lifecycle.md)              | One-shot, deterministic plugin lifecycle | Accepted |
-| [002](./002-plugin-dependencies.md)             | ID-only required dependency graph        | Accepted |
-| [003](./003-service-scopes.md)                  | Separate scoped dependency injection     | Accepted |
-| [004](./004-event-delivery.md)                  | Serial, error-isolated event delivery    | Accepted |
-| [005](./005-package-boundaries.md)              | Environment-neutral layered packages     | Accepted |
-| [006](./006-agent-owned-protocol.md)            | Agent-owned orchestration protocol       | Accepted |
-| [007](./007-explicit-browser-hosts.md)          | Explicit browser host injection          | Accepted |
-| [008](./008-extension-credential-boundary.md)   | Extension-owned credential boundary      | Accepted |
-| [009](./009-codex-auth-experiment-boundary.md)  | Isolated, gated Codex auth experiment    | Accepted |
-| [010](./010-extension-model-transport.md)       | Extension-owned experimental model path  | Accepted |
-| [011](./011-platform-responses-programs.md)     | Isolated Platform program continuations  | Accepted |
-| [012](./012-browser-coding-workbench.md)        | Browser coding boundaries                | Accepted |
-| [014](./014-opt-in-persistent-authorization.md) | Opt-in profile-local authorization       | Accepted |
+| ADR                                             | Decision                                 | Status     |
+| ----------------------------------------------- | ---------------------------------------- | ---------- |
+| [001](./001-one-shot-lifecycle.md)              | One-shot, deterministic plugin lifecycle | Accepted   |
+| [002](./002-plugin-dependencies.md)             | ID-only required dependency graph        | Accepted   |
+| [003](./003-service-scopes.md)                  | Separate scoped dependency injection     | Accepted   |
+| [004](./004-event-delivery.md)                  | Serial, error-isolated event delivery    | Accepted   |
+| [005](./005-package-boundaries.md)              | Environment-neutral layered packages     | Accepted   |
+| [006](./006-agent-owned-protocol.md)            | Agent-owned orchestration protocol       | Accepted   |
+| [007](./007-explicit-browser-hosts.md)          | Explicit browser host injection          | Accepted   |
+| [008](./008-extension-credential-boundary.md)   | Extension-owned credential boundary      | Accepted   |
+| [009](./009-codex-auth-experiment-boundary.md)  | Isolated, gated Codex auth experiment    | Accepted   |
+| [010](./010-extension-model-transport.md)       | Extension-owned experimental model path  | Superseded |
+| [011](./011-platform-responses-programs.md)     | Isolated Platform program continuations  | Accepted   |
+| [012](./012-browser-coding-workbench.md)        | Browser coding boundaries                | Accepted   |
+| [013](./013-direct-experimental-model-fetch.md) | Direct experimental model fetch          | Accepted   |
+| [014](./014-opt-in-persistent-authorization.md) | Opt-in profile-local authorization       | Accepted   |
+| [015](./015-cors-relay-fallback.md)             | Direct-first extension relay fallback    | Accepted   |

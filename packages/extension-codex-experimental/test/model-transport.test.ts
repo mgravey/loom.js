@@ -84,8 +84,11 @@ function request(
       ...(wireProtocol === 'classic' ? { instructions: 'Use tools when needed.', tools } : {}),
       input,
       tool_choice: 'auto',
-      parallel_tool_calls: true,
-      reasoning: { effort: 'medium' },
+      parallel_tool_calls: wireProtocol === 'classic',
+      reasoning:
+        wireProtocol === 'classic'
+          ? { effort: 'medium' }
+          : { effort: 'medium', context: 'all_turns' },
       stream: true,
       store: false,
       include: ['reasoning.encrypted_content'],

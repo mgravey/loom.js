@@ -81,7 +81,7 @@ Tests must cover:
   validation, direct S256/state/callback handling, response sanitization, and explicit experiment
   gates.
 - experimental model request encoding, chunk-safe SSE parsing, streamed text/tool/completion events,
-  cancellation, account routing, model Port origin checks, and credential-free page transport;
+  cancellation, account routing, direct-auth origin checks, and page-originated fetch transport;
 - credential status/logout behavior, session-to-local migration and restart reconstruction, and
   deletion of extension-owned refresh/routing state from both storage areas.
 - coding-session follow-ups, transcript snapshots, cancellation, runtime dispatch, and disposal;
@@ -156,9 +156,11 @@ external access-token request. Any live compatibility check is manual, opt-in, u
 follow the re-audit gate in the [experiment guide](./codex-auth-experiment.md).
 
 Phase 5.5 loads the experimental extension and the built localhost application together. Its local
-fixtures complete device authorization, refresh a synthetic access token, stream two synthetic
-provider turns over the external Port, execute `workspace/list-files` against an injected OPFS
-directory, and verify logout. The page DOM is checked for fixture-secret leakage. See the
+fixtures complete device authorization, refresh a synthetic access token, stream synthetic provider
+turns through one failed direct attempt and a sticky extension relay, require first-contact
+exact-origin approval, verify automatic reconnection after reload, execute `workspace/list-files`
+against an injected OPFS directory, and verify logout. The page DOM is checked for fixture-secret
+leakage and repeated fallback notices. See the
 [vertical-slice guide](./phase-5-5-vertical-slice.md).
 
 ## CI

@@ -467,11 +467,15 @@ async function executeTool(
     return immutableJson(output);
   } catch (error) {
     context?.signal?.throwIfCancelled();
-    throw new CodexAgentError(
-      'TOOL_FAILURE',
-      `Workspace tool '${call.operation}' failed for call '${call.id}'.`,
-      { cause: error, details: { callId: call.id, operation: call.operation } },
-    );
+    const message = error instanceof Error ? error.message : 'The workspace tool failed.';
+    return immutableJson({
+      ok: false,
+      error: {
+        code: 'TOOL_FAILURE',
+        message,
+        operation: call.operation,
+      },
+    });
   }
 }
 

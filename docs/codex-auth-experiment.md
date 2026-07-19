@@ -147,12 +147,14 @@ The concrete provider remains outside Loom Core and the provider-neutral broker:
   tab-scoped DNR session rules, `chrome.storage.session`, and `chrome.storage.local`. Removing that
   leaf must leave Loom Core and the shared broker unchanged.
 
-The application page retains the Phase 4 API for provider-neutral status, temporary token access,
-and logout by explicit provider ID. The Phase 5.5 application itself does not request a token: it
-uses a separate credential-free model Port, and the extension injects the access token and account
-routing ID into the provider request. The page cannot receive refresh or ID tokens and cannot
-initiate an interactive flow. A trusted extension page must initiate any manual experiment after
-explaining its status and risks.
+The application page retains the Phase 4 API for provider-neutral status and logout by explicit
+provider ID. Phase 5.5 also defines a provider-specific direct-auth message: a manifest-eligible
+workbench origin must first receive explicit user approval in trusted extension UI, then it can
+request a short-lived access token and account-routing ID and perform all non-auth provider requests
+directly when browser CORS permits. A failure before an HTTP response retries the credential-free
+body through the origin-authorized extension. The page cannot receive refresh or ID tokens and
+cannot initiate an interactive flow. A trusted extension page must initiate any manual experiment
+after explaining its status and risks.
 
 ## Security and threat model
 
@@ -202,10 +204,16 @@ explaining its status and risks.
   the destination before changing the preference, remove inactive or incomplete copies during
   initialization, and scrub both storage areas on logout, experiment disable, or credential
   rejection.
-- Reject external access-token requests. Status/logout may use external messages, while token use
-  remains internal to the extension-owned model Port.
-- For the experimental model Port, resolve the token and `ChatGPT-Account-ID` only in the extension.
-  Return authentication state, sanitized status, and response chunks—not credentials—to the page.
+- Keep generic credential-broker access-token requests disabled. The separate experimental
+  direct-auth message may return only the current short-lived access token and routing ID to an
+  exact manifest-eligible, user-approved origin; it must never return refresh or ID tokens.
+- Persist approved exact origins separately from credentials, keep pending requests session-only,
+  and clear all origin grants when the experiment is disabled. A manifest match is necessary but
+  never sufficient for token delivery.
+- Treat the authorized workbench origin as bearer-credential-sensitive. Do not run untrusted scripts
+  there, persist the direct credential response, or include it in logs and diagnostics.
+- Restrict the extension model relay to direct pre-response failures. Never copy page authorization
+  headers into the Port request, and never retry HTTP errors, stream failures, or cancellation.
 - Parse initial account routing inside trusted extension code. Persist only the account ID needed
   for routing; do not persist the raw ID token merely to recover that claim later.
 - Sanitize OAuth and HTTP failures. Do not include codes, verifiers, tokens, callback query strings,

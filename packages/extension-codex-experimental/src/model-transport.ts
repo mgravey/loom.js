@@ -194,9 +194,8 @@ function normalizedRequestBody(
     !boundedString(body.model, 256) ||
     !Array.isArray(body.input) ||
     body.tool_choice !== 'auto' ||
-    body.parallel_tool_calls !== true ||
+    typeof body.parallel_tool_calls !== 'boolean' ||
     !isRecord(body.reasoning) ||
-    Object.keys(body.reasoning).some((key) => key !== 'effort') ||
     body.reasoning.effort !== 'medium' ||
     body.stream !== true ||
     body.store !== false ||
@@ -210,11 +209,22 @@ function normalizedRequestBody(
     throw new Error('Invalid experimental model request.');
   }
   if (wireProtocol === 'classic') {
-    if (typeof body.instructions !== 'string' || !Array.isArray(body.tools)) {
+    if (
+      typeof body.instructions !== 'string' ||
+      !Array.isArray(body.tools) ||
+      !body.parallel_tool_calls ||
+      Object.keys(body.reasoning).some((key) => key !== 'effort')
+    ) {
       throw new Error('Invalid experimental model request.');
     }
   } else {
-    if ('instructions' in body || 'tools' in body) {
+    if (
+      'instructions' in body ||
+      'tools' in body ||
+      body.parallel_tool_calls ||
+      Object.keys(body.reasoning).some((key) => key !== 'effort' && key !== 'context') ||
+      body.reasoning.context !== 'all_turns'
+    ) {
       throw new Error('Invalid experimental model request.');
     }
     const additionalTools: unknown = body.input[0];
@@ -340,7 +350,7 @@ export function createCodexModelPortListener(
         let stage: CodexModelDiagnosticStage = 'authorization';
         try {
           report(options.diagnosticSink, { event: 'request.received', stage });
-          authorizer.assertAuthorized(port.sender ?? {});
+          await authorizer.assertAuthorized(port.sender ?? {});
           report(options.diagnosticSink, { event: 'origin.authorized', stage });
           stage = 'validation';
           const request = parseGenerateRequest(untrustedMessage);

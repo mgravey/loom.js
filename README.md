@@ -204,12 +204,21 @@ policy. It is independent of the ChatGPT-authenticated Codex experiment.
 
 The [Phase 5.5 vertical-slice guide](./docs/phase-5-5-vertical-slice.md) explains how to build, load
 the unpacked extension, serve the browser application, authenticate from trusted extension UI, run
-an agent, inspect secret-safe diagnostics on both sides of the extension boundary, log out, and
-perform the fully local acceptance test. The example supports the classic audited Responses shape
-and the current Responses Lite input-item shape. It defaults to `gpt-5.6-sol`; model availability
-and entitlement remain account-controlled and can change independently of Loom. Authorization
-normally ends when Chrome closes; the extension options provide an explicit, warned private-computer
-option to remember the refresh credential and routing ID in the current Chrome profile.
+an agent with a direct-first model fetch and extension fallback, inspect Network/Console
+diagnostics, and perform the fully local acceptance test. The example supports the classic audited
+Responses shape and the current Responses Lite input-item shape. It defaults to `gpt-5.6-sol`; model
+availability and entitlement remain account-controlled and can change independently of Loom. This
+direct mode temporarily exposes the refreshed access token and account-routing ID to the authorized
+workbench JavaScript process; refresh and ID tokens remain extension-only. Authorization normally
+ends when Chrome closes; the extension options provide an explicit, warned private-computer option
+to remember the refresh credential and routing ID in the current Chrome profile. On first contact,
+the user must also approve the workbench's exact origin in trusted extension UI; that origin grant
+persists until revoked or the experiment is disabled. If the browser fails before receiving an HTTP
+response—typically CORS or a connection failure—the same request is retried through the extension.
+That failure selects the extension relay for the rest of the tab session, including reloads,
+avoiding repeated direct failures and conversation notices. Provider HTTP errors and cancellation
+are never retried. A configured extension is checked automatically when the workbench loads, while
+workspace-tool activity stays compact and collapsible in the chat-first interface.
 
 The [browser coding workbench guide](./docs/browser-coding-workbench.md) covers the reusable
 `@loom/coding` API, extension callback bridge, project modes, folder/ZIP transfer, and

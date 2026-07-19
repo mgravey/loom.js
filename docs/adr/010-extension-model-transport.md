@@ -1,6 +1,6 @@
 # ADR-010: Keep experimental model transport inside the extension leaf
 
-- Status: Accepted
+- Status: Superseded by ADR-013
 - Date: 2026-07-16
 
 ## Context

@@ -357,7 +357,7 @@ describe('Codex agent orchestration', () => {
     await expect(collect(agent)).rejects.toMatchObject({ code });
   });
 
-  it('wraps model and tool failures with typed errors and causes', async () => {
+  it('wraps model failures and returns tool failures to the model for recovery', async () => {
     const modelCause = new Error('model offline');
     const failingModel: CodexModel = {
       async *generate() {
@@ -376,25 +376,47 @@ describe('Codex agent orchestration', () => {
     fixture.readFile.execute = vi.fn(async () => {
       throw toolCause;
     });
-    const toolModel = scriptedModel([
+    const requests: CodexModelRequest[] = [];
+    const toolModel = scriptedModel(
       [
-        {
-          type: 'tool-call',
-          call: {
-            id: 'read',
-            operation: WORKSPACE_OPERATIONS.readFile,
-            input: { path: 'file.ts' },
+        [
+          {
+            type: 'tool-call',
+            call: {
+              id: 'read',
+              operation: WORKSPACE_OPERATIONS.readFile,
+              input: { path: 'file.ts' },
+            },
           },
-        },
-        { type: 'completed' },
+          { type: 'completed' },
+        ],
+        [{ type: 'text', text: 'Recovered.' }, { type: 'completed' }],
       ],
-    ]);
+      requests,
+    );
     const toolAgent = createCodexAgentFactory().create(
       dependencies(toolModel, fixture.tools),
     ) as CodexAgent;
-    await expect(collect(toolAgent)).rejects.toMatchObject({
-      code: 'TOOL_FAILURE',
-      cause: toolCause,
+    const events = await collect(toolAgent);
+    expect(events.map((event) => event.type)).toEqual([
+      'tool-start',
+      'tool-finish',
+      'text',
+      'completed',
+    ]);
+    expect(events[1]).toMatchObject({
+      type: 'tool-finish',
+      result: {
+        ok: false,
+        error: { code: 'TOOL_FAILURE', message: 'read failed' },
+      },
+    });
+    expect(requests[1]?.messages.at(-1)).toMatchObject({
+      role: 'tool',
+      result: {
+        ok: false,
+        error: { code: 'TOOL_FAILURE', message: 'read failed' },
+      },
     });
   });
 

@@ -175,6 +175,8 @@ describe('experimental Codex Responses model', () => {
     const body = createCodexResponsesRequestBody(REQUEST, 'gpt-5.6-sol', 'responses-lite');
     expect(body).not.toHaveProperty('instructions');
     expect(body).not.toHaveProperty('tools');
+    expect(body.parallel_tool_calls).toBe(false);
+    expect(body.reasoning).toEqual({ effort: 'medium', context: 'all_turns' });
     expect(body.input).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ type: 'additional_tools', role: 'developer' }),

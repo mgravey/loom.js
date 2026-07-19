@@ -8,6 +8,7 @@ import {
 import { CODEX_EXPERIMENTAL_CONFIGURATION } from './composition.js';
 import { createCodexCredentialPersistence } from './credential-persistence.js';
 import { runManualDeviceAuthorization } from './manual-authorization.js';
+import { createCodexOriginAccessStore } from './origin-access.js';
 import { createCodexExperimentSettings, type CodexCredentialPersistenceMode } from './settings.js';
 
 function requiredElement<T extends Element>(root: Document, id: string): T {
@@ -22,6 +23,7 @@ const host = globalThis as unknown as {
   readonly document: Document;
   readonly fetch: OAuthFetch;
   readonly confirm: (message: string) => boolean;
+  readonly setInterval: (callback: () => void, milliseconds: number) => unknown;
   readonly setTimeout: (callback: () => void, milliseconds: number) => unknown;
 };
 const settings = createCodexExperimentSettings(host.chrome.storage.local);
@@ -31,8 +33,15 @@ const credentialPersistence = createCodexCredentialPersistence({
   sessionStorage: host.chrome.storage.session,
   providerId: CODEX_EXPERIMENTAL_CONFIGURATION.providerId,
 });
+const originAccessStore = createCodexOriginAccessStore({
+  localStorage: host.chrome.storage.local,
+  sessionStorage: host.chrome.storage.session,
+});
 const bridgeStore = createBrowserAuthorizationBridgeStore(host.chrome.storage.session);
-const ready = credentialPersistence.initialize();
+const ready = Promise.all([
+  credentialPersistence.initialize(),
+  originAccessStore.initialize(),
+]).then(() => undefined);
 const enabled = requiredElement<HTMLInputElement>(host.document, 'enabled');
 const remember = requiredElement<HTMLButtonElement>(host.document, 'remember');
 const browserAuthorize = requiredElement<HTMLButtonElement>(host.document, 'browser-authorize');
@@ -42,6 +51,8 @@ const challenge = requiredElement<HTMLElement>(host.document, 'challenge');
 const verificationUrl = requiredElement<HTMLAnchorElement>(host.document, 'verification-url');
 const userCode = requiredElement<HTMLElement>(host.document, 'user-code');
 const credentialStatus = requiredElement<HTMLElement>(host.document, 'credential-status');
+const pendingOrigins = requiredElement<HTMLUListElement>(host.document, 'pending-origins');
+const approvedOrigins = requiredElement<HTMLUListElement>(host.document, 'approved-origins');
 const status = requiredElement<HTMLElement>(host.document, 'status');
 
 function clearChallenge(): void {
@@ -73,6 +84,77 @@ function updateRememberButton(mode: CodexCredentialPersistenceMode): void {
     : 'Remember sign-in on this Chrome profile';
 }
 
+function originListItem(
+  origin: string,
+  actions: readonly { readonly label: string; readonly run: () => Promise<void> }[],
+): HTMLLIElement {
+  const item = host.document.createElement('li');
+  const label = host.document.createElement('code');
+  label.textContent = origin;
+  item.append(label);
+  for (const action of actions) {
+    const button = host.document.createElement('button');
+    button.type = 'button';
+    button.textContent = action.label;
+    button.addEventListener('click', () => {
+      button.disabled = true;
+      void action
+        .run()
+        .then(refreshOriginAccess)
+        .catch(() => {
+          status.textContent = 'Website access could not be updated.';
+        });
+    });
+    item.append(button);
+  }
+  return item;
+}
+
+async function refreshOriginAccess(): Promise<void> {
+  const [pending, approved] = await Promise.all([
+    originAccessStore.listPending(),
+    originAccessStore.listApproved(),
+  ]);
+  pendingOrigins.replaceChildren(
+    ...(pending.length === 0
+      ? [originListItem('No websites are waiting for approval.', [])]
+      : pending.map((origin) =>
+          originListItem(origin, [
+            {
+              label: 'Approve',
+              run: async () => {
+                if (!enabled.checked) throw new Error('The experiment is disabled.');
+                await originAccessStore.approve(origin);
+                status.textContent = `${origin} is approved.`;
+              },
+            },
+            {
+              label: 'Deny',
+              run: async () => {
+                await originAccessStore.deny(origin);
+                status.textContent = `${origin} was denied.`;
+              },
+            },
+          ]),
+        )),
+  );
+  approvedOrigins.replaceChildren(
+    ...(approved.length === 0
+      ? [originListItem('No websites are approved.', [])]
+      : approved.map((origin) =>
+          originListItem(origin, [
+            {
+              label: 'Revoke',
+              run: async () => {
+                await originAccessStore.revoke(origin);
+                status.textContent = `${origin} was revoked.`;
+              },
+            },
+          ]),
+        )),
+  );
+}
+
 async function initialize(): Promise<void> {
   await ready;
   const [experimentEnabled, mode] = await Promise.all([
@@ -85,6 +167,7 @@ async function initialize(): Promise<void> {
   browserAuthorize.disabled = !enabled.checked;
   deviceAuthorize.disabled = !enabled.checked;
   await refreshCredentialStatus();
+  await refreshOriginAccess();
   status.textContent = enabled.checked
     ? 'The experiment is enabled. Authorization still requires the button below.'
     : 'The experiment is disabled.';
@@ -105,10 +188,12 @@ enabled.addEventListener('change', () => {
           declarativeNetRequest: host.chrome.declarativeNetRequest,
         }),
         credentialPersistence.clearAll(CODEX_EXPERIMENTAL_CONFIGURATION.providerId),
+        originAccessStore.clear(),
       ]);
       await settings.setCredentialPersistenceMode('session');
       updateRememberButton('session');
       await refreshCredentialStatus();
+      await refreshOriginAccess();
       status.textContent = 'The experiment is disabled and its refresh credential was removed.';
     } else {
       status.textContent = 'Enabled. Sign in with ChatGPT or use the device-code fallback.';
@@ -222,7 +307,9 @@ deviceAuthorize.addEventListener('click', () => {
       clearChallenge();
       return refreshCredentialStatus();
     })
-    .then(() => settings.getCredentialPersistenceMode())
+    .then(() => {
+      return settings.getCredentialPersistenceMode();
+    })
     .then((mode) => {
       status.textContent =
         mode === 'local'
@@ -240,8 +327,22 @@ deviceAuthorize.addEventListener('click', () => {
 });
 
 host.document.addEventListener('visibilitychange', () => {
-  if (host.document.visibilityState === 'visible') void refreshCredentialStatus();
+  if (host.document.visibilityState === 'visible') {
+    void Promise.all([refreshCredentialStatus(), refreshOriginAccess()]);
+  }
 });
+
+host.chrome.storage.onChanged?.addListener((_changes, areaName) => {
+  if (areaName === 'local' || areaName === 'session') void refreshOriginAccess();
+});
+
+host.setInterval(() => {
+  if (host.document.visibilityState === 'visible') {
+    void refreshOriginAccess().catch(() => {
+      status.textContent = 'Website access status could not be refreshed.';
+    });
+  }
+}, 500);
 
 void initialize().catch(() => {
   enabled.checked = false;

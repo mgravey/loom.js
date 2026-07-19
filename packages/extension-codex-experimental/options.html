@@ -73,6 +73,17 @@
         max-width: 42rem;
         font-size: 0.92rem;
       }
+      .origin-list {
+        display: grid;
+        gap: 0.65rem;
+        padding-left: 1.2rem;
+      }
+      .origin-list li {
+        overflow-wrap: anywhere;
+      }
+      .origin-list button {
+        margin-left: 0.75rem;
+      }
       #challenge[hidden] {
         display: none;
       }
@@ -111,12 +122,14 @@
           When you explicitly sign in and run Loom, this extension normally stores a refresh
           credential and account-routing ID only until Chrome exits. You may separately choose to
           remember them in this Chrome profile. It sends authentication exchanges to
-          <code>auth.openai.com</code> and sends your Loom prompts, selected project context, tool
-          results, and model settings to <code>chatgpt.com</code> to produce the response you
-          request.
+          <code>auth.openai.com</code>. For a model run it returns a short-lived access token and
+          the stored routing ID to the authorized Loom workbench, which sends prompts and selected
+          project context directly to <code>chatgpt.com</code>. If the browser fails before an HTTP
+          response, the extension retries that request and temporarily processes its model content.
         </p>
         <p>
-          Credentials are not exposed to the Loom website or browser runtimes. The extension does
+          Refresh and ID credentials are not exposed to the Loom website or browser runtimes. The
+          authorized workbench temporarily receives a short-lived access token. The extension does
           not inspect unrelated pages, browsing history, or cookies, and it contains no developer
           analytics. Read the
           <a href="privacy.html" target="_blank">extension privacy disclosure</a>.
@@ -145,6 +158,22 @@
         <p id="user-code"></p>
       </section>
       <p id="credential-status" role="status" aria-live="polite">Not authenticated.</p>
+      <section class="disclosure" aria-labelledby="website-access-title">
+        <h2 id="website-access-title">Website access</h2>
+        <p>
+          A website must be permitted by the extension manifest and explicitly approved here before
+          it can request a short-lived access token. Approval applies to the exact origin, including
+          scheme and port, and remains until revoked or the experiment is disabled.
+        </p>
+        <h3>Waiting for approval</h3>
+        <ul id="pending-origins" class="origin-list">
+          <li>No websites are waiting for approval.</li>
+        </ul>
+        <h3>Approved websites</h3>
+        <ul id="approved-origins" class="origin-list">
+          <li>No websites are approved.</li>
+        </ul>
+      </section>
       <p id="status" role="status" aria-live="polite">The experiment is disabled.</p>
     </main>
     <script type="module" src="brand-animation.js"></script>

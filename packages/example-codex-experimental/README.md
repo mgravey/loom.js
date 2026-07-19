@@ -9,9 +9,13 @@ This package contains three deliberately separate browser surfaces:
   unpacked installation and future Store-facing policy/support surfaces.
 
 The private example is a multi-mode browser coding workbench built on `@loom/coding`. The extension
-owns ChatGPT/Codex login, credentials, account routing, and provider network access; the page
-receives only authentication state, logout acknowledgement, the requested provider response stream,
-and sanitized failure metadata. It cannot request access tokens.
+owns ChatGPT/Codex login, refresh credentials, ID-token parsing, and account-routing persistence.
+For a model run it returns a short-lived access token plus the routing ID to the exact authorized
+workbench origin, which starts with direct non-auth provider requests. The page renews that
+credential through the extension shortly before expiry. If direct `fetch` fails before an HTTP
+response, the credential-free body is retried through the extension relay and later turns or reloads
+in the same tab stay on that relay. HTTP errors and cancellation are not retried. Refresh and ID
+tokens remain extension-only.
 
 This is an unsupported interoperability experiment, not a public OpenAI OAuth integration. Never
 paste tokens into this page, configuration, source files, logs, or test fixtures.
@@ -34,16 +38,20 @@ In `chrome://extensions`, enable Developer mode, select **Load unpacked**, and c
 `packages/extension-codex-experimental/dist`. Open the extension's options page, enable the
 experiment, then choose normal **Sign in with ChatGPT** or the device-code fallback. Open the
 welcome page at `http://localhost:4173/example-codex-experimental/`, follow its documentation, then
-launch `http://localhost:4173/example-codex-experimental/workbench.html`. Enter the extension ID and
-choose a direct directory, virtual memory project, or persistent OPFS project. Folder and ZIP import
-plus ZIP export are available for every mode.
+launch `http://localhost:4173/example-codex-experimental/workbench.html`. Enter the extension ID;
+the page checks it automatically, with **Reconnect** available when needed. First contact opens
+trusted extension options; approve the exact `http://localhost:4173` origin there, return to the
+workbench, and reload. Then choose a direct directory, virtual memory project, or persistent OPFS
+project. Folder and ZIP import plus ZIP export are available for every mode.
 
 The workbench defaults to `gpt-5.6-sol` and uses the current Responses Lite input-item envelope for
-GPT-5.6 model IDs. Other model IDs use the classic Responses request. Both remain audited,
-unsupported compatibility paths rather than documented Platform API contracts.
+GPT-5.6 model IDs, including `reasoning.context: "all_turns"` and disabled parallel tool calls.
+Other model IDs use the classic Responses request. Both remain audited, unsupported compatibility
+paths rather than documented Platform API contracts.
 
 QuickJS, WebContainer Node.js, and Pyodide Python execution receive only project snapshots and
-command arguments. Credentials never enter a runtime. See the
+command arguments. Credentials never enter a runtime. These manual utilities and the editor remain
+inside a closed drawer while the primary UI stays focused on chat. See the
 [browser workbench guide](../../docs/browser-coding-workbench.md) for runtime hosting headers,
 isolation constraints, project synchronization, and security limits.
 
@@ -52,7 +60,9 @@ options offer **Remember sign-in on this Chrome profile** after a private-comput
 moves that pair to trusted local extension storage until the option is disabled, logout/experiment
 disable occurs, the provider rejects it, extension data is cleared, or the extension is uninstalled.
 Local deletion does not itself revoke a provider-side grant. The application cannot start
-authorization or read/request provider credentials.
+authorization or receive refresh/ID tokens, but direct model mode does receive a short-lived access
+token in page memory. Website access is a separate exact-origin grant stored by the extension until
+revoked or the experiment is disabled. Do not run untrusted scripts in an approved origin.
 
 For complete step-by-step instructions, automated verification, trust boundaries, and current
 limitations, see the [Phase 5.5 vertical-slice guide](../../docs/phase-5-5-vertical-slice.md).

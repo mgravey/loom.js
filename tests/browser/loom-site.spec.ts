@@ -32,8 +32,8 @@ test('presents Loom as a library before linking to the experimental workbench', 
 
   await page.getByRole('link', { name: 'Open workbench' }).click();
   await expect(page).toHaveURL(/workbench\.html$/u);
-  await expect(page.getByRole('heading', { name: 'Browser coding workbench' })).toBeVisible();
-  await expect(page.getByText('Experimental ChatGPT transport', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Coding conversation' })).toBeVisible();
+  await expect(page.getByText('Experimental coding workbench', { exact: true })).toBeVisible();
   await expect(page.getByLabel('Experimental extension ID')).toHaveValue(
     'foofdcgdelahbdgdfgocoeajdodhjbjo',
   );

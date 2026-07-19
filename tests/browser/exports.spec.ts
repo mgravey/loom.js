@@ -114,7 +114,7 @@ test('built experimental extension is isolated, installable, and self-contained'
     manifest_version: 3,
     name: 'Loom Secure Model Bridge',
     description:
-      'Authenticates Loom sessions and relays model requests without exposing provider credentials to web pages.',
+      'Authenticates Loom sessions and relays model requests only when direct browser access fails.',
     icons: {
       '16': 'icons/icon16.png',
       '32': 'icons/icon32.png',

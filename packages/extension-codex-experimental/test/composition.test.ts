@@ -53,6 +53,7 @@ function host(
     runtime: {
       id: 'extension-id',
       getURL: (path) => `chrome-extension://extension-id/${path}`,
+      openOptionsPage: vi.fn(() => Promise.resolve()),
       onMessageExternal: { addListener: vi.fn() },
       onConnectExternal: { addListener: vi.fn() },
     },
@@ -114,6 +115,7 @@ describe('Codex experimental extension composition', () => {
       value: 'session-refresh-token',
     });
     await composition.accountRoutingStore.set('account-test');
+    await composition.originAccessStore.approve('http://localhost:4173');
 
     const response = await new Promise<unknown>((resolve) => {
       composition.externalMessageListener(

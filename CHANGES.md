@@ -33,21 +33,34 @@ This project follows a lightweight milestone changelog while packages remain pri
   a web-accessible extension callback page. It validates PKCE state, tab, expiry, and replay;
   device-code authentication remains an explicit fallback.
 - Classic Responses and Responses Lite request modes. Lite requests carry developer instruction and
-  `additional_tools` input items; only the extension adds the internal Lite transport header.
+  `additional_tools` input items; direct mode adds the internal Lite transport header.
+- A provider-specific direct-auth message lets the exact authorized workbench origin obtain a
+  short-lived access token and account-routing ID for page-originated model requests.
 - An explicit **Remember sign-in on this Chrome profile** option migrates the refresh credential and
   routing ID between trusted session and local extension storage. Session-only storage remains the
   default.
+- A first-contact website approval flow records only user-approved exact origins. Pending requests
+  are session-only; approved origins persist until individually revoked or the bridge is disabled.
+- A direct-first model transport retries through the extension only when the browser fails before
+  receiving an HTTP response, covering CORS and indistinguishable connection failures.
+- After that first direct failure, the workbench keeps using the extension relay for the remaining
+  tab session, including reloads, and does not repeat the fallback notice in the conversation.
+- The workbench automatically checks a configured extension on load and presents agent output in a
+  chat-first layout with compact, collapsible tool activity and hidden-by-default local utilities.
+- Recoverable workspace-tool failures are returned to the model as structured results so it can
+  inspect the error and retry instead of aborting the coding run.
 
 ### Security
 
-- The extension owns login, token refresh, account routing, ChatGPT model fetches, and streaming.
-  Access, refresh, and ID tokens never enter the workbench, project workspace, browser runtimes,
-  OPFS project archive, IndexedDB, configuration, or logs.
-- The experimental bridge rejects external access-token requests and derives its runtime origin
-  authorization from the packaged manifest. Refresh/routing state defaults to trusted session
-  storage; persistent local extension storage is used only after a private-computer warning and
-  explicit user confirmation. Logout, disable, credential rejection, and switching persistence off
-  scrub local copies.
+- The extension owns login, token refresh, ID-token parsing, and account-routing persistence.
+  Refresh and ID tokens never enter the workbench. Direct model mode temporarily exposes a
+  short-lived access token and routing ID to the authorized page process; they never enter project
+  storage, browser runtimes, configuration, or logs.
+- The experimental direct-auth bridge requires both a packaged-manifest match and a durable,
+  user-approved exact-origin grant. Refresh/routing state defaults to trusted session storage;
+  persistent local extension storage is used only after a private-computer warning and explicit user
+  confirmation. Logout, disable, credential rejection, and switching persistence off scrub local
+  copies.
 - Browser runtimes accept no environment map, credentials, headers, cookies, or host fetch adapter.
   Runtime caches such as `node_modules`, `.venv`, and `__pycache__` are excluded from write-back.
 - Direct-directory runtime write-back requires an explicit confirmation. ZIP import is atomic and
@@ -65,7 +78,11 @@ This project follows a lightweight milestone changelog while packages remain pri
   Bridge**. Public submission remains blocked on a supported provider contract and verified
   publisher/legal details.
 - The experimental example now defaults to `gpt-5.6-sol` and selects Responses Lite for GPT-5.6
-  model IDs, while retaining classic mode for older audited models.
+  model IDs, while retaining classic mode for older audited models. Lite requests now match the
+  current Codex contract with `reasoning.context: "all_turns"` and parallel tool calls disabled.
+- The runnable workbench now performs model requests directly from the page so POST/preflight
+  behavior is visible in its Network panel. A narrowly restored extension model port and ChatGPT
+  host permission provide the pre-response fallback; HTTP errors and cancellations are not retried.
 - The coding agent exposes optional stat, mkdir, move, remove, and exact-patch definitions only when
   their corresponding tools are supplied. Hosted programs remain read-only.
 
@@ -106,8 +123,9 @@ This project follows a lightweight milestone changelog while packages remain pri
 
 - The initial ID token is parsed only in the extension. Only the non-bearer ChatGPT account routing
   ID is persisted in trusted storage; raw ID tokens are neither retained nor exposed to the page.
-- The application never receives access or refresh credentials. The provider request runs in the
-  extension because the audited ChatGPT backend does not allow the localhost page's CORS preflight.
+- The original Phase 5.5 composition kept access and refresh credentials in the extension because
+  the audited ChatGPT backend rejected the localhost CORS preflight. ADR-013 deliberately tries a
+  page-originated request first; ADR-015 restores an extension relay only for pre-response failures.
 - Automated tests remain offline from OpenAI and use synthetic credentials and local responses.
 
 ### Still deferred

@@ -106,7 +106,7 @@ export function createCredentialBrokerMessageHandler(
       const fallbackRequestId = requestIdFrom(message);
       const operation = operationFrom(message);
       try {
-        options.authorizer.assertAuthorized(sender);
+        await options.authorizer.assertAuthorized(sender);
         const request = parseCredentialBrokerRequest(message);
         if (request.type === GET_CREDENTIAL_STATUS_MESSAGE_TYPE) {
           const status = await options.tokenService.getStatus(request.providerId);

@@ -52,7 +52,8 @@ OAuth server and synthetic credentials; it never contacts live OpenAI authentica
 PKCE `S256` and state in accordance with [RFC 7636](https://www.rfc-editor.org/rfc/rfc7636) and
 [RFC 9700](https://www.rfc-editor.org/rfc/rfc9700). Keep short-lived transaction material in trusted
 `chrome.storage.session`, keep refresh credentials and routing in that same session-only trusted
-area, and reject external access-token requests. The model Port uses access credentials internally.
+area. The generic broker rejects external access-token requests; ADR-013 later adds a separate,
+provider-specific direct-auth exception for the exact authorized experimental workbench origin.
 ADR-014 later supersedes only the session-only retention rule with an explicit persistent option.
 
 ## Consequences

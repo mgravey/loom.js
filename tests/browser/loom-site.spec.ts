@@ -21,6 +21,10 @@ test('presents Loom as a library before linking to the experimental workbench', 
   );
   await expect(page.getByText('The library', { exact: true })).toBeVisible();
   await expect(page.getByText('The example', { exact: true })).toBeVisible();
+  await expect(page.locator('.footer-maker-note')).toContainText(
+    'Carefully vibe coded agentically engineered.',
+  );
+  await expect(page.locator('.footer-maker-note s')).toHaveText('vibe coded');
   await expect(page.getByRole('link', { name: 'Install unpacked extension' })).toHaveAttribute(
     'href',
     './install.html',
@@ -73,4 +77,30 @@ test('serves installation, privacy, terms, legal, and support surfaces', async (
     page.getByText(/No user data is sent to a server operated by the publisher/u),
   ).toBeVisible();
   await expect(page.getByText('Chrome Web Store Limited Use')).toBeVisible();
+});
+
+test('automatically selects the Store extension over a legacy production ID', async ({ page }) => {
+  await openBuiltEsmHarness(page);
+  await page.addInitScript(() => {
+    localStorage.setItem('loom.chrome-extension-id', 'foofdcgdelahbdgdfgocoeajdodhjbjo');
+  });
+  await page.route(
+    `${browserOrigin}/example-codex-experimental/deployment-config.js`,
+    async (route) => {
+      await route.fulfill({
+        contentType: 'text/javascript; charset=utf-8',
+        body: `globalThis.LOOM_DEPLOYMENT_CONFIG = Object.freeze({
+          environment: 'production',
+          chromeExtensionId: 'gdcebopdllcifgleoefgbobdopiaholg'
+        });`,
+      });
+    },
+  );
+
+  await page.goto(`${browserOrigin}/example-codex-experimental/workbench.html`);
+
+  await expect(page.getByLabel('Experimental extension ID')).toHaveValue(
+    'gdcebopdllcifgleoefgbobdopiaholg',
+  );
+  await expect(page.getByRole('status')).toContainText('Connection failed:');
 });

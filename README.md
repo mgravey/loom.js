@@ -29,13 +29,17 @@ The production GitHub Pages target is `https://mgravey.com/loom.js/`. A dedicate
 builds the example and its transitive workspace dependencies, then deploys only the static
 welcome/docs/workbench assets as the `loom.js` project site. See
 [GitHub Pages deployment](./docs/github-pages.md) for the one-time repository setting, inherited
-custom-domain behavior, deployment variables, local artifact check, and hosting limitations.
+custom-domain behavior, deployment variables, local artifact check, and hosting limitations. The
+welcome page footer includes the project's deliberately tongue-in-cheek maker's signature. The
+production artifact defaults to the Store Companion ID `gdcebopdllcifgleoefgbobdopiaholg`, so the
+workbench attempts that connection automatically.
 
 ### Install the Chrome extension during development
 
 The unpacked extension ID currently observed for this checkout is
 `foofdcgdelahbdgdfgocoeajdodhjbjo`. It is prefilled in the website deployment configuration, but
-Chrome's value in `chrome://extensions` is authoritative and may differ for another checkout.
+Chrome's value in `chrome://extensions` is authoritative and may differ for another checkout. This
+local development ID is separate from the Store ID used by the production Pages artifact.
 
 ```sh
 pnpm --filter @loom/extension-codex-experimental build

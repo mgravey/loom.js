@@ -6,6 +6,7 @@ const source = join(root, 'packages', 'example-codex-experimental');
 const output = join(root, 'site-preview');
 const defaultOrigin = 'https://mgravey.com';
 const defaultBasePath = '/loom.js';
+const defaultChromeExtensionId = 'gdcebopdllcifgleoefgbobdopiaholg';
 const supportEmail = process.env.LOOM_SUPPORT_EMAIL?.trim() || 'sideproject@mgravey.com';
 const securityEmail = process.env.LOOM_SECURITY_EMAIL?.trim() || supportEmail;
 
@@ -34,7 +35,7 @@ function publicBasePath() {
 }
 
 function optionalExtensionId() {
-  const value = process.env.LOOM_CHROME_EXTENSION_ID?.trim() || '';
+  const value = process.env.LOOM_CHROME_EXTENSION_ID?.trim() || defaultChromeExtensionId;
   if (value !== '' && !/^[a-p]{32}$/u.test(value)) {
     throw new Error('LOOM_CHROME_EXTENSION_ID must be a 32-character Chrome extension ID.');
   }

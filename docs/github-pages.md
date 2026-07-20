@@ -60,17 +60,21 @@ records `https://mgravey.com/loom.js/`.
 The workflow reads these optional non-secret variables from **Settings → Secrets and variables →
 Actions → Variables**:
 
-| Variable                    | When to set it                                                                |
-| --------------------------- | ----------------------------------------------------------------------------- |
-| `LOOM_CHROME_EXTENSION_ID`  | After the first Chrome Web Store draft assigns the permanent 32-character ID. |
-| `LOOM_CHROME_WEB_STORE_URL` | After the final `chromewebstore.google.com` listing URL exists.               |
-| `LOOM_LEGAL_NAME`           | Optional override for the publisher name; defaults to `Mathieu Gravey`.       |
+| Variable                    | When to set it                                                                 |
+| --------------------------- | ------------------------------------------------------------------------------ |
+| `LOOM_CHROME_EXTENSION_ID`  | Optional override for the default Store ID `gdcebopdllcifgleoefgbobdopiaholg`. |
+| `LOOM_CHROME_WEB_STORE_URL` | After the final `chromewebstore.google.com` listing URL exists.                |
+| `LOOM_LEGAL_NAME`           | Optional override for the publisher name; defaults to `Mathieu Gravey`.        |
 
 Support and security contacts are fixed to `sideproject@mgravey.com`. The privacy policy is
 publication-ready for the declared extension data flow. The separate terms and legal notice retain
 their own draft warnings because they require jurisdiction-specific review. Public pages present
 labeled contact links instead of displaying the address as visible text; the links retain a working
 `mailto:` target.
+
+The generated production configuration defaults to the assigned Store ID. The workbench checks it on
+load and replaces the known legacy unpacked ID retained by an earlier production visit. A query
+parameter or another manually entered valid ID can still override it.
 
 ## Chrome extension origin
 

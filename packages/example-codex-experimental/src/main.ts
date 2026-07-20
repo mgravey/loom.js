@@ -64,9 +64,11 @@ const OPFS_DIRECTORY = 'loom-workbench';
 const OPFS_ARCHIVE = 'project.zip';
 const EXTENSION_ID_PATTERN = /^[a-p]{32}$/u;
 const EXTENSION_ID_STORAGE_KEY = 'loom.chrome-extension-id';
+const LEGACY_DEVELOPMENT_EXTENSION_IDS = new Set(['foofdcgdelahbdgdfgocoeajdodhjbjo']);
 const MODEL_TRANSPORT_STORAGE_PREFIX = 'loom.codex-model-transport.';
 
 interface LoomDeploymentConfig {
+  readonly environment?: string;
   readonly chromeExtensionId?: string;
 }
 
@@ -172,7 +174,29 @@ function queryExtensionId(): string | undefined {
   return value !== null && EXTENSION_ID_PATTERN.test(value) ? value : undefined;
 }
 
-extensionIdInput.value = queryExtensionId() ?? storedExtensionId() ?? deploymentExtensionId() ?? '';
+function initialExtensionId(): string {
+  const query = queryExtensionId();
+  if (query !== undefined) return query;
+
+  const stored = storedExtensionId();
+  const deployed = deploymentExtensionId();
+  const environment = (
+    globalThis as typeof globalThis & {
+      readonly LOOM_DEPLOYMENT_CONFIG?: LoomDeploymentConfig;
+    }
+  ).LOOM_DEPLOYMENT_CONFIG?.environment;
+  if (
+    environment === 'production' &&
+    deployed !== undefined &&
+    stored !== undefined &&
+    LEGACY_DEVELOPMENT_EXTENSION_IDS.has(stored)
+  ) {
+    return deployed;
+  }
+  return stored ?? deployed ?? '';
+}
+
+extensionIdInput.value = initialExtensionId();
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);

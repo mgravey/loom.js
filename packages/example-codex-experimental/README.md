@@ -25,9 +25,9 @@ This is an unsupported interoperability experiment, not a public OpenAI OAuth in
 paste tokens into this page, configuration, source files, logs, or test fixtures.
 
 The current checkout's observed unpacked ID is `foofdcgdelahbdgdfgocoeajdodhjbjo`. The site reads it
-from `deployment-config.js`; replace it with the permanent ID allocated by the first Chrome Web
-Store draft before deploying the production site. Another checkout may receive a different unpacked
-ID, so `chrome://extensions` remains authoritative.
+from the development `deployment-config.js`. Another checkout may receive a different unpacked ID,
+so `chrome://extensions` remains authoritative. Production Pages artifacts default to the assigned
+Store ID `gdcebopdllcifgleoefgbobdopiaholg` and attempt that connection on page load.
 
 ## Build and run
 

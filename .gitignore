@@ -12,6 +12,7 @@ playwright/.auth/
 output/
 # Generated GitHub Pages preview and Loom.js Companion release archives; Store media remains tracked.
 site-preview/
+site-preview-*.zip
 store-artifacts/
 packages/extension-codex-experimental/.chrome-store-staging/
 .loom-runs/

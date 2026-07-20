@@ -48,9 +48,9 @@
             <pre><code>foofdcgdelahbdgdfgocoeajdodhjbjo</code></pre>
           </div>
           <p>
-            This is not the future Chrome Web Store ID. An unpacked ID can vary with packaging or
-            checkout location. The browser site reads its default from
-            <code>deployment-config.js</code>, and the field remains editable in the workbench.
+            This unpacked ID can vary with packaging or checkout location. It is separate from the
+            Store ID <code>gdcebopdllcifgleoefgbobdopiaholg</code>. Production uses the Store ID
+            automatically, while the workbench field remains editable for local development.
           </p>
         </section>
 
@@ -109,12 +109,14 @@ python3 -m http.server 4173 --directory packages</code></pre>
         </section>
 
         <section class="doc-section" id="store">
-          <h2>4. Switch after Chrome Web Store upload</h2>
+          <h2>4. Production Store connection</h2>
           <ol>
-            <li>Upload the first draft package to allocate the permanent Store item ID.</li>
-            <li>Replace <code>chromeExtensionId</code> in <code>deployment-config.js</code>.</li>
-            <li>Set <code>chromeWebStoreUrl</code> to the final listing URL.</li>
-            <li>Set the production HTTPS origin and verified legal/support details.</li>
+            <li>
+              Production defaults to Store ID <code>gdcebopdllcifgleoefgbobdopiaholg</code> and
+              checks it when the workbench loads.
+            </li>
+            <li>Set <code>chromeWebStoreUrl</code> when the final listing URL is available.</li>
+            <li>Confirm the production HTTPS origin and verified legal/support details.</li>
             <li>
               Build the Store ZIP with the production-origin packaging command documented in the
               extension README.

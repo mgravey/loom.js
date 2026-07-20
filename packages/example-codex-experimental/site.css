@@ -537,6 +537,18 @@ h1 {
   font-size: 0.82rem;
 }
 
+.footer-maker-note {
+  flex: 1;
+  margin: 0;
+  text-align: center;
+}
+
+.footer-maker-note s {
+  color: #596273;
+  text-decoration-color: var(--coral);
+  text-decoration-thickness: 1px;
+}
+
 .footer-links {
   display: flex;
   flex-wrap: wrap;
@@ -798,6 +810,10 @@ h1 {
   .site-footer {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .footer-maker-note {
+    text-align: left;
   }
 
   .package-table {

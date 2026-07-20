@@ -21,7 +21,8 @@ foofdcgdelahbdgdfgocoeajdodhjbjo
 ```
 
 This value is prefilled in `packages/example-codex-experimental/deployment-config.js`. It is
-development metadata, not a credential and not the future Chrome Web Store ID.
+development metadata, not a credential, and is separate from the assigned Chrome Web Store ID
+`gdcebopdllcifgleoefgbobdopiaholg`.
 
 Chrome can assign a different unpacked ID if the path, package, profile, or key changes. Always copy
 the authoritative current value from `chrome://extensions`. The workbench field is editable and
@@ -101,22 +102,23 @@ The development ID is supplied in three descending-priority ways:
 2. the last valid ID stored by the site; or
 3. `chromeExtensionId` in `deployment-config.js`.
 
-No authentication credential is placed in any of those locations.
+No authentication credential is placed in any of those locations. On the production site only, the
+configured Store ID replaces the known legacy unpacked ID retained by an earlier visit; deliberate
+query-string and other manually stored IDs remain valid overrides.
 
-## Switch to the permanent Store ID
+## Production Store ID
 
-The permanent ID becomes available after the first ZIP is uploaded as a Chrome Web Store draft; it
-does not need to be publicly published first.
+The Chrome Web Store assigned `gdcebopdllcifgleoefgbobdopiaholg`. Production Pages artifacts use it
+by default, and the workbench checks that extension automatically on load.
 
-1. Upload the first draft package and copy the item/extension ID.
-2. Update `chromeExtensionId` in `packages/example-codex-experimental/deployment-config.js`.
-3. Set `chromeWebStoreUrl` to
+1. Override `LOOM_CHROME_EXTENSION_ID` only when building for another Store item.
+2. Set `chromeWebStoreUrl` to
    `https://chromewebstore.google.com/detail/<listing-slug>/<extension-id>` after the listing URL is
    available.
-4. Replace every legal/contact placeholder in `deployment-config.js`.
-5. Deploy the website to its final HTTPS origin.
-6. Build a production Store package for that exact origin.
-7. Retest the Store-installed build before submitting or publishing.
+3. Replace every legal/contact placeholder in `deployment-config.js`.
+4. Deploy the website to its final HTTPS origin.
+5. Build a production Store package for that exact origin.
+6. Retest the Store-installed build before submitting or publishing.
 
 Google recommends making application code insensitive to an extension manifest `key`. Loom follows
 that model: internal extension pages use `chrome.runtime.getURL()`, while the separate website keeps
@@ -135,8 +137,8 @@ The command defaults to the `https://mgravey.com` origin, `/loom.js` base path,
 `https://mgravey.com/loom.js/privacy.html`, `https://mgravey.com/loom.js/support.html`, and
 `sideproject@mgravey.com`. `LOOM_CHROME_EXTENSION_ID` may be omitted for the first draft upload. The
 extension ID is recorded in submission metadata only because Chrome assigns and owns it; the
-companion website's generated deployment configuration consumes it after the repository variable is
-set. Environment variables can override the defaults for another deployment. The release commands:
+companion website's generated deployment configuration now defaults to the assigned Store ID.
+Environment variables can override the defaults for another deployment. The release commands:
 
 - require a real public HTTPS origin rather than localhost or reserved example domains;
 - retain broad HTTPS message routing while enforcing the separately approved exact origin in the

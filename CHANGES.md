@@ -6,6 +6,11 @@ This project follows a lightweight milestone changelog while packages remain pri
 
 ### Added
 
+- Production Pages artifacts now default to Store Companion ID `gdcebopdllcifgleoefgbobdopiaholg`;
+  the workbench checks it automatically and migrates the known legacy unpacked ID retained by
+  earlier production visits.
+- A subtle homepage footer signature: “Carefully vibe coded agentically engineered,” with the
+  original “vibe coded” claim struck through.
 - Transparent SVG exports and a Lottie-ready After Effects builder that reveals the accepted
   `loom-mark-08.svg` ribbon silhouettes through centerline Trim Paths, preserving the original
   S-curves and crossings without scaling.

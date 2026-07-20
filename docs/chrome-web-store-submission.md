@@ -29,8 +29,8 @@ Do not upload for public review until every item is resolved.
       deployment is live over HTTPS, and complete publisher contact details in the Developer
       Dashboard.
 - [ ] Complete a live end-to-end test with the release provider account and production origin.
-- [ ] Upload a private draft to allocate the permanent Chrome Web Store extension ID, then update
-      the website deployment configuration.
+- [x] Record the assigned Chrome Web Store extension ID (`gdcebopdllcifgleoefgbobdopiaholg`) and
+      make it the website production default.
 - [x] Produce the required 440×280 promotional image and one 1280×800 real extension screenshot.
 - [ ] Manually review the generated media and upload it with the listing copy.
 - [ ] Decide distribution: trusted testers/unlisted first is recommended; public only after the
@@ -242,15 +242,14 @@ expose a personal credential. Never place secrets in this repository or listing 
 pnpm chrome:store:release
 ```
 
-For the first private draft, omit `LOOM_CHROME_EXTENSION_ID`. The Store assigns the permanent ID.
-Then update `deployment-config.js`, deploy the public site configuration, rebuild, and re-upload a
-higher manifest version if the submitted package changed.
+The Store assigned `gdcebopdllcifgleoefgbobdopiaholg`. The public site configuration now defaults to
+that ID; `LOOM_CHROME_EXTENSION_ID` remains an override for a different Store item.
 
 The defaults configure the `https://mgravey.com` external origin, `/loom.js/` homepage, public
 privacy/support links, `sideproject@mgravey.com`, and submission metadata. Environment variables can
 override them for another deployment. `LOOM_CHROME_EXTENSION_ID` is metadata-only; the extension
-does not need to know its own assigned ID. Configure the matching repository variable for the
-companion website after the first draft assigns it.
+does not need to know its own assigned ID. The companion website attempts the configured Store
+extension automatically when its workbench loads.
 
 The ZIP is written under ignored `store-artifacts/` with `manifest.json` at its root. Inspect its
 contents manually:

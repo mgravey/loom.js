@@ -204,6 +204,14 @@ test('keeps using the extension relay after one direct connection failure', asyn
     await application.bringToFront();
     await application.reload();
     await expect(application.getByRole('status')).toHaveText(/^Authenticated\./u);
+    await expect(application.getByLabel('Message')).toHaveValue('');
+    await expect(application.getByLabel('Message')).toHaveAttribute(
+      'placeholder',
+      'Inspect the workspace, implement the requested change, and explain what you changed.',
+    );
+    await application
+      .getByLabel('Message')
+      .fill('Inspect the workspace, implement the requested change, and explain what you changed.');
     await application.getByRole('button', { name: 'Choose directory and send' }).click();
     expect(
       await application.evaluate(
@@ -272,6 +280,11 @@ test('keeps using the extension relay after one direct connection failure', asyn
     await application.reload();
     await expect(application.getByRole('status')).toHaveText(/^Authenticated\./u);
     await expect(application.locator('#transport-status')).toHaveText('Extension relay');
+    await expect(application.getByLabel('Message')).toHaveValue('');
+    await expect(application.getByLabel('Message')).toHaveAttribute(
+      'placeholder',
+      'Inspect the workspace, implement the requested change, and explain what you changed.',
+    );
     await application.getByLabel('Message').fill('Check the workspace once more.');
     await application.getByRole('button', { name: 'Choose directory and send' }).click();
     await expect(application.locator('#activity-status')).toHaveAttribute('data-state', 'working');

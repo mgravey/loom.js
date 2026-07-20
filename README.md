@@ -284,7 +284,8 @@ are never retried. A configured extension is checked automatically when the work
 workspace-tool activity stays compact and collapsible in the chat-first interface. Tool rows explain
 what each operation does and show live state; long conversations scroll independently without
 pushing the follow-up composer off-screen. Assistant Markdown is rendered with safe DOM nodes,
-including polished output/code panels with copy controls and readable inline code.
+including polished output/code panels with copy controls and readable inline code. The composer
+opens empty and presents its starter guidance as placeholder text only.
 
 Each workspace can keep multiple resumable conversations as bounded JSON records under
 `.loom/conversations/`. The sidebar can create, switch, and delete individual conversations, or

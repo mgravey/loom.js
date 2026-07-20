@@ -160,6 +160,65 @@ coverage thresholds, ESM and declaration builds, browser-window and dedicated-wo
 and Manifest V3 extension tests. See [Testing](./docs/testing.md) for focused commands and
 troubleshooting.
 
+## Website-defined model tools
+
+Applications can expose their own website features directly to the coding agent. A `CodexTool`
+supplies a stable namespaced operation, a model-facing description, JSON input/output schemas, and
+the application-owned executor. Loom forwards its definition to the selected model, validates the
+registered operation and caller policy, invokes the exact registered implementation, and returns its
+JSON result to the next turn.
+
+```ts
+import type { CodexTool } from '@loom/agent-codex';
+import { createCodingSession } from '@loom/coding';
+
+const cartSummary: CodexTool = Object.freeze({
+  name: 'cart_summary',
+  operation: 'shop/cart-summary',
+  description: 'Read the current website cart total and item count.',
+  inputSchema: {
+    type: 'object',
+    properties: { currency: { type: 'string' } },
+    required: ['currency'],
+    additionalProperties: false,
+  },
+  outputSchema: {
+    type: 'object',
+    properties: {
+      currency: { type: 'string' },
+      itemCount: { type: 'integer' },
+      total: { type: 'number' },
+    },
+    required: ['currency', 'itemCount', 'total'],
+    additionalProperties: false,
+  },
+  allowedCallers: ['direct'],
+  async execute(input, context) {
+    context?.signal?.throwIfCancelled();
+    if (typeof input.currency !== 'string') throw new TypeError('currency is required.');
+    return { currency: input.currency, itemCount: cart.items.length, total: cart.total };
+  },
+});
+
+const session = createCodingSession({
+  model,
+  tools: [...workspaceTools, cartSummary],
+});
+```
+
+Schemas describe the operation to the model; every executor must still validate untrusted input and
+grant only the narrow website authority it needs. Custom tools default to direct model calls only.
+See [Getting started](./docs/getting-started.md#6-register-a-custom-tool-capability) for the Core
+capability and model-callable variants.
+
+The browser workbench applies the same API to `website/run-workspace-file` and
+`website/install-runtime-packages`. Pyodide preloads NumPy and Matplotlib, supports additional
+compatible registry packages through `micropip`, and saves open figures as PNG artifacts that the
+chat displays. The Node backend uses npm, persists `package.json`/lockfile changes, excludes
+`node_modules` from workspace write-back, and restores dependencies before later Node runs. Visible
+read/write controls in the sidebar determine which tools are exposed; read-only runs execute copied
+snapshots and discard filesystem changes.
+
 ## Design guarantees
 
 - The core knows capabilities by structural `(kind, id)` keys, never by implementations.
@@ -171,6 +230,8 @@ troubleshooting.
 - Multiple runtimes do not share mutable state.
 - Agent protocols stay in agent packages rather than becoming core wire formats.
 - Workspace tools depend on an injected adapter and cannot access a host filesystem directly.
+- Websites can add schema-described model tools without changing the agent package; the website owns
+  each executor and its authority.
 - Browser APIs are isolated in browser packages and supplied explicitly by applications.
 - Refresh credentials are owned by the extension and never enter a Loom page or runtime.
 - External token requests require an exact authorized origin and a validated versioned envelope.
@@ -180,6 +241,8 @@ troubleshooting.
   extension-owned access, refresh, or ID credentials.
 - Browser runtimes receive project snapshots and command arguments only; credentials, cookies,
   request headers, and host fetch adapters are absent from their contracts.
+- Runtime package installation accepts bounded registry requirements rather than command flags or
+  arbitrary package URLs; installed package code remains untrusted and isolated to the runtime.
 - Folder/ZIP imports reject unsafe paths and bounded-resource violations; patches use exact context
   without fuzzy offsets.
 - Stateless model continuations preserve opaque reasoning, program, and caller items without moving
@@ -218,7 +281,15 @@ response—typically CORS or a connection failure—the same request is retried 
 That failure selects the extension relay for the rest of the tab session, including reloads,
 avoiding repeated direct failures and conversation notices. Provider HTTP errors and cancellation
 are never retried. A configured extension is checked automatically when the workbench loads, while
-workspace-tool activity stays compact and collapsible in the chat-first interface.
+workspace-tool activity stays compact and collapsible in the chat-first interface. Tool rows explain
+what each operation does and show live state; long conversations scroll independently without
+pushing the follow-up composer off-screen. Assistant Markdown is rendered with safe DOM nodes,
+including polished output/code panels with copy controls and readable inline code.
+
+Each workspace can keep multiple resumable conversations as bounded JSON records under
+`.loom/conversations/`. The sidebar can create, switch, and delete individual conversations, or
+clean the complete `.loom` directory—including generated figures—after explicit confirmation.
+Conversation records stay inside the selected local, temporary, or persistent browser workspace.
 
 The [browser coding workbench guide](./docs/browser-coding-workbench.md) covers the reusable
 `@loom/coding` API, extension callback bridge, project modes, folder/ZIP transfer, and

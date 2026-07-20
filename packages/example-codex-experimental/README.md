@@ -50,8 +50,21 @@ Other model IDs use the classic Responses request. Both remain audited, unsuppor
 paths rather than documented Platform API contracts.
 
 QuickJS, WebContainer Node.js, and Pyodide Python execution receive only project snapshots and
-command arguments. Credentials never enter a runtime. These manual utilities and the editor remain
-inside a closed drawer while the primary UI stays focused on chat. See the
+command arguments. Credentials never enter a runtime. The workbench registers those runtimes as the
+schema-described `website/run-workspace-file` tool, so the agent can execute a requested file and
+return its real exit code, stdout, and stderr. Pyodide loads packages referenced by imports,
+preloads NumPy and Matplotlib, and captures open figures as PNG images shown in the conversation.
+The companion `website/install-runtime-packages` tool installs compatible Python wheels through
+micropip or Node dependencies through npm. Node dependency metadata persists, while `node_modules`
+is restored inside each temporary execution root instead of entering project storage. Manual
+execution controls and the editor remain inside a closed drawer while the primary UI stays focused
+on chat. Human-readable tool rows and a header activity indicator show ongoing work without
+expanding raw tool payloads. The conversation scrolls independently, keeping the composer visible
+for follow-up commands. Sidebar read/write controls determine the agent's tool set: read-only runs
+use copied snapshots and discard filesystem changes, while Chrome requests the selected folder
+permission once when it is opened. Multiple resumable chats are stored as bounded JSON records in
+`.loom/conversations/`; sidebar controls create, switch, delete, or clean this Loom-owned metadata.
+Conversation records are excluded from runtime snapshots. See the
 [browser workbench guide](../../docs/browser-coding-workbench.md) for runtime hosting headers,
 isolation constraints, project synchronization, and security limits.
 

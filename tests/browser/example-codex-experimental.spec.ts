@@ -122,6 +122,7 @@ test('keeps using the extension relay after one direct connection failure', asyn
       const body = request.postData() ?? '';
       modelRequests.push({ body, headers: request.headers(), frameUrl });
       const turn = modelRequests.length;
+      if (turn === 3) await new Promise((resolve) => setTimeout(resolve, 200));
       const events =
         turn === 1
           ? [
@@ -141,7 +142,12 @@ test('keeps using the extension relay after one direct connection failure', asyn
           : [
               {
                 type: 'response.output_text.delta',
-                delta: 'The selected workspace contains source.txt.',
+                delta:
+                  turn === 3
+                    ? 'A detailed coding response remains readable while the composer stays fixed.\n'.repeat(
+                        180,
+                      )
+                    : 'The selected workspace contains **source.txt**.\n\n```text\nOriginal array: [1 2 3 4 5]\nMean: 3.0\n```\n\nExit code: `0`',
               },
               { type: 'response.completed' },
             ];
@@ -164,9 +170,16 @@ test('keeps using the extension relay after one direct connection failure', asyn
 
     const application = await context.newPage();
     await application.addInitScript(() => {
+      Object.defineProperty(globalThis, 'confirm', {
+        configurable: true,
+        value: () => true,
+      });
       Object.defineProperty(globalThis, 'showDirectoryPicker', {
         configurable: true,
-        value: async () => {
+        value: async (options?: { readonly mode?: string }) => {
+          const pickerState = globalThis as typeof globalThis & { __loomPickerMode?: string };
+          if (options?.mode === undefined) delete pickerState.__loomPickerMode;
+          else pickerState.__loomPickerMode = options.mode;
           const root = await navigator.storage.getDirectory();
           const directory = await root.getDirectoryHandle('loom-codex-vertical-slice', {
             create: true,
@@ -181,6 +194,7 @@ test('keeps using the extension relay after one direct connection failure', asyn
     });
     await openBuiltEsmHarness(application);
     await application.goto(`${browserOrigin}/example-codex-experimental/workbench.html`);
+    await expect(application.locator('#access-summary')).toHaveText('Read and write enabled');
     await application.getByLabel('Experimental extension ID').fill(extensionId);
     await application.getByRole('button', { name: 'Reconnect' }).click();
     await expect(application.getByRole('status')).toHaveText(/Approve this exact website origin/u);
@@ -191,12 +205,23 @@ test('keeps using the extension relay after one direct connection failure', asyn
     await application.reload();
     await expect(application.getByRole('status')).toHaveText(/^Authenticated\./u);
     await application.getByRole('button', { name: 'Choose directory and send' }).click();
+    expect(
+      await application.evaluate(
+        () => (globalThis as typeof globalThis & { __loomPickerMode?: string }).__loomPickerMode,
+      ),
+    ).toBe('readwrite');
     await expect(application.getByRole('status')).toHaveText('Run complete.');
     const experimentLog = application.getByRole('log', {
       name: 'Coding conversation',
     });
-    await expect(experimentLog).toContainText('Inspecting workspace — done');
+    await expect(experimentLog).toContainText('Explore the project root');
+    await expect(experimentLog.locator('.tool-state').first()).toHaveText('Done');
     await expect(experimentLog).toContainText('The selected workspace contains source.txt.');
+    await expect(experimentLog.locator('.markdown-code-header')).toHaveText(/OutputCopy/u);
+    await expect(experimentLog.locator('.markdown-code pre')).toContainText(
+      'Original array: [1 2 3 4 5]',
+    );
+    await expect(experimentLog.locator('.chat-message.assistant p code')).toHaveText('0');
     await expect(application.locator('#transport-status')).toHaveText('Extension relay');
     await expect(experimentLog).not.toContainText('Retrying through the extension');
 
@@ -208,10 +233,36 @@ test('keeps using the extension relay after one direct connection failure', asyn
     expect(modelRequests[0]?.frameUrl).toBe('extension-service-worker');
     expect(modelRequests[1]?.headers.originator).toBe('loom_extension_experiment');
     expect(modelRequests[1]?.frameUrl).toBe('extension-service-worker');
-    expect(JSON.parse(modelRequests[0]?.body ?? '{}')).toMatchObject({
+    const firstRequestBody = JSON.parse(modelRequests[0]?.body ?? '{}') as {
+      readonly input?: readonly unknown[];
+    };
+    expect(firstRequestBody).toMatchObject({
       parallel_tool_calls: false,
       reasoning: { effort: 'medium', context: 'all_turns' },
     });
+    expect(firstRequestBody.input).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'additional_tools',
+          tools: expect.arrayContaining([
+            expect.objectContaining({
+              name: 'loom_8_website_run-workspace-file',
+              description: expect.stringContaining('real exit code, stdout, and stderr'),
+              parameters: expect.objectContaining({
+                required: ['runtime', 'path'],
+              }),
+            }),
+            expect.objectContaining({
+              name: 'loom_9_website_install-runtime-packages',
+              description: expect.stringContaining('Additional Python packages use micropip'),
+              parameters: expect.objectContaining({
+                required: ['runtime', 'packages'],
+              }),
+            }),
+          ]),
+        }),
+      ]),
+    );
     expect(modelRequests[1]?.body).toContain('function_call_output');
     expect(modelRequests[1]?.body).toContain('source.txt');
     expect(await application.locator('body').innerText()).not.toMatch(
@@ -223,12 +274,63 @@ test('keeps using the extension relay after one direct connection failure', asyn
     await expect(application.locator('#transport-status')).toHaveText('Extension relay');
     await application.getByLabel('Message').fill('Check the workspace once more.');
     await application.getByRole('button', { name: 'Choose directory and send' }).click();
+    await expect(application.locator('#activity-status')).toHaveAttribute('data-state', 'working');
     await expect(application.getByRole('status')).toHaveText('Run complete.');
+    await expect(application.locator('#activity-status')).toHaveText('Ready');
+    await expect(application.getByRole('log', { name: 'Coding conversation' })).toContainText(
+      'The selected workspace contains source.txt.',
+    );
+    await expect(application.locator('#conversation-list button')).toHaveCount(1);
     expect(modelRequests).toHaveLength(3);
     expect(modelRequests[2]?.frameUrl).toBe('extension-service-worker');
     expect(
       modelRequests.filter((request) => request.frameUrl === 'extension-service-worker'),
     ).toHaveLength(3);
+    const scrollMetrics = await experimentLog.evaluate((element) => ({
+      clientHeight: element.clientHeight,
+      scrollHeight: element.scrollHeight,
+    }));
+    expect(scrollMetrics.scrollHeight).toBeGreaterThan(scrollMetrics.clientHeight);
+    await expect(application.getByLabel('Message')).toBeVisible();
+    await application.getByLabel('Message').fill('The next command remains reachable.');
+    await expect(application.getByLabel('Message')).toHaveValue(
+      'The next command remains reachable.',
+    );
+
+    await application.getByRole('button', { name: 'New', exact: true }).click();
+    await expect(application.locator('#conversation-list button')).toHaveCount(2);
+    await expect(application.getByRole('status')).toHaveText(
+      'New conversation created in .loom/conversations.',
+    );
+    await application.locator('#conversation-list button').last().click();
+    await expect(experimentLog).toContainText('The selected workspace contains source.txt.');
+    await application.getByRole('button', { name: 'Delete', exact: true }).click();
+    await expect(application.locator('#conversation-list button')).toHaveCount(1);
+    await application.getByRole('button', { name: 'Clean .loom', exact: true }).click();
+    await expect(application.locator('#conversation-list')).toHaveText('No saved conversations.');
+    await expect(application.getByRole('status')).toHaveText(
+      '.loom was removed from the workspace.',
+    );
+
+    await application.locator('#allow-write').uncheck();
+    await expect(application.locator('#access-summary')).toHaveText(
+      'Read-only; runtime changes are discarded',
+    );
+    await expect(application.getByRole('button', { name: 'New', exact: true })).toBeDisabled();
+    await expect(application.getByRole('button', { name: 'Delete', exact: true })).toBeDisabled();
+    await expect(
+      application.getByRole('button', { name: 'Clean .loom', exact: true }),
+    ).toBeDisabled();
+    await expect(application.getByRole('status')).toHaveText(
+      'Workspace access changed. Reopen the local folder to apply it.',
+    );
+    await application.getByRole('button', { name: 'Open' }).click();
+    expect(
+      await application.evaluate(
+        () => (globalThis as typeof globalThis & { __loomPickerMode?: string }).__loomPickerMode,
+      ),
+    ).toBe('read');
+    await expect(application.locator('#save-file')).toBeDisabled();
 
     await application.getByRole('button', { name: 'Log out' }).click();
     await expect(application.getByRole('status')).toHaveText(/^Not authenticated\./u);

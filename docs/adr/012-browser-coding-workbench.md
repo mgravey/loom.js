@@ -28,7 +28,9 @@ files never receive OAuth credentials.
 ## Consequences
 
 - The same coding library can run with a different model, workspace, or runtime host.
-- Direct-directory permission and runtime write-back confirmation stay application-owned.
+- Direct-directory permission and runtime write-back policy stay application-owned. The example
+  requests read or read/write access when opening the folder, exposes that policy in the sidebar,
+  and does not ask again on every run. Read-only execution discards filesystem changes.
 - OPFS persistence and ZIP download are UI policies, not Core storage semantics.
 - WebContainer cross-origin isolation/licensing and WASM hard-cancellation limits remain explicit
   deployment concerns.

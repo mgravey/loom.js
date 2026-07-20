@@ -1,6 +1,23 @@
-import type { Model } from '@loom/plugin-api';
-import type { WorkspaceOperation } from '@loom/tool-workspace';
+import type { Model, Tool } from '@loom/plugin-api';
 import type { JsonObject, JsonValue } from '@loom/types';
+
+export type CodexToolCaller = 'direct' | 'programmatic';
+
+/**
+ * A model-callable tool supplied by an application. Websites can register arbitrary namespaced
+ * operations without modifying the agent package, provided they describe JSON input explicitly.
+ */
+export interface CodexTool<
+  Input extends JsonObject = JsonObject,
+  Output extends JsonValue = JsonValue,
+> extends Tool<Input, Output> {
+  readonly operation: string;
+  readonly description: string;
+  readonly inputSchema: JsonObject;
+  readonly outputSchema?: JsonObject;
+  /** Defaults to direct model calls only. */
+  readonly allowedCallers?: readonly CodexToolCaller[];
+}
 
 export interface CodexUserMessage {
   readonly role: 'user';
@@ -9,7 +26,7 @@ export interface CodexUserMessage {
 
 export interface CodexAssistantToolCall {
   readonly id: string;
-  readonly operation: WorkspaceOperation;
+  readonly operation: string;
   readonly input: JsonObject;
   /** Opaque provider continuation metadata for a nested hosted-program call. */
   readonly caller?: JsonObject;
@@ -26,7 +43,7 @@ export interface CodexAssistantMessage {
 export interface CodexToolMessage {
   readonly role: 'tool';
   readonly callId: string;
-  readonly operation: WorkspaceOperation;
+  readonly operation: string;
   readonly result: JsonValue;
   /** Copied unchanged from the corresponding nested tool call. */
   readonly caller?: JsonObject;
@@ -35,11 +52,11 @@ export interface CodexToolMessage {
 export type CodexModelMessage = CodexUserMessage | CodexAssistantMessage | CodexToolMessage;
 
 export interface CodexModelToolDefinition {
-  readonly operation: WorkspaceOperation;
+  readonly operation: string;
   readonly description: string;
   readonly inputSchema: JsonObject;
   readonly outputSchema?: JsonObject;
-  readonly allowedCallers?: readonly ('direct' | 'programmatic')[];
+  readonly allowedCallers?: readonly CodexToolCaller[];
 }
 
 export interface CodexModelRequest {
@@ -91,7 +108,7 @@ export interface CodexAgentTextEvent {
 export interface CodexAgentToolStartEvent {
   readonly type: 'tool-start';
   readonly callId: string;
-  readonly operation: WorkspaceOperation;
+  readonly operation: string;
   readonly input: JsonObject;
   readonly caller?: JsonObject;
 }
@@ -99,7 +116,7 @@ export interface CodexAgentToolStartEvent {
 export interface CodexAgentToolFinishEvent {
   readonly type: 'tool-finish';
   readonly callId: string;
-  readonly operation: WorkspaceOperation;
+  readonly operation: string;
   readonly result: JsonValue;
   readonly caller?: JsonObject;
 }

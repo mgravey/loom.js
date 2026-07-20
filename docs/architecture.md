@@ -163,10 +163,11 @@ owns cancellation without changing Core session semantics.
 
 ## Minimal agent composition
 
-The Phase 2 coding agent is resolved by an explicit capability key and constructed outside core from
-an explicitly selected model, the required list/read/write tools, optional project tools, optional
+The coding agent is resolved by an explicit capability key and constructed outside core from an
+explicitly selected model, any built-in workspace or application-defined schema tools, optional
 memory, and the agent's immutable session configuration. The model and tools receive the same
-operation context as the agent run.
+operation context as the agent run. Application tools use unique namespaced operations and keep
+their implementation authority outside Core.
 
 The workspace tools operate only through an injected text-workspace adapter. The deterministic
 in-memory adapter and scripted model in `@loom/examples` demonstrate composition; they are not

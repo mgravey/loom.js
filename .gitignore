@@ -8,11 +8,13 @@ playwright-report/
 test-results/
 blob-report/
 playwright/.auth/
+.playwright-cli/
 output/
 site-preview/
 store-artifacts/
 packages/extension-codex-experimental/.chrome-store-staging/
 .loom-runs/
+.loom/
 loom-project.zip
 packages/*/*.crx
 packages/*/*.pem

@@ -52,6 +52,27 @@ describe('coding session', () => {
     expect(prompts[1]).toContain('User: second');
   });
 
+  it('resumes a persisted transcript without mutating the supplied entries', async () => {
+    const prompts: string[] = [];
+    const seed = [{ role: 'user' as const, content: 'remember this decision' }];
+    const model: CodexModel = {
+      async *generate(request) {
+        prompts.push(request.messages[0]?.role === 'user' ? request.messages[0].content : '');
+        yield { type: 'text', text: 'continued' };
+        yield { type: 'completed' };
+      },
+    };
+    const session = createCodingSession({ model, tools, transcript: seed });
+    await collect(session.followUp('what was it?'));
+    expect(prompts[0]).toContain('User: remember this decision');
+    expect(session.transcript).toEqual([
+      ...seed,
+      { role: 'user', content: 'what was it?' },
+      { role: 'assistant', content: 'continued' },
+    ]);
+    expect(seed).toEqual([{ role: 'user', content: 'remember this decision' }]);
+  });
+
   it('runs an injected execution runtime and rejects overlapping work', async () => {
     const model: CodexModel = {
       async *generate() {

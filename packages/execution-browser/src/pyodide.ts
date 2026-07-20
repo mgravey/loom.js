@@ -11,6 +11,8 @@ import { cancellationError, copyProject, emitOutput, executionPath } from './val
 
 const PYODIDE_MODULE_SPECIFIER = 'pyodide';
 const PYTHON_COMMANDS = new Set(['python', 'python3', 'pyodide']);
+const PYTHON_PACKAGE_COMMANDS = new Set(['micropip', 'pip', 'pip3']);
+const DEFAULT_PYODIDE_PACKAGES = Object.freeze(['numpy', 'matplotlib']);
 
 interface PyodideFileSystem {
   mkdirTree(path: string): void;
@@ -35,6 +37,8 @@ interface PyodideInstance {
   setStdout(options: { readonly batched: (text: string) => void }): void;
   setStderr(options: { readonly batched: (text: string) => void }): void;
   setInterruptBuffer?(buffer: Int32Array): void;
+  loadPackage(packages: string | readonly string[]): Promise<void>;
+  loadPackagesFromImports(source: string): Promise<void>;
   runPythonAsync(source: string, options?: { readonly filename?: string }): Promise<unknown>;
 }
 
@@ -46,8 +50,32 @@ export interface CreatePyodideExecutionRuntimeOptions {
   readonly loadModule?: BrowserRuntimeModuleLoader;
   readonly createBackend?: BrowserExecutionBackendFactory;
   readonly indexURL?: string;
+  /** Packages loaded once with the runtime. Defaults to NumPy and Matplotlib. */
+  readonly defaultPackages?: readonly string[];
   readonly createInterruptBuffer?: () => Int32Array | undefined;
 }
+
+const MATPLOTLIB_PRELUDE = `
+import matplotlib as __loom_matplotlib
+__loom_matplotlib.use("Agg")
+import matplotlib.pyplot as __loom_plt
+def __loom_show(*args, **kwargs):
+    return None
+__loom_plt.show = __loom_show
+`;
+
+const MATPLOTLIB_CAPTURE = `
+import os as __loom_os
+__loom_os.makedirs(__loom_figure_directory, exist_ok=True)
+for __loom_index, __loom_number in enumerate(__loom_plt.get_fignums(), start=1):
+    __loom_figure = __loom_plt.figure(__loom_number)
+    __loom_figure.savefig(
+        f"{__loom_figure_directory}/{__loom_figure_prefix}-figure-{__loom_index}.png",
+        format="png",
+        bbox_inches="tight",
+    )
+__loom_plt.close("all")
+`;
 
 function assertModule(value: unknown): asserts value is PyodidePackageModule {
   if (
@@ -132,35 +160,68 @@ function defaultInterruptBuffer(): Int32Array | undefined {
   return new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT));
 }
 
+function validatedDefaultPackages(value: readonly string[] | undefined): readonly string[] {
+  const packages = value ?? DEFAULT_PYODIDE_PACKAGES;
+  if (
+    packages.length > 64 ||
+    packages.some(
+      (name) =>
+        typeof name !== 'string' ||
+        name.length === 0 ||
+        name.length > 256 ||
+        name.startsWith('-') ||
+        /[\s\0]/u.test(name),
+    )
+  ) {
+    throw new TypeError('Pyodide default packages must be bounded package names.');
+  }
+  return Object.freeze(packages.map((packageName) => packageName));
+}
+
 function createPyodideBackend(
   indexURL: string | undefined,
+  defaultPackages: readonly string[],
   createInterruptBuffer: () => Int32Array | undefined,
 ): BrowserExecutionBackendFactory {
   return async (module) => {
     assertModule(module);
     const pyodide = await module.loadPyodide(indexURL === undefined ? {} : { indexURL });
+    if (defaultPackages.length > 0) await pyodide.loadPackage(defaultPackages);
     let sequence = 0;
     return Object.freeze({
       async execute(request: BrowserExecutionRequest, context: BrowserExecutionContext) {
-        if (!PYTHON_COMMANDS.has(request.command)) {
+        const installsPackages = PYTHON_PACKAGE_COMMANDS.has(request.command);
+        if (!PYTHON_COMMANDS.has(request.command) && !installsPackages) {
           throw new BrowserExecutionError(
             'UNSUPPORTED_COMMAND',
-            "Pyodide accepts only 'python', 'python3', or 'pyodide'.",
+            "Pyodide accepts Python execution or the 'micropip' package installer.",
           );
         }
         const [entrypoint, ...scriptArguments] = request.arguments ?? [];
-        if (entrypoint === undefined) {
+        if (!installsPackages && entrypoint === undefined) {
           throw new BrowserExecutionError(
             'INVALID_REQUEST',
             'Pyodide requires an entrypoint argument.',
           );
         }
-        const normalizedEntrypoint = executionPath(
-          request.workingDirectory === undefined || request.workingDirectory.length === 0
-            ? entrypoint
-            : `${request.workingDirectory}/${entrypoint}`,
-        );
-        const source = textFile(request.project, normalizedEntrypoint);
+        if (installsPackages && entrypoint === undefined) {
+          throw new BrowserExecutionError(
+            'INVALID_REQUEST',
+            'Micropip requires at least one package requirement.',
+          );
+        }
+        let normalizedEntrypoint: string | undefined;
+        if (!installsPackages && entrypoint !== undefined) {
+          normalizedEntrypoint = executionPath(
+            request.workingDirectory === undefined || request.workingDirectory.length === 0
+              ? entrypoint
+              : `${request.workingDirectory}/${entrypoint}`,
+          );
+        }
+        const source =
+          normalizedEntrypoint === undefined
+            ? undefined
+            : textFile(request.project, normalizedEntrypoint);
         sequence += 1;
         const root = `/home/pyodide/.loom-runs/run-${String(sequence)}`;
         mountProject(pyodide.FS, root, request.project);
@@ -168,6 +229,31 @@ function createPyodideBackend(
           request.workingDirectory === undefined || request.workingDirectory.length === 0
             ? root
             : `${root}/${request.workingDirectory}`;
+        const temporaryGlobals = new Set<string>();
+        const setTemporaryGlobal = (name: string, value: unknown): void => {
+          pyodide.globals.set(name, value);
+          temporaryGlobals.add(name);
+        };
+        let capturesFigures = false;
+        const captureFigures = async (): Promise<void> => {
+          const figureDirectory = `${root}/.loom/figures`;
+          const figurePrefix = `run-${String(sequence)}`;
+          setTemporaryGlobal('__loom_figure_directory', figureDirectory);
+          setTemporaryGlobal('__loom_figure_prefix', figurePrefix);
+          await pyodide.runPythonAsync(MATPLOTLIB_CAPTURE);
+        };
+        const executionResult = (exitCode: number) => {
+          const project = exportProject(pyodide.FS, root);
+          const artifactPrefix = `.loom/figures/run-${String(sequence)}-`;
+          const artifacts = project.files
+            .filter((file) => file.path.startsWith(artifactPrefix) && file.path.endsWith('.png'))
+            .map((file) => Object.freeze({ path: file.path, mediaType: 'image/png' }));
+          return Object.freeze({
+            exitCode,
+            project,
+            ...(artifacts.length === 0 ? {} : { artifacts: Object.freeze(artifacts) }),
+          });
+        };
         const interrupt = createInterruptBuffer();
         if (interrupt !== undefined) {
           interrupt[0] = 0;
@@ -190,9 +276,22 @@ function createPyodideBackend(
         try {
           context.signal?.throwIfCancelled();
           pyodide.FS.chdir(cwd);
-          pyodide.globals.set('__loom_argv', [request.command, entrypoint, ...scriptArguments]);
-          await pyodide.runPythonAsync('import sys\nsys.argv = list(__loom_argv)');
-          await pyodide.runPythonAsync(source, { filename: normalizedEntrypoint });
+          if (installsPackages) {
+            setTemporaryGlobal('__loom_packages', [entrypoint, ...scriptArguments]);
+            await pyodide.loadPackage('micropip');
+            await pyodide.runPythonAsync(
+              'import micropip\nawait micropip.install(list(__loom_packages))',
+            );
+          } else if (source !== undefined && normalizedEntrypoint !== undefined) {
+            setTemporaryGlobal('__loom_argv', [request.command, entrypoint, ...scriptArguments]);
+            await pyodide.loadPackagesFromImports(source);
+            capturesFigures =
+              defaultPackages.includes('matplotlib') || /\bmatplotlib\b/u.test(source);
+            if (capturesFigures) await pyodide.runPythonAsync(MATPLOTLIB_PRELUDE);
+            await pyodide.runPythonAsync('import sys\nsys.argv = list(__loom_argv)');
+            await pyodide.runPythonAsync(source, { filename: normalizedEntrypoint });
+            if (capturesFigures) await captureFigures();
+          }
           if (context.signal?.cancelled === true) throw cancellationError(context.signal.reason);
           if (executionState.timedOut) {
             throw new BrowserExecutionError(
@@ -200,7 +299,7 @@ function createPyodideBackend(
               `Pyodide execution exceeded ${String(request.timeoutMs)} ms.`,
             );
           }
-          return Object.freeze({ exitCode: 0, project: exportProject(pyodide.FS, root) });
+          return executionResult(0);
         } catch (error) {
           if (context.signal?.cancelled === true) throw cancellationError(context.signal.reason);
           if (executionState.timedOut) {
@@ -216,11 +315,24 @@ function createPyodideBackend(
             'stderr',
             `${error instanceof Error ? error.message : String(error)}\n`,
           );
-          return Object.freeze({ exitCode: 1, project: exportProject(pyodide.FS, root) });
+          if (capturesFigures) {
+            try {
+              await captureFigures();
+            } catch {
+              // Preserve the original execution failure; figure capture is best-effort here.
+            }
+          }
+          return executionResult(1);
         } finally {
           unsubscribe();
           if (timer !== undefined) clearTimeout(timer);
-          pyodide.globals.delete('__loom_argv');
+          for (const name of temporaryGlobals) {
+            try {
+              pyodide.globals.delete(name);
+            } catch {
+              // User code may already have removed a temporary global; cleanup must not mask output.
+            }
+          }
           pyodide.setStdout({ batched: () => undefined });
           pyodide.setStderr({ batched: () => undefined });
           pyodide.FS.chdir('/home/pyodide');
@@ -233,6 +345,7 @@ function createPyodideBackend(
 }
 
 export function createPyodideExecutionRuntime(options: CreatePyodideExecutionRuntimeOptions = {}) {
+  const defaultPackages = validatedDefaultPackages(options.defaultPackages);
   return createLazyBrowserRuntime({
     kind: 'pyodide',
     moduleSpecifier: PYODIDE_MODULE_SPECIFIER,
@@ -241,6 +354,7 @@ export function createPyodideExecutionRuntime(options: CreatePyodideExecutionRun
       options.createBackend ??
       createPyodideBackend(
         options.indexURL,
+        defaultPackages,
         options.createInterruptBuffer ?? defaultInterruptBuffer,
       ),
   });

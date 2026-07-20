@@ -20,9 +20,11 @@ import {
   type CodexAgent,
   type CodexAgentDependencies,
   type CodexAgentEvent,
+  type CodexAgentTool,
   type CodexModel,
   type CodexModelEvent,
   type CodexModelRequest,
+  type CodexTool,
 } from '../src/index.js';
 
 interface ToolsFixture {
@@ -72,7 +74,7 @@ function scriptedModel(
 
 function dependencies(
   model: CodexModel,
-  tools: readonly WorkspaceTool[] = createTools().tools,
+  tools: readonly CodexAgentTool[] = createTools().tools,
   configuration: JsonObject = {},
 ): CodexAgentDependencies {
   return { model, tools, configuration };
@@ -167,6 +169,65 @@ describe('Codex agent orchestration', () => {
     const model = scriptedModel([[{ type: 'completed' }]], requests);
     await collect(createCodexAgentFactory().create(dependencies(model)) as CodexAgent);
     expect(requests[0]?.instructions).toBe(DEFAULT_CODEX_INSTRUCTIONS);
+  });
+
+  it('advertises and executes application-defined schema tools', async () => {
+    const requests: CodexModelRequest[] = [];
+    const inspectCart = vi.fn(async () => ({ items: 3, total: 42 }));
+    const websiteTool: CodexTool = {
+      name: 'inspect_cart',
+      operation: 'website/cart-summary',
+      description: 'Read the current shopping-cart summary shown by the website.',
+      inputSchema: {
+        type: 'object',
+        properties: {},
+        additionalProperties: false,
+      },
+      outputSchema: {
+        type: 'object',
+        properties: { items: { type: 'number' }, total: { type: 'number' } },
+        required: ['items', 'total'],
+        additionalProperties: false,
+      },
+      execute: inspectCart,
+    };
+    const model = scriptedModel(
+      [
+        [
+          {
+            type: 'tool-call',
+            call: { id: 'cart', operation: 'website/cart-summary', input: {} },
+          },
+          { type: 'completed' },
+        ],
+        [{ type: 'text', text: 'There are three items.' }, { type: 'completed' }],
+      ],
+      requests,
+    );
+
+    const events = await collect(
+      createCodexAgentFactory().create(dependencies(model, [websiteTool])) as CodexAgent,
+    );
+
+    expect(inspectCart).toHaveBeenCalledWith({}, undefined);
+    expect(requests[0]?.tools).toEqual([
+      expect.objectContaining({
+        operation: 'website/cart-summary',
+        description: expect.stringContaining('shopping-cart'),
+        allowedCallers: ['direct'],
+      }),
+    ]);
+    expect(requests[1]?.messages.at(-1)).toMatchObject({
+      role: 'tool',
+      operation: 'website/cart-summary',
+      result: { items: 3, total: 42 },
+    });
+    expect(events.map((event) => event.type)).toEqual([
+      'tool-start',
+      'tool-finish',
+      'text',
+      'completed',
+    ]);
   });
 
   it('preserves continuation items and runs nested read-only calls concurrently', async () => {
@@ -294,24 +355,37 @@ describe('Codex agent orchestration', () => {
     ).rejects.toMatchObject({ code: 'UNAUTHORIZED_TOOL_CALL' });
   });
 
-  it('validates configuration, request, and exactly one tool per operation', async () => {
+  it('validates configuration, custom schemas, requests, and unique operations', async () => {
     const factory = createCodexAgentFactory();
     const model = scriptedModel([[{ type: 'completed' }]]);
     const fixture = createTools();
 
-    expect(() => factory.create(dependencies(model, fixture.tools.slice(1)))).toThrowError(
-      expect.objectContaining({ code: 'INVALID_DEPENDENCIES' }),
-    );
     expect(() =>
       factory.create(dependencies(model, [...fixture.tools, fixture.listFiles])),
     ).toThrow(/Duplicate/);
-    const unsupported = {
-      name: 'unsupported',
-      operation: 'workspace/delete-file',
+    const missingSchema = {
+      name: 'website_action',
+      operation: 'website/action',
+      description: 'Perform a website action.',
       execute: async () => null,
-    } as unknown as WorkspaceTool;
-    expect(() => factory.create(dependencies(model, [...fixture.tools, unsupported]))).toThrow(
-      /Unsupported/,
+    } as unknown as CodexAgentTool;
+    expect(() => factory.create(dependencies(model, [...fixture.tools, missingSchema]))).toThrow(
+      /input schema/,
+    );
+    const primitiveSchema = {
+      ...missingSchema,
+      inputSchema: { type: 'string' },
+    } as unknown as CodexAgentTool;
+    expect(() => factory.create(dependencies(model, [...fixture.tools, primitiveSchema]))).toThrow(
+      /object JSON input schema/,
+    );
+    const invalidOperation = {
+      ...missingSchema,
+      operation: 'website action',
+      inputSchema: { type: 'object' },
+    } as unknown as CodexAgentTool;
+    expect(() => factory.create(dependencies(model, [...fixture.tools, invalidOperation]))).toThrow(
+      /operation.*invalid/,
     );
     expect(() => factory.create(dependencies(model, fixture.tools, { maxTurns: 0 }))).toThrowError(
       expect.objectContaining({ code: 'INVALID_CONFIGURATION' }),

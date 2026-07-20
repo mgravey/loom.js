@@ -6,8 +6,8 @@ phases.
 - [Architecture](./docs/architecture.md) — runtime boundaries, composition, and state ownership
 - [Plugin authoring](./docs/plugin-authoring.md) — manifests, hooks, registrations, and constraints
 - [Step-by-step onboarding](./docs/getting-started.md) — repository setup, first workspace and
-  coding session, plugin composition, typed custom-tool registration, model transports, runtimes,
-  and current limitations
+  coding session, plugin composition, typed and model-callable website tools, model transports,
+  runtimes, and current limitations
 - [Chrome Web Store submission dossier](./docs/chrome-web-store-submission.md) — development/store
   extension IDs, production packaging, listing copy, permission justifications, privacy answers,
   legal/support pages, reviewer instructions, assets, blockers, and release checklist

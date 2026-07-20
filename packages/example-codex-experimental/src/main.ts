@@ -1,4 +1,4 @@
-import type { CodexAgentEvent } from '@loom/agent-codex';
+import type { CodexAgentEvent, CodexAgentTool } from '@loom/agent-codex';
 import {
   createExternalCredentialBroker,
   createExtensionAuthProvider,
@@ -10,9 +10,7 @@ import {
   createQuickJsExecutionRuntime,
   createWebContainerExecutionRuntime,
   executeBrowserWorkspace,
-  type BrowserExecutionProject,
   type BrowserExecutionRuntime,
-  type BrowserExecutionWorkspace,
 } from '@loom/execution-browser';
 import {
   createCodexExperimentalModel,
@@ -25,16 +23,32 @@ import {
   createWorkspaceTools,
   exportWorkspaceZip,
   importBrowserFolderFiles,
-  importWorkspaceEntries,
   importWorkspaceZip,
   snapshotWorkspace,
+  workspacePath,
   type ProjectWorkspace,
-  type WorkspaceImportEntry,
   type WorkspacePath,
-  type WorkspaceTool,
 } from '@loom/tool-workspace';
 import { createCancellationSource, sessionId, type CancellationSource } from '@loom/types';
 import { createFileSystemAccessProjectWorkspace } from '@loom/workspace-fsa';
+
+import {
+  BROWSER_INSTALL_PACKAGES_OPERATION,
+  BROWSER_RUN_FILE_OPERATION,
+  createBrowserExecutionWorkspace,
+  createBrowserInstallPackagesTool,
+  createBrowserRunFileTool,
+  type WebsiteRuntimeId,
+} from './browser-run-file-tool.js';
+import {
+  cleanLoomDirectory,
+  createWorkspaceConversation,
+  loadWorkspaceConversations,
+  removeWorkspaceConversation,
+  saveWorkspaceConversation,
+  updateWorkspaceConversation,
+  type WorkspaceConversation,
+} from './conversation-store.js';
 
 const PROVIDER_ID = 'openai/codex-experimental';
 const CODEX_RESPONSES_ENDPOINT = 'https://chatgpt.com/backend-api/codex/responses';
@@ -45,7 +59,7 @@ const ORIGIN_ACCESS_VERSION = 1;
 const MODEL_PORT_NAME = 'loom/codex-model-experimental/v1';
 const MODEL_PROTOCOL = 'loom/codex-model-experimental';
 const MODEL_PROTOCOL_VERSION = 1;
-const RUN_SESSION_ID = sessionId('codex-experimental-browser-run');
+const DEFAULT_RUN_SESSION_ID = sessionId('codex-experimental-browser-run');
 const OPFS_DIRECTORY = 'loom-workbench';
 const OPFS_ARCHIVE = 'project.zip';
 const EXTENSION_ID_PATTERN = /^[a-p]{32}$/u;
@@ -109,14 +123,22 @@ const logoutButton = requiredElement('#logout', HTMLButtonElement);
 const statusElement = requiredElement('#status', HTMLParagraphElement);
 const logElement = requiredElement('#log', HTMLDivElement);
 const transportStatusElement = requiredElement('#transport-status', HTMLSpanElement);
+const activityStatusElement = requiredElement('#activity-status', HTMLSpanElement);
 const workspaceMode = requiredElement('#workspace-mode', HTMLSelectElement);
 const openWorkspaceButton = requiredElement('#open-workspace', HTMLButtonElement);
+const allowReadInput = requiredElement('#allow-read', HTMLInputElement);
+const allowWriteInput = requiredElement('#allow-write', HTMLInputElement);
+const accessSummary = requiredElement('#access-summary', HTMLParagraphElement);
 const importFolderButton = requiredElement('#import-folder', HTMLButtonElement);
 const importZipButton = requiredElement('#import-zip', HTMLButtonElement);
 const exportZipButton = requiredElement('#export-zip', HTMLButtonElement);
 const folderInput = requiredElement('#folder-input', HTMLInputElement);
 const zipInput = requiredElement('#zip-input', HTMLInputElement);
 const fileList = requiredElement('#file-list', HTMLUListElement);
+const conversationList = requiredElement('#conversation-list', HTMLUListElement);
+const newConversationButton = requiredElement('#new-conversation', HTMLButtonElement);
+const deleteConversationButton = requiredElement('#delete-conversation', HTMLButtonElement);
+const cleanLoomButton = requiredElement('#clean-loom', HTMLButtonElement);
 const editor = requiredElement('#editor', HTMLTextAreaElement);
 const editorTitle = requiredElement('#editor-title', HTMLHeadingElement);
 const saveFileButton = requiredElement('#save-file', HTMLButtonElement);
@@ -160,10 +182,150 @@ function setStatus(message: string): void {
   statusElement.textContent = message;
 }
 
+function setActivityStatus(state: 'idle' | 'working' | 'error', message: string): void {
+  activityStatusElement.dataset.state = state;
+  activityStatusElement.textContent = message;
+}
+
+function canReadWorkspace(): boolean {
+  return allowReadInput.checked;
+}
+
+function canWriteWorkspace(): boolean {
+  return allowReadInput.checked && allowWriteInput.checked;
+}
+
+function updateAccessSummary(): void {
+  accessSummary.textContent = canWriteWorkspace()
+    ? 'Read and write enabled'
+    : canReadWorkspace()
+      ? 'Read-only; runtime changes are discarded'
+      : 'Project access disabled';
+}
+
+function appendInlineMarkdown(container: HTMLElement, value: string): void {
+  const tokenPattern = /(`[^`\n]+`|\*\*[^*\n]+\*\*)/gu;
+  let offset = 0;
+  for (const match of value.matchAll(tokenPattern)) {
+    const index = match.index;
+    if (index > offset) container.append(value.slice(offset, index));
+    const token = match[0];
+    const element = globalThis.document.createElement(token.startsWith('`') ? 'code' : 'strong');
+    element.textContent = token.startsWith('`') ? token.slice(1, -1) : token.slice(2, -2);
+    container.append(element);
+    offset = index + token.length;
+  }
+  if (offset < value.length) container.append(value.slice(offset));
+}
+
+function markdownCodeBlock(source: string, language: string): HTMLElement {
+  const block = globalThis.document.createElement('div');
+  block.className = 'markdown-code';
+  const header = globalThis.document.createElement('div');
+  header.className = 'markdown-code-header';
+  const label = globalThis.document.createElement('span');
+  label.textContent = language === '' ? 'Code' : language === 'text' ? 'Output' : language;
+  const copy = globalThis.document.createElement('button');
+  copy.type = 'button';
+  copy.className = 'markdown-code-copy';
+  copy.textContent = 'Copy';
+  copy.addEventListener('click', () => {
+    void globalThis.navigator.clipboard
+      .writeText(source)
+      .then(() => {
+        copy.textContent = 'Copied';
+        globalThis.setTimeout(() => {
+          copy.textContent = 'Copy';
+        }, 1_500);
+      })
+      .catch(() => {
+        copy.textContent = 'Unavailable';
+      });
+  });
+  const pre = globalThis.document.createElement('pre');
+  const code = globalThis.document.createElement('code');
+  code.textContent = source;
+  pre.append(code);
+  header.append(label, copy);
+  block.append(header, pre);
+  return block;
+}
+
+function renderMarkdown(container: HTMLElement, markdown: string): void {
+  container.replaceChildren();
+  const lines = markdown.replaceAll('\r\n', '\n').split('\n');
+  let index = 0;
+  while (index < lines.length) {
+    const line = lines[index] ?? '';
+    if (line.trim() === '') {
+      index += 1;
+      continue;
+    }
+    const fence = /^```([^`\s]*)\s*$/u.exec(line);
+    if (fence !== null) {
+      const codeLines: string[] = [];
+      index += 1;
+      while (index < lines.length && !/^```\s*$/u.test(lines[index] ?? '')) {
+        codeLines.push(lines[index] ?? '');
+        index += 1;
+      }
+      if (index < lines.length) index += 1;
+      container.append(markdownCodeBlock(codeLines.join('\n'), fence[1] ?? ''));
+      continue;
+    }
+    const heading = /^(#{1,3})\s+(.+)$/u.exec(line);
+    if (heading !== null) {
+      const level = heading[1]?.length ?? 1;
+      const element = globalThis.document.createElement(`h${String(level + 1)}`);
+      appendInlineMarkdown(element, heading[2] ?? '');
+      container.append(element);
+      index += 1;
+      continue;
+    }
+    const unordered = /^[-*]\s+(.+)$/u.exec(line);
+    const ordered = /^\d+[.)]\s+(.+)$/u.exec(line);
+    if (unordered !== null || ordered !== null) {
+      const list = globalThis.document.createElement(unordered === null ? 'ol' : 'ul');
+      while (index < lines.length) {
+        const candidate = lines[index] ?? '';
+        const item =
+          unordered === null
+            ? /^\d+[.)]\s+(.+)$/u.exec(candidate)
+            : /^[-*]\s+(.+)$/u.exec(candidate);
+        if (item === null) break;
+        const listItem = globalThis.document.createElement('li');
+        appendInlineMarkdown(listItem, item[1] ?? '');
+        list.append(listItem);
+        index += 1;
+      }
+      container.append(list);
+      continue;
+    }
+    const paragraphLines = [line.trim()];
+    index += 1;
+    while (index < lines.length) {
+      const candidate = lines[index] ?? '';
+      if (
+        candidate.trim() === '' ||
+        candidate.startsWith('```') ||
+        /^(?:#{1,3}\s+|[-*]\s+|\d+[.)]\s+)/u.test(candidate)
+      ) {
+        break;
+      }
+      paragraphLines.push(candidate.trim());
+      index += 1;
+    }
+    const paragraph = globalThis.document.createElement('p');
+    appendInlineMarkdown(paragraph, paragraphLines.join(' '));
+    container.append(paragraph);
+  }
+}
+
 function appendLog(message: string, tone: 'assistant' | 'error' | 'system' = 'system'): void {
   const entry = globalThis.document.createElement('div');
   entry.className = `chat-message ${tone}`;
-  entry.textContent = message;
+  if (tone === 'assistant') renderMarkdown(entry, message);
+  else entry.textContent = message;
   logElement.append(entry);
   logElement.scrollTop = logElement.scrollHeight;
 }
@@ -463,8 +625,11 @@ const directModelFetch: CodexResponsesFetch = async (
   if (!isRecord(parsedBody)) throw new Error('Direct model request body is invalid.');
   const body = JSON.stringify({
     ...parsedBody,
-    prompt_cache_key: RUN_SESSION_ID,
-    client_metadata: { session_id: RUN_SESSION_ID, thread_id: RUN_SESSION_ID },
+    prompt_cache_key: currentRunSessionId(),
+    client_metadata: {
+      session_id: currentRunSessionId(),
+      thread_id: currentRunSessionId(),
+    },
   });
   let response: Response;
   try {
@@ -612,8 +777,8 @@ const relayModelFetch: CodexResponsesFetch = (request) => {
       version: MODEL_PROTOCOL_VERSION,
       type: 'generate',
       requestId,
-      sessionId: RUN_SESSION_ID,
-      threadId: RUN_SESSION_ID,
+      sessionId: currentRunSessionId(),
+      threadId: currentRunSessionId(),
       body: request.body,
       wireProtocol:
         request.headers['x-openai-internal-codex-responses-lite'] === 'true'
@@ -649,24 +814,48 @@ let activeWorkspace: ProjectWorkspace | undefined;
 let activeWorkspaceMode: 'direct' | 'memory' | 'opfs' | undefined;
 let codingSession: CodingSession | undefined;
 let selectedFile: WorkspacePath | undefined;
+let conversations: readonly WorkspaceConversation[] = Object.freeze([]);
+let activeConversation: WorkspaceConversation | undefined;
+
+function currentRunSessionId() {
+  return activeConversation === undefined
+    ? DEFAULT_RUN_SESSION_ID
+    : sessionId(`loom-${activeConversation.id}`);
+}
 let runtimeCancellation: CancellationSource | undefined;
 
-const executionRuntimes: Readonly<Record<string, BrowserExecutionRuntime>> = Object.freeze({
-  quickjs: createQuickJsExecutionRuntime(),
-  node: createWebContainerExecutionRuntime({ coep: 'credentialless' }),
-  python: createPyodideExecutionRuntime({
-    indexURL: 'https://cdn.jsdelivr.net/npm/pyodide@314.0.2/',
-  }),
-});
+const executionRuntimes: Readonly<Record<WebsiteRuntimeId, BrowserExecutionRuntime>> =
+  Object.freeze({
+    quickjs: createQuickJsExecutionRuntime(),
+    node: createWebContainerExecutionRuntime({ coep: 'credentialless' }),
+    python: createPyodideExecutionRuntime({
+      indexURL: 'https://cdn.jsdelivr.net/pyodide/v314.0.2/full/',
+    }),
+  });
 
 function updateControls(): void {
   const hasWorkspace = activeWorkspace !== undefined;
-  runButton.disabled = !authenticated;
+  const readable = canReadWorkspace();
+  const writable = canWriteWorkspace();
+  const busy = codingSession?.state === 'running' || runtimeCancellation !== undefined;
+  runButton.disabled = !authenticated || !readable;
   logoutButton.disabled = !authenticated;
-  exportZipButton.disabled = !hasWorkspace;
-  runCommandButton.disabled = !hasWorkspace;
-  editor.disabled = selectedFile === undefined;
-  saveFileButton.disabled = selectedFile === undefined;
+  openWorkspaceButton.disabled = !readable || busy;
+  importFolderButton.disabled = !writable;
+  importZipButton.disabled = !writable;
+  exportZipButton.disabled = !hasWorkspace || !readable;
+  runCommandButton.disabled = !hasWorkspace || !readable;
+  editor.disabled = selectedFile === undefined || !readable;
+  saveFileButton.disabled = selectedFile === undefined || !writable;
+  newConversationButton.disabled = !hasWorkspace || !writable || busy;
+  deleteConversationButton.disabled = activeConversation === undefined || !writable || busy;
+  cleanLoomButton.disabled = !hasWorkspace || !writable || busy;
+  for (const button of Array.from(conversationList.querySelectorAll('button'))) {
+    button.disabled = busy;
+  }
+  allowReadInput.disabled = busy;
+  allowWriteInput.disabled = !readable || busy;
+  updateAccessSummary();
   runButton.setAttribute(
     'aria-label',
     hasWorkspace ? 'Send coding request' : 'Choose directory and send',
@@ -674,6 +863,7 @@ function updateControls(): void {
 }
 
 async function refreshAuthenticationStatus(updateStatus = true): Promise<boolean> {
+  setActivityStatus('working', 'Connecting extension');
   await ensureOriginAccess();
   pageDiagnostic('auth.status.request');
   authenticated = await authProvider().isAuthenticated();
@@ -687,46 +877,191 @@ async function refreshAuthenticationStatus(updateStatus = true): Promise<boolean
         : 'Not authenticated. Complete sign-in from the extension options page.',
     );
   }
+  setActivityStatus(authenticated ? 'idle' : 'error', authenticated ? 'Ready' : 'Sign-in required');
   return authenticated;
 }
 
 const activeToolRows = new Map<string, HTMLDetailsElement>();
 let activeAssistantMessage: HTMLDivElement | undefined;
+let activeAssistantText = '';
 
-function toolLabel(operation: string, input: Readonly<Record<string, unknown>>): string {
-  const path = typeof input.path === 'string' ? ` ${input.path}` : '';
-  if (operation === 'workspace/list-files') return `Inspecting workspace${path}`;
-  if (operation === 'workspace/read-file') return `Reading${path}`;
-  if (operation === 'workspace/write-file') return `Writing${path}`;
-  if (operation === 'workspace/apply-patch') return `Applying changes${path}`;
-  if (operation === 'workspace/stat') return `Inspecting${path}`;
-  if (operation === 'workspace/create-directory') return `Creating folder${path}`;
-  if (operation === 'workspace/move') return 'Moving workspace item';
-  if (operation === 'workspace/remove') return `Removing${path}`;
-  return 'Using workspace tool';
+interface ToolPresentation {
+  readonly title: string;
+  readonly description: string;
+}
+
+function toolPresentation(
+  operation: string,
+  input: Readonly<Record<string, unknown>>,
+): ToolPresentation {
+  const path = typeof input.path === 'string' ? input.path : undefined;
+  const location = path === undefined || path === '' ? 'the project root' : `“${path}”`;
+  if (operation === 'workspace/list-files') {
+    return {
+      title: `Explore ${location}`,
+      description: 'Lists the files and folders available to the agent.',
+    };
+  }
+  if (operation === 'workspace/read-file') {
+    return {
+      title: `Read ${location}`,
+      description: 'Loads the current text so the agent can inspect it before editing.',
+    };
+  }
+  if (operation === 'workspace/write-file') {
+    return {
+      title: `Write ${location}`,
+      description: 'Creates the text file or replaces its complete contents.',
+    };
+  }
+  if (operation === 'workspace/apply-patch') {
+    return {
+      title: `Edit ${location}`,
+      description:
+        'Applies an exact-context patch; a mismatch is returned for correction and retry.',
+    };
+  }
+  if (operation === 'workspace/stat') {
+    return {
+      title: `Inspect ${location}`,
+      description:
+        'Checks whether the item exists and reads its type, size, and modification time.',
+    };
+  }
+  if (operation === 'workspace/create-directory') {
+    return {
+      title: `Create folder ${location}`,
+      description: 'Creates a project directory without exposing anything outside the workspace.',
+    };
+  }
+  if (operation === 'workspace/move') {
+    const source = typeof input.source === 'string' ? `“${input.source}”` : 'a project item';
+    const destination =
+      typeof input.destination === 'string' ? `“${input.destination}”` : 'a new location';
+    return {
+      title: `Move ${source} to ${destination}`,
+      description: 'Renames or relocates a file or folder inside the project.',
+    };
+  }
+  if (operation === 'workspace/remove') {
+    return {
+      title: `Remove ${location}`,
+      description:
+        'Deletes the selected workspace item; recursive removal requires explicit input.',
+    };
+  }
+  if (operation === BROWSER_RUN_FILE_OPERATION) {
+    const runtime = typeof input.runtime === 'string' ? input.runtime : 'browser';
+    return {
+      title: `Run ${location} with ${runtime}`,
+      description:
+        'Executes the file in the real isolated browser runtime and captures its exit code, stdout, and stderr.',
+    };
+  }
+  if (operation === BROWSER_INSTALL_PACKAGES_OPERATION) {
+    const runtime = typeof input.runtime === 'string' ? input.runtime : 'browser';
+    const packages = Array.isArray(input.packages)
+      ? input.packages.filter((item): item is string => typeof item === 'string').join(', ')
+      : 'packages';
+    return {
+      title: `Install ${packages} for ${runtime}`,
+      description:
+        runtime === 'python'
+          ? 'Uses micropip to add compatible Pyodide or PyPI wheel packages to the live Python runtime.'
+          : 'Uses npm and records dependency metadata so later Node runs restore the packages.',
+    };
+  }
+  return {
+    title: `Use ${operation}`,
+    description: 'Runs a tool registered by this website with schema-validated input.',
+  };
+}
+
+function toolExitCode(value: unknown): number | undefined {
+  return isRecord(value) && typeof value.exitCode === 'number' ? value.exitCode : undefined;
 }
 
 function isFailedToolResult(value: unknown): boolean {
-  return isRecord(value) && value.ok === false;
+  const exitCode = toolExitCode(value);
+  return isRecord(value) && (value.ok === false || (exitCode !== undefined && exitCode !== 0));
 }
 
-function renderAgentEvent(event: CodexAgentEvent): void {
+function toolArtifacts(
+  value: unknown,
+): readonly { readonly path: string; readonly mediaType: string }[] {
+  if (!isRecord(value) || !Array.isArray(value.artifacts)) return [];
+  return value.artifacts.flatMap((artifact) =>
+    isRecord(artifact) &&
+    typeof artifact.path === 'string' &&
+    typeof artifact.mediaType === 'string' &&
+    artifact.mediaType.startsWith('image/')
+      ? [{ path: artifact.path, mediaType: artifact.mediaType }]
+      : [],
+  );
+}
+
+async function appendToolArtifacts(row: HTMLDetailsElement, result: unknown): Promise<void> {
+  const workspace = activeWorkspace;
+  if (workspace === undefined) return;
+  const artifacts = toolArtifacts(result);
+  if (artifacts.length === 0) return;
+  const gallery = globalThis.document.createElement('div');
+  gallery.className = 'tool-artifacts';
+  for (const artifact of artifacts) {
+    const figure = globalThis.document.createElement('figure');
+    const image = globalThis.document.createElement('img');
+    const data = await workspace.readBytes(workspacePath(artifact.path));
+    const source = URL.createObjectURL(new Blob([ownedBuffer(data)], { type: artifact.mediaType }));
+    image.src = source;
+    image.alt = `Generated figure ${artifact.path}`;
+    image.addEventListener('load', () => URL.revokeObjectURL(source), { once: true });
+    image.addEventListener('error', () => URL.revokeObjectURL(source), { once: true });
+    const caption = globalThis.document.createElement('figcaption');
+    caption.textContent = artifact.path;
+    figure.append(image, caption);
+    gallery.append(figure);
+  }
+  row.insertAdjacentElement('afterend', gallery);
+}
+
+async function renderAgentEvent(event: CodexAgentEvent): Promise<void> {
   if (event.type === 'text') {
+    setActivityStatus('working', 'Writing response');
     if (activeAssistantMessage === undefined) {
       activeAssistantMessage = globalThis.document.createElement('div');
       activeAssistantMessage.className = 'chat-message assistant';
+      activeAssistantText = '';
       logElement.append(activeAssistantMessage);
     }
-    activeAssistantMessage.textContent = `${activeAssistantMessage.textContent}${event.text}`;
+    activeAssistantText += event.text;
+    renderMarkdown(activeAssistantMessage, activeAssistantText);
     logElement.scrollTop = logElement.scrollHeight;
     return;
   }
   activeAssistantMessage = undefined;
+  activeAssistantText = '';
   if (event.type === 'tool-start') {
+    const presentation = toolPresentation(event.operation, event.input);
+    setActivityStatus('working', presentation.title);
     const row = globalThis.document.createElement('details');
     row.className = 'tool-activity';
     const summary = globalThis.document.createElement('summary');
-    summary.textContent = toolLabel(event.operation, event.input);
+    const indicator = globalThis.document.createElement('span');
+    indicator.className = 'tool-indicator';
+    indicator.setAttribute('aria-hidden', 'true');
+    const copy = globalThis.document.createElement('span');
+    copy.className = 'tool-copy';
+    const title = globalThis.document.createElement('span');
+    title.className = 'tool-title';
+    title.textContent = presentation.title;
+    const description = globalThis.document.createElement('span');
+    description.className = 'tool-description';
+    description.textContent = presentation.description;
+    copy.append(title, description);
+    const state = globalThis.document.createElement('span');
+    state.className = 'tool-state';
+    state.textContent = 'Running';
+    summary.append(indicator, copy, state);
     const detail = globalThis.document.createElement('pre');
     detail.textContent = JSON.stringify(
       { operation: event.operation, input: event.input },
@@ -743,24 +1078,174 @@ function renderAgentEvent(event: CodexAgentEvent): void {
     const row = activeToolRows.get(event.callId);
     if (row !== undefined) {
       row.classList.add(isFailedToolResult(event.result) ? 'failed' : 'complete');
-      const summary = row.querySelector('summary');
-      if (summary !== null) {
-        summary.textContent = `${summary.textContent} ${
-          isFailedToolResult(event.result) ? '— retrying' : '— done'
-        }`;
+      const state = row.querySelector('.tool-state');
+      const exitCode = toolExitCode(event.result);
+      if (state !== null) {
+        state.textContent =
+          exitCode === undefined
+            ? isFailedToolResult(event.result)
+              ? 'Needs retry'
+              : 'Done'
+            : `Exited ${String(exitCode)}`;
       }
       const detail = row.querySelector('pre');
       if (detail !== null) {
         detail.textContent = `${detail.textContent}\n\nResult\n${JSON.stringify(event.result, null, 2)}`;
       }
+      await appendToolArtifacts(row, event.result);
       activeToolRows.delete(event.callId);
+      setActivityStatus('working', 'Thinking');
     }
+    return;
   }
+  setActivityStatus('working', 'Finishing');
 }
 
 async function disposeCodingSession(): Promise<void> {
   if (codingSession !== undefined) await codingSession.dispose();
   codingSession = undefined;
+}
+
+function renderConversationHistory(): void {
+  logElement.replaceChildren();
+  activeToolRows.clear();
+  activeAssistantMessage = undefined;
+  activeAssistantText = '';
+  if (activeConversation === undefined) return;
+  modelInput.value = activeConversation.model;
+  for (const entry of activeConversation.transcript) {
+    if (entry.role === 'user') appendUserMessage(entry.content);
+    else appendLog(entry.content, 'assistant');
+  }
+}
+
+function sortedConversations(
+  values: readonly WorkspaceConversation[],
+): readonly WorkspaceConversation[] {
+  return Object.freeze([...values].sort((left, right) => right.updatedAt - left.updatedAt));
+}
+
+function replaceConversation(conversation: WorkspaceConversation): void {
+  conversations = sortedConversations([
+    conversation,
+    ...conversations.filter((candidate) => candidate.id !== conversation.id),
+  ]);
+  activeConversation = conversation;
+}
+
+function renderConversationList(): void {
+  conversationList.replaceChildren();
+  if (conversations.length === 0) {
+    const item = globalThis.document.createElement('li');
+    item.textContent = 'No saved conversations.';
+    conversationList.append(item);
+    updateControls();
+    return;
+  }
+  for (const conversation of conversations) {
+    const item = globalThis.document.createElement('li');
+    const button = globalThis.document.createElement('button');
+    button.type = 'button';
+    button.textContent = conversation.title;
+    button.title = conversation.title;
+    button.setAttribute(
+      'aria-current',
+      conversation.id === activeConversation?.id ? 'true' : 'false',
+    );
+    button.addEventListener('click', () => {
+      void selectConversation(conversation.id).catch((error: unknown) => {
+        setStatus(`Conversation failed: ${errorMessage(error)}`);
+      });
+    });
+    item.append(button);
+    conversationList.append(item);
+  }
+  updateControls();
+}
+
+async function selectConversation(id: string): Promise<void> {
+  const selected = conversations.find((conversation) => conversation.id === id);
+  if (selected === undefined || selected.id === activeConversation?.id) return;
+  await disposeCodingSession();
+  activeConversation = selected;
+  renderConversationHistory();
+  renderConversationList();
+  setStatus(`Conversation “${selected.title}” loaded.`);
+}
+
+async function loadConversationState(workspace: ProjectWorkspace): Promise<void> {
+  await disposeCodingSession();
+  conversations = await loadWorkspaceConversations(workspace);
+  activeConversation = conversations[0];
+  renderConversationHistory();
+  renderConversationList();
+}
+
+async function createNewConversation(): Promise<void> {
+  const workspace = activeWorkspace;
+  if (workspace === undefined) throw new Error('Open a workspace first.');
+  if (!canWriteWorkspace()) throw new Error('Enable workspace write access to save conversations.');
+  await disposeCodingSession();
+  const conversation = createWorkspaceConversation({ model: modelInput.value.trim() });
+  await saveWorkspaceConversation(workspace, conversation);
+  replaceConversation(conversation);
+  renderConversationHistory();
+  renderConversationList();
+  await persistOpfsWorkspace();
+  setStatus('New conversation created in .loom/conversations.');
+}
+
+async function persistActiveConversation(): Promise<void> {
+  const workspace = activeWorkspace;
+  const session = codingSession;
+  const conversation = activeConversation;
+  if (workspace === undefined || session === undefined || conversation === undefined) return;
+  const updated = updateWorkspaceConversation(
+    conversation,
+    session.transcript,
+    modelInput.value.trim(),
+  );
+  replaceConversation(updated);
+  if (canWriteWorkspace()) await saveWorkspaceConversation(workspace, updated);
+  renderConversationList();
+}
+
+async function deleteActiveConversation(): Promise<void> {
+  const workspace = activeWorkspace;
+  const conversation = activeConversation;
+  if (workspace === undefined || conversation === undefined) return;
+  if (!canWriteWorkspace()) throw new Error('Enable workspace write access first.');
+  if (!globalThis.confirm(`Delete the conversation “${conversation.title}”?`)) return;
+  await disposeCodingSession();
+  await removeWorkspaceConversation(workspace, conversation.id);
+  conversations = conversations.filter((candidate) => candidate.id !== conversation.id);
+  activeConversation = conversations[0];
+  renderConversationHistory();
+  renderConversationList();
+  await persistOpfsWorkspace();
+  setStatus('Conversation deleted.');
+}
+
+async function cleanWorkspaceLoomDirectory(): Promise<void> {
+  const workspace = activeWorkspace;
+  if (workspace === undefined) return;
+  if (!canWriteWorkspace()) throw new Error('Enable workspace write access first.');
+  if (
+    !globalThis.confirm(
+      'Remove the entire .loom folder, including all saved conversations and generated figures?',
+    )
+  ) {
+    return;
+  }
+  await disposeCodingSession();
+  await cleanLoomDirectory(workspace);
+  conversations = Object.freeze([]);
+  activeConversation = undefined;
+  renderConversationHistory();
+  renderConversationList();
+  await persistOpfsWorkspace();
+  await renderFiles();
+  setStatus('.loom was removed from the workspace.');
 }
 
 async function opfsArchiveFile(create: boolean): Promise<FileSystemFileHandle> {
@@ -801,7 +1286,7 @@ async function openWorkspace(): Promise<ProjectWorkspace> {
   selectedFile = undefined;
   const mode = workspaceMode.value;
   if (mode === 'direct') {
-    const root = await directoryPicker()({ mode: 'readwrite' });
+    const root = await directoryPicker()({ mode: canWriteWorkspace() ? 'readwrite' : 'read' });
     activeWorkspace = createFileSystemAccessProjectWorkspace(root);
     activeWorkspaceMode = 'direct';
   } else if (mode === 'opfs') {
@@ -811,6 +1296,7 @@ async function openWorkspace(): Promise<ProjectWorkspace> {
     activeWorkspace = createMemoryProjectWorkspace();
     activeWorkspaceMode = 'memory';
   }
+  await loadConversationState(activeWorkspace);
   await renderFiles();
   updateControls();
   setStatus(`Workspace opened in ${activeWorkspaceMode} mode.`);
@@ -829,8 +1315,16 @@ async function renderFiles(): Promise<void> {
     fileList.append(item);
     return;
   }
+  if (!canReadWorkspace()) {
+    const item = globalThis.document.createElement('li');
+    item.textContent = 'Read access disabled.';
+    fileList.append(item);
+    return;
+  }
   const entries = await snapshotWorkspace(activeWorkspace);
-  const files = entries.filter((entry) => entry.kind === 'file');
+  const files = entries.filter(
+    (entry) => entry.kind === 'file' && !entry.path.startsWith('.loom/'),
+  );
   if (files.length === 0) {
     const item = globalThis.document.createElement('li');
     item.textContent = 'Workspace is empty.';
@@ -851,7 +1345,7 @@ async function renderFiles(): Promise<void> {
 }
 
 async function selectEditorFile(path: WorkspacePath): Promise<void> {
-  if (activeWorkspace === undefined) return;
+  if (activeWorkspace === undefined || !canReadWorkspace()) return;
   try {
     editor.value = await activeWorkspace.readFile(path);
     selectedFile = path;
@@ -865,25 +1359,34 @@ async function selectEditorFile(path: WorkspacePath): Promise<void> {
   }
 }
 
-function workspaceTools(workspace: ProjectWorkspace): readonly WorkspaceTool[] {
-  const basic = createWorkspaceTools(workspace);
+function workspaceTools(workspace: ProjectWorkspace): readonly CodexAgentTool[] {
+  const [listFiles, readFile, writeFile] = createWorkspaceTools(workspace);
   const project = createProjectWorkspaceTools(workspace);
-  return Object.freeze([
-    ...basic,
-    project.stat,
-    project.createDirectory,
-    project.move,
-    project.remove,
-    project.applyPatch,
-  ]);
+  const browserToolOptions = {
+    workspace,
+    runtimes: executionRuntimes,
+    writeBack: canWriteWorkspace(),
+    persist: persistOpfsWorkspace,
+  } as const;
+  const tools: CodexAgentTool[] = [];
+  if (canReadWorkspace()) tools.push(listFiles, readFile);
+  if (canWriteWorkspace()) tools.push(writeFile);
+  if (canReadWorkspace()) tools.push(project.stat);
+  if (canWriteWorkspace())
+    tools.push(project.createDirectory, project.move, project.remove, project.applyPatch);
+  if (canReadWorkspace()) tools.push(createBrowserRunFileTool(browserToolOptions));
+  if (canWriteWorkspace()) tools.push(createBrowserInstallPackagesTool(browserToolOptions));
+  return Object.freeze(tools);
 }
 
 function sessionFor(workspace: ProjectWorkspace): CodingSession {
   if (codingSession !== undefined) return codingSession;
   const model = modelInput.value.trim();
   if (model === '') throw new Error('Model is required.');
+  const runSessionId = currentRunSessionId();
   codingSession = createCodingSession({
-    id: RUN_SESSION_ID,
+    id: runSessionId,
+    transcript: activeConversation?.transcript ?? [],
     model: createCodexExperimentalModel({
       model,
       wireProtocol: model.startsWith('gpt-5.6') ? 'responses-lite' : 'classic',
@@ -893,8 +1396,8 @@ function sessionFor(workspace: ProjectWorkspace): CodingSession {
       fetch: directFirstModelFetch,
       originator: 'loom_page_experiment',
       headers: {
-        'session-id': RUN_SESSION_ID,
-        'thread-id': RUN_SESSION_ID,
+        'session-id': runSessionId,
+        'thread-id': runSessionId,
         version: 'loom.js/0.1.0',
       },
     }),
@@ -902,7 +1405,7 @@ function sessionFor(workspace: ProjectWorkspace): CodingSession {
     configuration: {
       maxTurns: 12,
       instructions:
-        'Complete the coding request accurately. Inspect files before editing. Prefer exact unified patches for existing text files. Tool failures are returned as structured results: inspect the error, re-read current content when needed, and retry with corrected input. Never remove directories recursively unless the user explicitly requested it.',
+        'Complete the coding request accurately. Inspect files before editing. Prefer exact unified patches for existing text files. When the user asks you to run or verify a .py file, call website/run-workspace-file with runtime python; Loom routes it to Pyodide automatically. Report only captured output and never extrapolate execution results. NumPy and Matplotlib are already loaded by default and must not be installed. Generated Matplotlib figures are returned as image artifacts. Install only genuinely missing Python or Node dependencies with website/install-runtime-packages before retrying. Tool failures are structured results: inspect the error, re-read current content when needed, and retry with corrected input. Never remove directories recursively unless the user explicitly requested it.',
     },
   });
   return codingSession;
@@ -912,85 +1415,48 @@ async function runAgent(): Promise<void> {
   runButton.disabled = true;
   checkAuthButton.disabled = true;
   cancelRunButton.disabled = false;
+  allowReadInput.disabled = true;
+  allowWriteInput.disabled = true;
   try {
     const workspace = await ensureWorkspace();
     const prompt = promptInput.value.trim();
     if (prompt === '') throw new Error('Agent request is required.');
+    if (activeConversation === undefined) {
+      const conversation = createWorkspaceConversation({ model: modelInput.value.trim() });
+      replaceConversation(conversation);
+      if (canWriteWorkspace()) await saveWorkspaceConversation(workspace, conversation);
+      renderConversationList();
+    }
     const session = sessionFor(workspace);
     appendUserMessage(prompt);
     promptInput.value = '';
     activeAssistantMessage = undefined;
+    activeAssistantText = '';
     setStatus('Working…');
+    setActivityStatus('working', 'Thinking');
     const events =
       session.transcript.length === 0 ? session.submit(prompt) : session.followUp(prompt);
-    for await (const event of events) renderAgentEvent(event);
+    for await (const event of events) await renderAgentEvent(event);
+    await persistActiveConversation();
     await persistOpfsWorkspace();
     await renderFiles();
     setStatus('Run complete.');
+    setActivityStatus('idle', 'Ready');
   } catch (error) {
+    try {
+      await persistActiveConversation();
+      await persistOpfsWorkspace();
+    } catch {
+      // Preserve the original agent error; a later successful turn can retry persistence.
+    }
     appendLog(errorMessage(error), 'error');
     setStatus('Run failed. You can revise the request and try again.');
+    setActivityStatus('error', 'Needs attention');
   } finally {
     checkAuthButton.disabled = false;
     cancelRunButton.disabled = true;
     updateControls();
   }
-}
-
-function excludedRuntimePath(path: string): boolean {
-  return path
-    .split('/')
-    .some((segment) =>
-      ['node_modules', '.venv', '__pycache__', '.pytest_cache', '.cache'].includes(segment),
-    );
-}
-
-function executionWorkspace(workspace: ProjectWorkspace): BrowserExecutionWorkspace {
-  return Object.freeze({
-    async load() {
-      const entries = await snapshotWorkspace(workspace);
-      return Object.freeze({
-        directories: entries
-          .filter((entry) => entry.kind === 'directory' && !excludedRuntimePath(entry.path))
-          .map((entry) => entry.path),
-        files: entries.flatMap((entry) =>
-          entry.kind === 'file' && !excludedRuntimePath(entry.path)
-            ? [{ path: entry.path, data: entry.content }]
-            : [],
-        ),
-      });
-    },
-    async commit(project: BrowserExecutionProject) {
-      const desiredDirectories = new Set(
-        (project.directories ?? []).filter((path) => !excludedRuntimePath(path)),
-      );
-      const desiredFiles = new Map(
-        project.files
-          .filter((file) => !excludedRuntimePath(file.path))
-          .map((file) => [file.path, file.data] as const),
-      );
-      const current = await snapshotWorkspace(workspace);
-      for (const entry of [...current].sort(
-        (left, right) => right.path.length - left.path.length,
-      )) {
-        const keep =
-          entry.kind === 'directory'
-            ? desiredDirectories.has(entry.path)
-            : desiredFiles.has(entry.path);
-        if (!keep && !excludedRuntimePath(entry.path)) {
-          await workspace.remove(
-            entry.path,
-            entry.kind === 'directory' ? { recursive: true } : undefined,
-          );
-        }
-      }
-      const entries: WorkspaceImportEntry[] = [
-        ...[...desiredDirectories].map((path) => ({ path, kind: 'directory' as const })),
-        ...[...desiredFiles].map(([path, content]) => ({ path, kind: 'file' as const, content })),
-      ];
-      await importWorkspaceEntries(workspace, entries, { overwrite: true });
-    },
-  });
 }
 
 function commandParts(value: string): readonly string[] {
@@ -1003,26 +1469,26 @@ function commandParts(value: string): readonly string[] {
 }
 
 async function runCommand(): Promise<void> {
+  if (!canReadWorkspace()) throw new Error('Enable workspace read access before running code.');
   const workspace = await ensureWorkspace();
-  const runtime = executionRuntimes[runtimeSelect.value];
-  if (runtime === undefined) throw new Error('Unknown browser runtime.');
+  const runtimeId = runtimeSelect.value;
+  if (runtimeId !== 'quickjs' && runtimeId !== 'node' && runtimeId !== 'python') {
+    throw new Error('Unknown browser runtime.');
+  }
+  const runtime = executionRuntimes[runtimeId];
   const [command, ...arguments_] = commandParts(commandInput.value.trim());
   if (command === undefined) throw new Error('Enter a command.');
-  if (
-    activeWorkspaceMode === 'direct' &&
-    !globalThis.confirm(
-      'Allow this browser runtime to write changes back to the selected directory?',
-    )
-  )
-    return;
   runtimeOutput.textContent = '';
   runtimeCancellation = createCancellationSource();
+  setActivityStatus('working', `Running ${runtime.kind}`);
   runCommandButton.disabled = true;
   cancelRunButton.disabled = false;
+  allowReadInput.disabled = true;
+  allowWriteInput.disabled = true;
   try {
     const result = await executeBrowserWorkspace(
       runtime,
-      executionWorkspace(workspace),
+      createBrowserExecutionWorkspace(workspace, { writeBack: canWriteWorkspace() }),
       { command, arguments: arguments_, timeoutMs: 60_000 },
       {
         signal: runtimeCancellation.signal,
@@ -1032,6 +1498,7 @@ async function runCommand(): Promise<void> {
     appendRuntimeOutput(`\nProcess exited with code ${String(result.exitCode)}.\n`);
     await persistOpfsWorkspace();
     await renderFiles();
+    setActivityStatus('idle', 'Ready');
   } finally {
     runtimeCancellation = undefined;
     cancelRunButton.disabled = true;
@@ -1044,11 +1511,13 @@ checkAuthButton.addEventListener('click', () => {
     authenticated = false;
     updateControls();
     setStatus(`Connection failed: ${errorMessage(error)}`);
+    setActivityStatus('error', 'Connection failed');
   });
 });
 
 logoutButton.addEventListener('click', () => {
   logoutButton.disabled = true;
+  setActivityStatus('working', 'Signing out');
   void authProvider()
     .logout()
     .then(async () => {
@@ -1056,7 +1525,10 @@ logoutButton.addEventListener('click', () => {
       await disposeCodingSession();
       return refreshAuthenticationStatus();
     })
-    .catch((error: unknown) => setStatus(`Logout failed: ${errorMessage(error)}`));
+    .catch((error: unknown) => {
+      setStatus(`Logout failed: ${errorMessage(error)}`);
+      setActivityStatus('error', 'Logout failed');
+    });
 });
 
 runButton.addEventListener('click', () => void runAgent());
@@ -1078,14 +1550,66 @@ workspaceMode.addEventListener('change', () => {
   activeWorkspace = undefined;
   activeWorkspaceMode = undefined;
   selectedFile = undefined;
+  conversations = Object.freeze([]);
+  activeConversation = undefined;
+  renderConversationHistory();
+  renderConversationList();
   void disposeCodingSession()
     .then(() => renderFiles())
     .then(updateControls);
+});
+const applyAccessPolicy = (): void => {
+  if (!allowReadInput.checked) allowWriteInput.checked = false;
+  selectedFile = undefined;
+  if (activeWorkspaceMode === 'direct') {
+    activeWorkspace = undefined;
+    activeWorkspaceMode = undefined;
+    conversations = Object.freeze([]);
+    activeConversation = undefined;
+    renderConversationHistory();
+    renderConversationList();
+    setStatus('Workspace access changed. Reopen the local folder to apply it.');
+  } else {
+    setStatus(
+      `Workspace policy: ${canWriteWorkspace() ? 'read and write' : canReadWorkspace() ? 'read-only' : 'disabled'}.`,
+    );
+  }
+  void disposeCodingSession()
+    .then(async () => {
+      if (activeWorkspace !== undefined && canReadWorkspace()) {
+        await loadConversationState(activeWorkspace);
+      } else if (!canReadWorkspace()) {
+        conversations = Object.freeze([]);
+        activeConversation = undefined;
+        renderConversationHistory();
+        renderConversationList();
+      }
+      await renderFiles();
+    })
+    .then(updateControls);
+};
+allowReadInput.addEventListener('change', applyAccessPolicy);
+allowWriteInput.addEventListener('change', applyAccessPolicy);
+newConversationButton.addEventListener('click', () => {
+  void createNewConversation().catch((error: unknown) => {
+    setStatus(`Conversation failed: ${errorMessage(error)}`);
+  });
+});
+deleteConversationButton.addEventListener('click', () => {
+  void deleteActiveConversation().catch((error: unknown) => {
+    setStatus(`Conversation deletion failed: ${errorMessage(error)}`);
+  });
+});
+cleanLoomButton.addEventListener('click', () => {
+  void cleanWorkspaceLoomDirectory().catch((error: unknown) => {
+    setStatus(`.loom cleanup failed: ${errorMessage(error)}`);
+  });
 });
 importFolderButton.addEventListener('click', () => folderInput.click());
 importZipButton.addEventListener('click', () => zipInput.click());
 folderInput.addEventListener('change', () => {
   void (async () => {
+    if (!canWriteWorkspace()) throw new Error('Enable workspace write access before importing.');
     const workspace = await ensureWorkspace();
     await importBrowserFolderFiles(workspace, Array.from(folderInput.files ?? []), {
       overwrite: true,
@@ -1097,6 +1621,7 @@ folderInput.addEventListener('change', () => {
 });
 zipInput.addEventListener('change', () => {
   void (async () => {
+    if (!canWriteWorkspace()) throw new Error('Enable workspace write access before importing.');
     const file = zipInput.files?.[0];
     if (file === undefined) return;
     const workspace = await ensureWorkspace();
@@ -1110,6 +1635,7 @@ zipInput.addEventListener('change', () => {
 });
 exportZipButton.addEventListener('click', () => {
   void (async () => {
+    if (!canReadWorkspace()) throw new Error('Enable workspace read access before exporting.');
     const workspace = await ensureWorkspace();
     const blob = new Blob([ownedBuffer(await exportWorkspaceZip(workspace))], {
       type: 'application/zip',
@@ -1124,6 +1650,7 @@ exportZipButton.addEventListener('click', () => {
 });
 saveFileButton.addEventListener('click', () => {
   void (async () => {
+    if (!canWriteWorkspace()) throw new Error('Enable workspace write access before saving.');
     if (activeWorkspace === undefined || selectedFile === undefined) return;
     await activeWorkspace.writeFile(selectedFile, editor.value);
     await persistOpfsWorkspace();
@@ -1133,6 +1660,7 @@ saveFileButton.addEventListener('click', () => {
 runCommandButton.addEventListener('click', () => {
   void runCommand().catch((error: unknown) => {
     appendRuntimeOutput(`Error: ${errorMessage(error)}\n`);
+    setActivityStatus('error', 'Command failed');
     updateControls();
   });
 });
@@ -1155,11 +1683,13 @@ extensionIdInput.addEventListener('change', () => {
       authenticated = false;
       updateControls();
       setStatus(`Connection failed: ${errorMessage(error)}`);
+      setActivityStatus('error', 'Connection failed');
     });
   }
 });
 
 setTransportMode(storedTransportMode());
+setActivityStatus('idle', 'Ready');
 updateControls();
 if (EXTENSION_ID_PATTERN.test(extensionIdInput.value.trim())) {
   setStatus('Connecting to extension…');
@@ -1167,5 +1697,6 @@ if (EXTENSION_ID_PATTERN.test(extensionIdInput.value.trim())) {
     authenticated = false;
     updateControls();
     setStatus(`Connection failed: ${errorMessage(error)}`);
+    setActivityStatus('error', 'Connection failed');
   });
 }

@@ -381,15 +381,58 @@ try {
   await runtime.dispose();
 }</code></pre>
           </div>
-          <div class="callout warning">
-            <strong>Generic registration is not automatic model exposure</strong>
+          <div class="callout">
+            <strong>Model-callable website tools</strong>
             <p>
-              Core can discover and execute this tool, but the current Codex coding agent accepts a
-              fixed, audited set of workspace operations. Making arbitrary tools model-callable
-              still requires a future schema-bearing tool contract and per-tool authorization
-              policy. Do not add a tool to a prompt and assume it is enforced.
+              Core capability registration and model exposure remain separate decisions. To let the
+              coding agent use website behavior, pass a <code>CodexTool</code> with a unique
+              namespaced operation, precise description, JSON input/output schemas, caller policy,
+              and application-owned executor to <code>createCodingSession()</code>.
             </p>
           </div>
+          <div class="code-block">
+            <div class="code-title">Expose page behavior to the agent</div>
+            <pre><code>import type { CodexTool } from '@loom/agent-codex';
+
+const selectedProductTool: CodexTool = Object.freeze({
+  name: 'selected_product',
+  operation: 'shop/selected-product',
+  description: 'Read the product selected in the website UI.',
+  inputSchema: {
+    type: 'object',
+    properties: {},
+    additionalProperties: false,
+  },
+  outputSchema: {
+    type: 'object',
+    properties: {
+      id: { type: 'string' },
+      title: { type: 'string' },
+      price: { type: 'number' },
+    },
+    required: ['id', 'title', 'price'],
+    additionalProperties: false,
+  },
+  allowedCallers: ['direct'],
+  async execute(input, context) {
+    context?.signal?.throwIfCancelled();
+    if (Object.keys(input).length !== 0) {
+      throw new TypeError('No input is accepted.');
+    }
+    return readSelectedProductFromPage();
+  },
+});
+
+const session = createCodingSession({
+  model,
+  tools: [...modelTools, selectedProductTool],
+});</code></pre>
+          </div>
+          <p>
+            Custom tools default to direct model calls. Grant programmatic access only when a hosted
+            model program should receive that authority. The executor must still validate exact
+            untrusted input and return JSON-safe output.
+          </p>
         </section>
 
         <section class="doc-section" id="models">
@@ -475,19 +518,39 @@ try {
             <li><strong>QuickJS:</strong> small JavaScript execution with a virtual project.</li>
             <li>
               <strong>WebContainer:</strong> Node.js-compatible execution; requires COOP/COEP
-              hosting headers.
+              hosting headers. The package tool runs npm and restores dependencies from
+              <code>package.json</code> before later Node entrypoints.
             </li>
             <li>
-              <strong>Pyodide:</strong> Python/WASM execution; prefer a Worker when hard UI
-              responsiveness matters.
+              <strong>Pyodide:</strong> Python/WASM execution with NumPy and Matplotlib loaded by
+              default, plus compatible package installation through micropip.
             </li>
           </ul>
           <p>
-            The browser execution API currently runs directly. A reusable adapter between
-            <code>ProjectWorkspace</code> and <code>BrowserExecutionWorkspace</code>, plus an
-            event-stream adapter for <code>CodingSession.runtimes</code>, remain future library
-            work. The workbench contains the application-level synchronization logic used by the
-            example.
+            The workbench exposes execution and package installation through schema-described
+            website tools. Pyodide saves open Matplotlib figures as PNG artifacts under
+            <code>.loom/figures/</code>, and the conversation displays them below the completed tool
+            row. Node dependency metadata persists, while <code>node_modules</code> and runtime
+            caches remain outside the project snapshot.
+          </p>
+          <p>
+            The selected workspace can also keep multiple resumable chats under
+            <code>.loom/conversations/</code>. Sidebar controls create and switch chats, delete the
+            selected chat, or clean all <code>.loom</code> metadata after confirmation. Conversation
+            records are not copied into execution runtimes.
+          </p>
+          <div class="callout warning">
+            <strong>Installed packages are untrusted code</strong>
+            <p>
+              Package inputs are limited to bounded registry requirements, but npm lifecycle scripts
+              and imported Python packages still execute inside their isolated runtime. Pyodide
+              accepts pure-Python or compatible WebAssembly wheels; WebContainer cannot load normal
+              native Node addons.
+            </p>
+          </div>
+          <p>
+            Prefer a Worker for generated QuickJS or Pyodide code when hard UI responsiveness
+            matters. WebContainer requires the documented cross-origin isolation headers.
           </p>
         </section>
 
@@ -546,8 +609,9 @@ python3 -m http.server 4173 --directory packages</code></pre>
               API.
             </li>
             <li>
-              Require explicit confirmation before writing runtime changes back to a selected
-              directory.
+              Choose read or read/write access in the sidebar before opening a direct folder. Chrome
+              asks once when the folder opens; later runs follow that policy without repeat prompts.
+              Read-only runtime filesystem changes are discarded.
             </li>
             <li>
               Keep hosted model programs read-only. Mutations must be direct, validated tool calls.
@@ -567,12 +631,13 @@ python3 -m http.server 4173 --directory packages</code></pre>
           <ul>
             <li>Workspace packages are private and unpublished.</li>
             <li>
-              The Codex coding agent does not yet accept arbitrary schema-bearing model tools.
+              Generic schema-bearing tools are agent-callable, but each application still owns tool
+              discovery, user authorization, input validation, and UI presentation.
             </li>
             <li>
-              Browser execution and coding-session runtime contracts still need a public bridge.
+              The browser run-file tool and ProjectWorkspace synchronization are example-owned
+              rather than a general execution policy in the agent package.
             </li>
-            <li>ProjectWorkspace-to-runtime snapshot synchronization is local to the workbench.</li>
             <li>
               The ChatGPT/Codex extension integration is unsupported compatibility work, not a
               documented public OAuth contract.

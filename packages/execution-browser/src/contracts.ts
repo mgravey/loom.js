@@ -43,6 +43,13 @@ export interface BrowserExecutionContext {
 export interface BrowserExecutionResult {
   readonly exitCode: number;
   readonly project: BrowserExecutionProject;
+  /** Files produced for host presentation, such as rendered figures. */
+  readonly artifacts?: readonly BrowserExecutionArtifact[];
+}
+
+export interface BrowserExecutionArtifact {
+  readonly path: string;
+  readonly mediaType: string;
 }
 
 export interface BrowserExecutionRuntime {

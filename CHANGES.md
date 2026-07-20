@@ -49,6 +49,25 @@ This project follows a lightweight milestone changelog while packages remain pri
   chat-first layout with compact, collapsible tool activity and hidden-by-default local utilities.
 - Recoverable workspace-tool failures are returned to the model as structured results so it can
   inspect the error and retry instead of aborting the coding run.
+- Tool activity now uses human-readable titles, purpose descriptions, running/completed states, and
+  a conversation-level progress indicator. Long responses scroll independently so the composer
+  remains fixed and ready for follow-up commands.
+- Assistant Markdown now renders as structured headings, lists, inline code, and compact code/output
+  panels with copy controls instead of exposing literal backtick fences in the conversation.
+- Workspaces can persist multiple resumable chats under `.loom/conversations/`. The workbench adds
+  conversation switching, creation, individual deletion, and a confirmed full `.loom` cleanup;
+  runtime sandboxes neither receive nor overwrite saved conversation records.
+- `@loom/agent-codex` and `@loom/coding` now accept application-defined, namespaced `CodexTool`
+  operations with model-facing JSON schemas, descriptions, output schemas, caller policies, and
+  website-owned executors.
+- The workbench exposes QuickJS, WebContainer Node.js, and Pyodide Python as an agent-callable
+  run-file tool with bounded captured output and workspace write-back. Pyodide resolves bundled
+  packages from entrypoint imports before execution.
+- Pyodide now preloads NumPy and Matplotlib, installs additional compatible registry requirements
+  with micropip, and exports open Matplotlib figures as PNG artifacts rendered in the chat.
+- A model-callable package tool installs Node dependencies with npm and persists dependency
+  metadata. WebContainer restores those dependencies before Node execution while excluding
+  `node_modules` and caches from project write-back.
 
 ### Security
 
@@ -63,8 +82,10 @@ This project follows a lightweight milestone changelog while packages remain pri
   copies.
 - Browser runtimes accept no environment map, credentials, headers, cookies, or host fetch adapter.
   Runtime caches such as `node_modules`, `.venv`, and `__pycache__` are excluded from write-back.
-- Direct-directory runtime write-back requires an explicit confirmation. ZIP import is atomic and
-  bounded, and unified patches use exact context with no fuzzy matching.
+- Direct-directory runtime execution uses the read or read/write permission selected when the folder
+  opens, without an additional prompt for every run. Visible sidebar controls shape the agent tool
+  set; read-only runtime changes are discarded. ZIP import remains atomic and bounded, and unified
+  patches use exact context with no fuzzy matching.
 
 ### Changed
 

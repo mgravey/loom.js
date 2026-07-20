@@ -81,6 +81,11 @@
               in a request.
             </li>
             <li>
+              <strong>Workspace conversation history:</strong> resumable transcripts saved only in
+              the user-selected workspace under <code>.loom/conversations/</code>. Sidebar deletion
+              controls remove one conversation or all Loom-owned workspace metadata.
+            </li>
+            <li>
               <strong>Operational information:</strong> extension version, enabled/authenticated
               state, request identifiers, bounded byte counts, and sanitized error codes required to
               run or troubleshoot the bridge.
@@ -222,7 +227,10 @@
               The user chooses which project directory or uploaded archive the website may access.
             </li>
             <li>
-              Browser runtime write-back to a selected directory requires separate confirmation.
+              The sidebar selects read or read/write access before a direct folder opens. Chrome
+              requests that permission when the folder is selected; later agent and browser-runtime
+              operations follow it without another prompt for every run. Read-only execution
+              discards filesystem changes.
             </li>
           </ul>
         </section>

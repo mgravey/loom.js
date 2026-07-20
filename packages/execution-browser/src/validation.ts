@@ -152,7 +152,32 @@ export function copyResult(value: BrowserExecutionResult): BrowserExecutionResul
   if (!Number.isSafeInteger(value.exitCode) || value.exitCode < 0 || value.exitCode > 255) {
     throw new BrowserExecutionError('EXECUTION_FAILED', 'Runtime returned an invalid exit code.');
   }
-  return Object.freeze({ exitCode: value.exitCode, project: copyProject(value.project) });
+  const project = copyProject(value.project);
+  const projectFiles = new Set(project.files.map((file) => file.path));
+  const artifacts = (value.artifacts ?? []).map((artifact) => {
+    if (
+      !record(artifact) ||
+      !exactKeys(artifact, ['path', 'mediaType']) ||
+      typeof artifact.mediaType !== 'string' ||
+      artifact.mediaType.length === 0 ||
+      artifact.mediaType.length > 256
+    ) {
+      throw new BrowserExecutionError('EXECUTION_FAILED', 'Runtime returned an invalid artifact.');
+    }
+    const path = executionPath(artifact.path);
+    if (!projectFiles.has(path)) {
+      throw new BrowserExecutionError(
+        'EXECUTION_FAILED',
+        `Runtime artifact '${path}' is not present in the resulting project.`,
+      );
+    }
+    return Object.freeze({ path, mediaType: artifact.mediaType });
+  });
+  return Object.freeze({
+    exitCode: value.exitCode,
+    project,
+    ...(artifacts.length === 0 ? {} : { artifacts: Object.freeze(artifacts) }),
+  });
 }
 
 export function emitOutput(

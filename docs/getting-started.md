@@ -60,8 +60,8 @@ import {
   createProjectWorkspaceTools,
   createWorkspaceTools,
   workspacePath,
-  type WorkspaceTool,
 } from '@loom/tool-workspace';
+import type { CodexAgentTool } from '@loom/agent-codex';
 
 const workspace = createMemoryProjectWorkspace({
   entries: [
@@ -75,7 +75,7 @@ const workspace = createMemoryProjectWorkspace({
 });
 
 const projectTools = createProjectWorkspaceTools(workspace);
-const modelTools: readonly WorkspaceTool[] = Object.freeze([
+const modelTools: readonly CodexAgentTool[] = Object.freeze([
   ...createWorkspaceTools(workspace),
   projectTools.stat,
   projectTools.createDirectory,
@@ -248,12 +248,51 @@ Registration is allowed only during the owning plugin's `initialize` hook. Tool 
 validate exact input shapes, honor cancellation, return JSON-safe values, and expose the smallest
 possible authority.
 
-### Current model-tool limitation
+### Make a website tool model-callable
 
-Generic Core registration does not automatically expose a tool to the coding model. The current
-`@loom/coding` session uses `@loom/agent-codex`, which accepts an audited, fixed set of workspace
-operations and schemas. A future schema-bearing model-tool contract must generalize this safely,
-including unique operation IDs and per-tool direct/programmatic authorization.
+Core capability registration and model exposure are separate decisions. Pass a `CodexTool` to the
+coding session when the agent should be able to call application behavior:
+
+```ts
+import type { CodexTool } from '@loom/agent-codex';
+
+const selectedProductTool: CodexTool = Object.freeze({
+  name: 'selected_product',
+  operation: 'shop/selected-product',
+  description: 'Read the product currently selected in the website UI.',
+  inputSchema: {
+    type: 'object',
+    properties: {},
+    additionalProperties: false,
+  },
+  outputSchema: {
+    type: 'object',
+    properties: {
+      id: { type: 'string' },
+      title: { type: 'string' },
+      price: { type: 'number' },
+    },
+    required: ['id', 'title', 'price'],
+    additionalProperties: false,
+  },
+  allowedCallers: ['direct'],
+  async execute(input, context) {
+    context?.signal?.throwIfCancelled();
+    if (Object.keys(input).length !== 0) throw new TypeError('No input is accepted.');
+    return readSelectedProductFromPage();
+  },
+});
+
+const session = createCodingSession({
+  model,
+  tools: [...modelTools, selectedProductTool],
+});
+```
+
+The operation must be unique and namespaced. `description`, `inputSchema`, and optional
+`outputSchema` are forwarded to the model. Custom tools default to direct calls; list `programmatic`
+only when a hosted model program should receive that authority. The executor remains the security
+boundary and must validate exact input, honor cancellation, and return JSON-safe data.
 
 ## 7. Connect a secure model transport
 
@@ -326,14 +365,22 @@ The package also supplies WebContainer and Pyodide adapters. WebContainer requir
 headers. Prefer dedicated Workers for generated QuickJS or Pyodide code when hard UI responsiveness
 matters.
 
-Two bridges remain application-local today:
+Pyodide loads NumPy and Matplotlib by default. The workbench's package tool invokes `micropip` for
+additional compatible Pyodide or PyPI wheel requirements. Open Matplotlib figures use the
+noninteractive Agg backend, are saved under `.loom/figures/`, returned as typed image artifacts, and
+rendered in the conversation.
 
-- conversion between `ProjectWorkspace` and `BrowserExecutionWorkspace`; and
-- conversion from promise-based `BrowserExecutionRuntime` to the event-stream runtime accepted by
-  `CodingSession.runtimes`.
+The Node package tool runs `npm install --save` inside WebContainer. Dependency metadata and the
+lockfile are synchronized back, while `node_modules` remains runtime-only. A later Node run detects
+`package.json` and restores its dependencies before starting the entrypoint. Package lifecycle code
+is untrusted even inside an isolated runtime; review dependencies before granting direct-directory
+write-back.
 
-The browser workbench implements both integration responsibilities locally without passing
-credentials into a runtime.
+The browser workbench demonstrates an application-owned `CodexTool` that converts a
+`ProjectWorkspace` snapshot into a `BrowserExecutionRuntime` request. This makes QuickJS, Node.js,
+and Python execution agent-callable without moving browser runtime policy into the agent package or
+passing credentials into a runtime. Applications can reuse that pattern for their own execution
+host, preview renderer, test service, search index, or website API.
 
 ## 9. Run the welcome site and workbench
 
@@ -363,7 +410,9 @@ development or production server before selecting the Node.js runtime.
   runtime environments, events, or logs.
 - Treat model responses, extension messages, imported folders, and ZIPs as untrusted input.
 - Use Loom's bounded ZIP validators instead of extracting uploads directly.
-- Require confirmation before committing runtime changes to a selected directory.
+- Choose read or read/write access before opening a direct directory. Chrome prompts when the folder
+  opens; later runs follow the visible sidebar policy without repeat prompts. Read-only runs discard
+  runtime filesystem changes.
 - Keep hosted model programs read-only; mutations remain direct validated tool calls.
 - Prefer Worker isolation for generated code and document cooperative-cancellation limits.
 - Keep experimental ChatGPT compatibility visually and architecturally separate from the
@@ -373,9 +422,10 @@ development or production server before selecting the Node.js runtime.
 ## Current limitations
 
 - Packages are private and unpublished.
-- The coding agent does not yet accept arbitrary schema-bearing model tools.
-- Browser execution and coding-session runtimes need a public bridge.
-- Project-to-runtime synchronization is local to the example.
+- Generic schema-bearing tools are agent-callable, but each application still owns tool discovery,
+  user authorization, input validation, and UI presentation.
+- The browser run-file tool and ProjectWorkspace synchronization are example-owned rather than a
+  general execution policy in `@loom/agent-codex`.
 - The ChatGPT/Codex extension path is unsupported compatibility work.
 - Production extension packaging, licensing, release versioning, and multi-browser CI are pending.
 

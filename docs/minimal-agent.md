@@ -15,7 +15,7 @@ every implementation by explicit capability ID.
 Agent construction belongs to the application. After the runtime is running, the application:
 
 1. creates a session;
-2. resolves the agent factory, model, and three workspace tools by their exported structural keys;
+2. resolves the agent factory, model, and any built-in or application-defined tools;
 3. passes only the model, tools, optional memory, and the agent plugin's session configuration to
    the factory;
 4. calls `run` with the session ID and Loom-owned cancellation signal;
@@ -37,23 +37,24 @@ filesystem permissions, symlink behavior, persistence, or browser API. A later p
 implement the same adapter over File System Access API, OPFS, remote storage, or another backing
 store without changing the agent.
 
-The only supported operations are:
+The built-in text operations are:
 
 - `workspace/list-files`;
 - `workspace/read-file`;
 - `workspace/write-file`.
 
 The operation discriminator is stable orchestration metadata. Display names and capability IDs are
-not used to guess a tool's behavior.
+not used to guess a tool's behavior. Applications may also pass schema-described `CodexTool`
+operations with their own namespaced operation IDs and executors.
 
 ## Model protocol
 
 The Codex-style agent sends a provider-neutral request containing instructions, immutable message
-history, and definitions for the three workspace tools. Tool definitions can include structured
-output schemas and direct/programmatic caller policies. A model adapter streams complete normalized
-events: text deltas, complete tool calls, opaque continuation items, and a completion marker.
-Provider-specific streaming fragments must be assembled inside the model adapter before they reach
-the agent.
+history, and definitions for every registered tool. Built-in workspace definitions are supplied by
+the agent; application tools supply their description, input schema, optional output schema, and
+direct/programmatic caller policy. A model adapter streams complete normalized events: text deltas,
+complete tool calls, opaque continuation items, and a completion marker. Provider-specific streaming
+fragments must be assembled inside the model adapter before they reach the agent.
 
 Direct tool calls are executed serially. Consecutive read-only calls attributed to a hosted program
 run concurrently, and their immutable JSON results copy the caller metadata into the next model
@@ -62,8 +63,8 @@ and program-output items without teaching the agent their provider-specific fiel
 marker with `final: false` continues the loop until a final assistant message exists.
 
 Unknown tools, malformed events, duplicate call IDs, missing completion markers, unauthorized
-programmatic writes, and duplicate/missing workspace tools fail with typed agent errors. A
-configurable turn limit prevents an unbounded continuation or tool loop.
+programmatic calls, invalid custom definitions, and duplicate operations fail with typed agent
+errors. A configurable turn limit prevents an unbounded continuation or tool loop.
 
 The protocol intentionally remains in `@loom/agent-codex`. It is not part of `@loom/plugin-api`, so
 future planner, Claude-style, OpenHands-like, or custom agents can define different orchestration

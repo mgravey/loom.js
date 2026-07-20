@@ -43,15 +43,16 @@ const modelPlugin = createOpenAIResponsesModelPlugin({
 });
 ```
 
-The application composes this plugin alongside `@loom/agent-codex` and the three workspace tools,
-then resolves the model capability through `OPENAI_RESPONSES_MODEL_KEY`. Model availability is
-project-dependent; confirm support before enabling Programmatic Tool Calling. Set
-`programmaticToolCalling: false` to use ordinary direct function calls with a model that does not
-support the hosted tool.
+The application composes this plugin alongside `@loom/agent-codex` and its selected built-in or
+application-defined tools, then resolves the model capability through `OPENAI_RESPONSES_MODEL_KEY`.
+Model availability is project-dependent; confirm support before enabling Programmatic Tool Calling.
+Set `programmaticToolCalling: false` to use ordinary direct function calls with a model that does
+not support the hosted tool.
 
 ## Tool policy
 
-The agent publishes structured input and output schemas for every workspace tool:
+The agent publishes structured input and output schemas for built-in workspace tools and forwards
+the schemas declared by application-defined `CodexTool` operations:
 
 | Operation              | Direct | Programmatic | Execution policy                  |
 | ---------------------- | ------ | ------------ | --------------------------------- |
@@ -66,6 +67,9 @@ the authorization boundary if a provider or custom adapter returns an invalid ca
 Programmatic calls are appropriate for bounded read-only discovery where JavaScript can batch,
 filter, join, validate, or reduce results. Direct calls remain appropriate when each result needs
 new model judgment and for every side effect.
+
+Custom tools default to direct-only. An application must opt into programmatic callers explicitly,
+and the agent enforces that policy again when normalizing returned calls.
 
 ## Stateless continuation
 

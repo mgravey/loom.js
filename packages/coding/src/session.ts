@@ -2,11 +2,11 @@ import {
   CODEX_AGENT_FACTORY,
   type CodexAgentConfiguration,
   type CodexAgentEvent,
+  type CodexAgentTool,
   type CodexAgent,
   type CodexModel,
 } from '@loom/agent-codex';
 import type { ExecutionRuntime, OperationContext } from '@loom/plugin-api';
-import type { WorkspaceTool } from '@loom/tool-workspace';
 import {
   createCancellationSource,
   immutableJson,
@@ -58,9 +58,12 @@ export interface CodingExecutionRequest {
 
 export interface CreateCodingSessionOptions {
   readonly model: CodexModel;
-  readonly tools: readonly WorkspaceTool[];
+  /** Built-in workspace tools and application-defined schema-described Codex tools. */
+  readonly tools: readonly CodexAgentTool[];
   readonly configuration?: CodexAgentConfiguration;
   readonly id?: SessionId;
+  /** Optional prior user/assistant messages used to resume a persisted conversation. */
+  readonly transcript?: readonly CodingTranscriptEntry[];
   readonly runtimes?: Readonly<Record<string, ExecutionRuntime<JsonValue, unknown>>>;
 }
 
@@ -91,6 +94,34 @@ function contextualPrompt(transcript: readonly CodingTranscriptEntry[], prompt: 
   return `Continue this coding conversation. Preserve decisions from the transcript.\n\n${history}\n\nUser: ${prompt}`;
 }
 
+function initialTranscript(
+  value: readonly CodingTranscriptEntry[] | undefined,
+): CodingTranscriptEntry[] {
+  if (value === undefined) return [];
+  const candidate: unknown = value;
+  if (!Array.isArray(candidate) || candidate.length > 2_000) {
+    throw new TypeError('Coding transcript must contain at most 2,000 entries.');
+  }
+  let characters = 0;
+  return (candidate as readonly unknown[]).map((entry) => {
+    if (
+      typeof entry !== 'object' ||
+      entry === null ||
+      !('role' in entry) ||
+      (entry.role !== 'user' && entry.role !== 'assistant') ||
+      !('content' in entry) ||
+      typeof entry.content !== 'string'
+    ) {
+      throw new TypeError('Coding transcript entries require a user or assistant role and text.');
+    }
+    characters += entry.content.length;
+    if (characters > 4 * 1024 * 1024) {
+      throw new TypeError('Coding transcript exceeds the 4 MiB text limit.');
+    }
+    return Object.freeze({ role: entry.role, content: entry.content });
+  });
+}
+
 let nextCodingSession = 0;
 
 export function createCodingSession(options: CreateCodingSessionOptions): CodingSession {
@@ -99,7 +130,7 @@ export function createCodingSession(options: CreateCodingSessionOptions): Coding
     throw new TypeError('Coding session options are required.');
   }
   const listeners = new Set<(event: CodingSessionEvent) => void>();
-  const entries: CodingTranscriptEntry[] = [];
+  const entries = initialTranscript(options.transcript);
   const runtimes = Object.freeze({ ...(options.runtimes ?? {}) });
   nextCodingSession += 1;
   const id = options.id ?? sessionId(`coding-${String(nextCodingSession)}`);

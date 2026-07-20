@@ -31,8 +31,29 @@ fallback. HTTP errors, response-stream failures, and cancellation are never retr
 extension is checked automatically on page load.
 
 The primary surface is a conversation view. Workspace operations appear as compact collapsed
-activity rows, while the editor and manually invoked browser runtimes remain in a closed utility
-drawer until the user opens it.
+activity rows with a human-readable action, purpose, and live state. A header indicator
+distinguishes thinking, tool use, response writing, ready, and error states. The conversation owns
+its scrolling, so the follow-up composer remains reachable during long responses. The editor and
+manual runtime controls remain in a closed utility drawer until the user opens it. The same runtimes
+are also exposed to the agent through a schema-described website tool, so a request to run or verify
+code produces captured execution output instead of an inferred result.
+
+Assistant Markdown is converted to safe DOM elements rather than injected as HTML. Headings, lists,
+inline code, and fenced blocks receive conversation-native styling; fenced code and captured text
+output include a small copy action.
+
+## Workspace conversations
+
+Completed turns are saved as versioned JSON records in `.loom/conversations/` when workspace write
+access is enabled. Opening the workspace restores the newest conversation, and selecting another
+saved conversation rebuilds the coding session with its prior user/assistant transcript so the next
+turn retains context. Conversation files are excluded from QuickJS, Pyodide, and WebContainer
+snapshots and preserved during runtime write-back.
+
+The sidebar supports multiple conversations per workspace. **Delete** removes only the selected
+conversation after confirmation. **Clean .loom** removes all Loom-owned workspace metadata,
+including conversations and generated figures, after a broader confirmation. Read-only workspaces
+can restore history but cannot create, delete, or persist conversation changes.
 
 The browser login creates an authorization tab with PKCE and state, installs one session-scoped DNR
 rule limited to that tab, and asks the provider to return to the audited
@@ -46,8 +67,10 @@ third-party production use.
 
 ## Library API
 
-`createCodingSession()` accepts an explicitly selected model, workspace tools, optional execution
-runtimes, and agent configuration. The returned session provides:
+`createCodingSession()` accepts an explicitly selected model, built-in workspace tools,
+application-defined `CodexTool` operations, optional execution runtimes, agent configuration, and a
+validated prior user/assistant transcript for resuming persisted conversations. The returned session
+provides:
 
 - `submit()` and `followUp()` streamed agent events;
 - immutable transcript snapshots and event subscriptions;
@@ -64,7 +87,8 @@ runtime-engine APIs.
 The example's workspace selector offers:
 
 - **Direct selected directory** — works against a user-approved File System Access handle. Edits are
-  immediately visible on disk. Runtime write-back asks for confirmation first.
+  immediately visible on disk when write access is enabled. Chrome asks for the selected read or
+  read/write permission when the folder is opened; runtime execution does not prompt again.
 - **Virtual memory project** — imports a folder or ZIP into an isolated in-memory filesystem. The
   browser receives no persistent permission; export a ZIP before closing the page.
 - **Persistent browser project (OPFS)** — uses the same project contract and saves a bounded ZIP
@@ -75,6 +99,12 @@ unified patches, folder import, ZIP import, and ZIP export. Imports reject absol
 backslashes, NULs, symlinks, duplicates, file/directory conflicts, excessive entries, oversized
 files/archives, and suspicious compression ratios. Patch application is atomic and requires exact
 context; it does not search for a nearby fuzzy match.
+
+The sidebar exposes **Read project files** and **Modify project files** controls. Disabling read
+removes project discovery and execution tools. Read-only mode keeps list/read/stat and run-file
+tools, removes mutation/package-install tools, disables editor/import writes, and executes runtimes
+against a copied snapshot without committing their filesystem changes. Changing the policy for a
+direct folder requires reopening it so Chrome can request the matching folder permission once.
 
 ## Browser runtimes
 
@@ -90,10 +120,29 @@ or host `fetch` callback. Output is streamed to the host and the resulting proje
 back. `node_modules`, `.venv`, `__pycache__`, `.pytest_cache`, and `.cache` are excluded from
 write-back by the example.
 
+The workbench registers `website/run-workspace-file` and `website/install-runtime-packages` with
+JSON schemas and detailed descriptions. The agent chooses `quickjs`, `node`, or `python`, while the
+website owns the runtime instances, workspace synchronization, output limits, persistence, and UI.
+
+Pyodide loads NumPy and Matplotlib by default, calls `loadPackagesFromImports()` for other bundled
+imports, and uses `micropip` for explicitly requested compatible registry packages. Matplotlib runs
+with the Agg backend: `plt.show()` remains nonblocking, open figures are saved into `.loom/figures/`
+as PNG artifacts, and the conversation renders them below the completed tool row.
+
+WebContainer package installation uses `npm install --save`. The resulting dependency metadata and
+lockfile are synchronized to the project, while `node_modules` and cache directories are excluded.
+Before a later Node entrypoint runs, its `package.json` dependencies are restored inside the fresh
+temporary execution root.
+
 WebContainers require cross-origin isolation headers and allow only one live instance per page.
 Production commercial use may require a StackBlitz WebContainer license. Pyodide and QuickJS should
 run in dedicated Workers when hard termination is required; cooperative cancellation cannot stop all
 native/WASM work immediately.
+
+Registry dependencies are untrusted code. The tool rejects command-like requirements and arbitrary
+package URLs, but npm lifecycle scripts and imported Python package code can still execute inside
+their isolated runtime. Pyodide can install only pure-Python wheels or compatible wasm32/Emscripten
+wheels; WebContainer cannot load ordinary native Node addons.
 
 ## Build and run
 

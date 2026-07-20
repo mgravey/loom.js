@@ -56,6 +56,8 @@ interface WebContainerDirectoryNode {
 type WebContainerNode = WebContainerFileNode | WebContainerDirectoryNode;
 type WebContainerTree = Readonly<Record<string, WebContainerNode>>;
 
+const TRANSIENT_PACKAGE_DIRECTORIES = new Set(['node_modules', '.cache']);
+
 export interface CreateWebContainerExecutionRuntimeOptions {
   readonly loadModule?: BrowserRuntimeModuleLoader;
   readonly createBackend?: BrowserExecutionBackendFactory;
@@ -105,6 +107,7 @@ function treeProject(tree: WebContainerTree): BrowserExecutionProject {
       const node = current[name];
       if (node === undefined) continue;
       const path = parent.length === 0 ? name : `${parent}/${name}`;
+      if ('directory' in node && TRANSIENT_PACKAGE_DIRECTORIES.has(name)) continue;
       executionPath(path);
       if ('directory' in node) {
         directories.push(path);
@@ -164,10 +167,6 @@ function createWebContainerBackend(
         const executionState = { timedOut: false };
         try {
           context.signal?.throwIfCancelled();
-          process = await instance.spawn(request.command, request.arguments ?? [], {
-            cwd,
-            output: true,
-          });
           unsubscribe =
             context.signal?.onCancel(() => {
               process?.kill();
@@ -178,24 +177,50 @@ function createWebContainerBackend(
               process?.kill();
             }, request.timeoutMs);
           }
-          const output = process.output.pipeTo(
-            new WritableStream<string>({
-              write(chunk) {
-                emitOutput(context, 'stdout', chunk);
-              },
-            }),
-          );
-          const exitCode = await process.exit;
-          await output;
-          if (context.signal?.cancelled === true) {
-            throw cancellationError(context.signal.reason);
-          }
-          if (executionState.timedOut) {
-            throw new BrowserExecutionError(
-              'TIMED_OUT',
-              `WebContainer execution exceeded ${String(request.timeoutMs)} ms.`,
+          const runProcess = async (
+            command: string,
+            arguments_: readonly string[],
+          ): Promise<number> => {
+            process = await instance.spawn(command, arguments_, { cwd, output: true });
+            const output = process.output.pipeTo(
+              new WritableStream<string>({
+                write(chunk) {
+                  emitOutput(context, 'stdout', chunk);
+                },
+              }),
             );
+            const exitCode = await process.exit;
+            await output;
+            process = undefined;
+            if (context.signal?.cancelled === true) {
+              throw cancellationError(context.signal.reason);
+            }
+            if (executionState.timedOut) {
+              throw new BrowserExecutionError(
+                'TIMED_OUT',
+                `WebContainer execution exceeded ${String(request.timeoutMs)} ms.`,
+              );
+            }
+            return exitCode;
+          };
+          const packageManifest =
+            request.workingDirectory === undefined || request.workingDirectory.length === 0
+              ? 'package.json'
+              : `${request.workingDirectory}/package.json`;
+          if (
+            request.command === 'node' &&
+            request.project.files.some((file) => file.path === packageManifest)
+          ) {
+            const installExitCode = await runProcess('npm', ['install']);
+            if (installExitCode !== 0) {
+              const exported = await instance.export(root, { format: 'json' });
+              return Object.freeze({
+                exitCode: installExitCode,
+                project: treeProject(exported),
+              });
+            }
           }
+          const exitCode = await runProcess(request.command, request.arguments ?? []);
           const exported = await instance.export(root, { format: 'json' });
           return Object.freeze({ exitCode, project: treeProject(exported) });
         } catch (error) {

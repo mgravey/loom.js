@@ -212,12 +212,6 @@ describe('WebContainer adapter', () => {
   it('mounts a copied project, streams output, exports changes, and tears down', async () => {
     const calls: string[] = [];
     const teardown = vi.fn();
-    const output = new ReadableStream<string>({
-      start(controller) {
-        controller.enqueue('node output\n');
-        controller.close();
-      },
-    });
     const instance = {
       fs: {
         mkdir: vi.fn(async (path: string) => {
@@ -233,6 +227,12 @@ describe('WebContainer adapter', () => {
       spawn: vi.fn(
         async (command: string, arguments_: readonly string[], options: { cwd?: string }) => {
           calls.push(`spawn:${command}:${arguments_.join(',')}:${options.cwd ?? ''}`);
+          const output = new ReadableStream<string>({
+            start(controller) {
+              controller.enqueue(`${command} output\n`);
+              controller.close();
+            },
+          });
           return { output, exit: Promise.resolve(0), kill: vi.fn() };
         },
       ),
@@ -241,6 +241,10 @@ describe('WebContainer adapter', () => {
           directory: {
             'main.js': { file: { contents: encoder.encode('changed') } },
             'generated.txt': { file: { contents: 'done' } },
+            'package.json': { file: { contents: '{"dependencies":{"kleur":"4.1.5"}}' } },
+            node_modules: {
+              directory: { kleur: { directory: { 'index.js': { file: { contents: 'cache' } } } } },
+            },
           },
         },
       })),
@@ -258,6 +262,16 @@ describe('WebContainer adapter', () => {
         command: 'node',
         arguments: ['main.js'],
         workingDirectory: 'src',
+        project: {
+          directories: ['src'],
+          files: [
+            { path: 'src/main.js', data: encoder.encode('console.log("hello")') },
+            {
+              path: 'src/package.json',
+              data: encoder.encode('{"dependencies":{"kleur":"4.1.5"}}'),
+            },
+          ],
+        },
       }),
       { onOutput: ({ chunk }) => chunks.push(chunk) },
     );
@@ -267,17 +281,123 @@ describe('WebContainer adapter', () => {
     expect(calls).toEqual([
       'mkdir:.loom-runs/run-1',
       'mount:.loom-runs/run-1',
+      'spawn:npm:install:.loom-runs/run-1/src',
       'spawn:node:main.js:.loom-runs/run-1/src',
       'rm:.loom-runs/run-1',
     ]);
-    expect(chunks).toEqual(['node output\n']);
+    expect(chunks).toEqual(['npm output\n', 'node output\n']);
     expect(
       result.project.files.map((file) => [file.path, new TextDecoder().decode(file.data)]),
     ).toEqual([
       ['src/generated.txt', 'done'],
       ['src/main.js', 'changed'],
+      ['src/package.json', '{"dependencies":{"kleur":"4.1.5"}}'],
     ]);
     expect(teardown).toHaveBeenCalledOnce();
+  });
+});
+
+describe('Pyodide adapter', () => {
+  it('loads packages imported by the entrypoint before executing it', async () => {
+    const directories = new Set(['/home', '/home/pyodide']);
+    const files = new Map<string, Uint8Array>();
+    const mkdirTree = (path: string): void => {
+      let current = '';
+      for (const segment of path.split('/').filter(Boolean)) {
+        current += `/${segment}`;
+        directories.add(current);
+      }
+    };
+    const children = (path: string): string[] => {
+      const prefix = `${path}/`;
+      return [...directories, ...files.keys()]
+        .filter((candidate) => candidate.startsWith(prefix))
+        .map((candidate) => candidate.slice(prefix.length).split('/')[0])
+        .filter((name): name is string => name !== undefined && name !== '')
+        .filter((name, index, values) => values.indexOf(name) === index);
+    };
+    const globalValues = new Map<string, unknown>();
+    const loadPackage = vi.fn(async () => undefined);
+    const loadPackagesFromImports = vi.fn(async () => undefined);
+    const fileSystem = {
+      mkdirTree,
+      writeFile(path: string, data: Uint8Array) {
+        mkdirTree(path.slice(0, path.lastIndexOf('/')));
+        files.set(path, new Uint8Array(data));
+      },
+      readFile(path: string) {
+        const data = files.get(path);
+        if (data === undefined) throw new Error(`missing file ${path}`);
+        return new Uint8Array(data);
+      },
+      readdir: (path: string) => ['.', '..', ...children(path)],
+      stat: (path: string) => ({ mode: directories.has(path) ? 1 : 0 }),
+      isDir: (mode: number) => mode === 1,
+      unlink: (path: string) => void files.delete(path),
+      rmdir: (path: string) => void directories.delete(path),
+      chdir: vi.fn(),
+    };
+    const runPythonAsync = vi.fn(async (code: string) => {
+      if (code.includes('print(np.arange(3))')) globalValues.delete('__loom_argv');
+      if (code.includes('micropip.install')) globalValues.delete('__loom_packages');
+      if (!code.includes('__loom_figure.savefig')) return;
+      const directory = globalValues.get('__loom_figure_directory');
+      const prefix = globalValues.get('__loom_figure_prefix');
+      if (typeof directory !== 'string' || typeof prefix !== 'string') return;
+      fileSystem.mkdirTree(directory);
+      fileSystem.writeFile(`${directory}/${prefix}-figure-1.png`, encoder.encode('png'));
+    });
+    const instance = {
+      FS: fileSystem,
+      globals: {
+        set(name: string, value: unknown) {
+          globalValues.set(name, value);
+        },
+        delete(name: string) {
+          if (!globalValues.has(name)) throw new Error(`KeyError: '${name}'`);
+          return globalValues.delete(name);
+        },
+      },
+      setStdout: vi.fn(),
+      setStderr: vi.fn(),
+      loadPackage,
+      loadPackagesFromImports,
+      runPythonAsync,
+    };
+    const runtime = createPyodideExecutionRuntime({
+      loadModule: async () => ({ loadPyodide: async () => instance }),
+      createInterruptBuffer: () => undefined,
+    });
+    const source = 'import numpy as np\nprint(np.arange(3))\n';
+
+    const result = await runtime.execute({
+      command: 'python',
+      arguments: ['main.py'],
+      project: { files: [{ path: 'main.py', data: encoder.encode(source) }] },
+    });
+
+    expect(result).toMatchObject({
+      exitCode: 0,
+      artifacts: [{ path: '.loom/figures/run-1-figure-1.png', mediaType: 'image/png' }],
+    });
+    await expect(
+      runtime.execute({
+        command: 'micropip',
+        arguments: ['snowballstemmer==2.2.0'],
+        project: { files: [] },
+      }),
+    ).resolves.toMatchObject({ exitCode: 0 });
+
+    expect(loadPackage).toHaveBeenNthCalledWith(1, ['numpy', 'matplotlib']);
+    expect(loadPackage).toHaveBeenNthCalledWith(2, 'micropip');
+    expect(loadPackagesFromImports).toHaveBeenCalledOnce();
+    expect(loadPackagesFromImports).toHaveBeenCalledWith(source);
+    expect(loadPackagesFromImports.mock.invocationCallOrder[0]).toBeLessThan(
+      runPythonAsync.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
+    );
+    expect(runPythonAsync).toHaveBeenCalledWith(
+      'import micropip\nawait micropip.install(list(__loom_packages))',
+    );
   });
 });
 

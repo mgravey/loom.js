@@ -26,8 +26,9 @@ workbench. The same onboarding is available as
 [repository documentation](./docs/getting-started.md).
 
 The production GitHub Pages target is `https://mgravey.com/loom.js/`. A dedicated Actions workflow
-builds only the static welcome/docs/workbench assets and deploys them as the `loom.js` project site.
-See [GitHub Pages deployment](./docs/github-pages.md) for the one-time repository setting, inherited
+builds the example and its transitive workspace dependencies, then deploys only the static
+welcome/docs/workbench assets as the `loom.js` project site. See
+[GitHub Pages deployment](./docs/github-pages.md) for the one-time repository setting, inherited
 custom-domain behavior, deployment variables, local artifact check, and hosting limitations.
 
 ### Install the Chrome extension during development

@@ -99,6 +99,9 @@ This project follows a lightweight milestone changelog while packages remain pri
 
 ### Changed
 
+- Fixed fresh GitHub Pages runners by building the experimental example's transitive workspace
+  dependencies before bundling the site.
+
 - Updated every browser example and experimental extension surface to Direction 08: self-contained
   Lottie animation on the landing and extension onboarding pages, compact optimized marks in site
   navigation, workbench/example headings and favicons, and the full SVG where space permits.

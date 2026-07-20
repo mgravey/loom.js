@@ -23,7 +23,7 @@
     "chrome:store:media": "pnpm --filter @loom/extension-codex-experimental build && node scripts/prepare-chrome-store-media.mjs",
     "chrome:store:release": "pnpm chrome:store:package && node scripts/prepare-chrome-store-media.mjs",
     "chrome:store:verify": "node scripts/verify-chrome-store.mjs",
-    "site:pages:build": "pnpm --filter @loom/example-codex-experimental build && node scripts/prepare-github-pages.mjs"
+    "site:pages:build": "pnpm --filter @loom/example-codex-experimental... build && node scripts/prepare-github-pages.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.31.0",

@@ -10,6 +10,11 @@ const staging = join(extensionRoot, '.chrome-store-staging');
 const artifacts = join(root, 'store-artifacts');
 const defaultSiteOrigin = 'https://mgravey.com';
 const defaultSiteBasePath = '/loom.js';
+const externallyConnectableMatches = Object.freeze([
+  'https://*/*',
+  'http://localhost/*',
+  'http://127.0.0.1/*',
+]);
 const supportEmail = process.env.LOOM_SUPPORT_EMAIL?.trim() || 'sideproject@mgravey.com';
 const testOriginAllowed = process.env.LOOM_ALLOW_TEST_ORIGIN === '1';
 
@@ -136,6 +141,11 @@ assertExactStringSet('Manifest host permissions', manifest.host_permissions, [
 if (manifest.key !== undefined || manifest.update_url !== undefined) {
   throw new Error('Store package must not embed a development key or custom update URL.');
 }
+assertExactStringSet(
+  'Manifest externally connectable matches',
+  manifest.externally_connectable?.matches,
+  externallyConnectableMatches,
+);
 if (
   manifest.background?.service_worker !== 'service-worker.js' ||
   manifest.background?.type !== 'module'
@@ -168,7 +178,6 @@ for (const [key, size] of Object.entries(requiredIcons)) {
     throw new Error(`${iconPath} must be exactly ${key}x${key} pixels.`);
   }
 }
-manifest.externally_connectable = { matches: [`${site.origin}/*`] };
 manifest.homepage_url = homepage.href;
 
 const runtimeFiles = [

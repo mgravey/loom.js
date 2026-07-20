@@ -78,9 +78,10 @@ profile, then choose **Open workbench**. The runnable application is
 7. Select **Log out** when finished. Logout removes both the refresh credential and saved
    account-routing ID from session and persistent extension storage.
 
-The manifest permits only `http://localhost:4173` and `http://127.0.0.1:4173` in development, and
-each exact origin still requires a separate user grant. Serving the page from another origin or port
-is expected to fail. Grants persist until revoked; disabling the experiment clears them.
+The manifest routes all HTTPS origins and the two local development hosts. Each exact origin still
+requires a separate user grant before authentication or model operations. Arbitrary HTTP origins and
+local ports other than `4173` are rejected by the service worker. Grants persist until revoked;
+disabling the experiment clears them.
 
 ## Diagnose a failed run
 

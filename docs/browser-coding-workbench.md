@@ -20,9 +20,10 @@ The extension owns normal ChatGPT login, the localhost callback transformation, 
 refresh, and account-routing persistence. The page receives a short-lived access token plus routing
 ID and starts non-auth provider requests directly. It asks the extension for a replacement shortly
 before expiry and never receives refresh or ID tokens. On first contact, Chrome opens trusted
-extension UI where the user must approve the exact page origin. A public HTTPS deployment must also
-replace the development entries in `externally_connectable` with its exact origin; owning a domain
-does not make direct page fetches pass provider CORS.
+extension UI where the user must approve the exact page origin. The manifest broadly routes HTTPS
+connection requests so independently deployed workbenches can reach that approval gate. Every
+credential and model operation remains restricted to the exact origin stored by the user; owning a
+domain does not make direct page fetches pass provider CORS.
 
 If direct `fetch` rejects before an HTTP response, the page retries the credential-free body over an
 authorized extension Port and keeps that transport for the remaining tab session, including page

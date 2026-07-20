@@ -1,6 +1,6 @@
 import { createCodexExperimentalExtension } from './composition.js';
 import type { CodexChromeExtensionApi, CodexModelFetch, OAuthFetch } from './chrome-contracts.js';
-import { externallyConnectableOrigins } from './manifest-origins.js';
+import { createExternallyConnectableAuthorizer } from './manifest-origins.js';
 import { isCodexDirectAuthRequest } from './direct-auth.js';
 import { isCodexOriginAccessRequest } from './origin-access.js';
 
@@ -12,7 +12,7 @@ const fetchRequest = host.fetch.bind(globalThis);
 if (host.chrome.runtime.getManifest === undefined) {
   throw new Error('Chrome runtime manifest access is unavailable.');
 }
-const allowedOrigins = externallyConnectableOrigins(host.chrome.runtime.getManifest());
+const manifestAuthorizer = createExternallyConnectableAuthorizer(host.chrome.runtime.getManifest());
 const authEnvelopeMetadata = (value: unknown): Readonly<Record<string, string | boolean>> => {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return {};
   const envelope = value as Readonly<Record<string, unknown>>;
@@ -31,7 +31,7 @@ const composition = createCodexExperimentalExtension({
   chromeApi: host.chrome,
   fetchRequest,
   modelFetchRequest: fetchRequest,
-  allowedOrigins,
+  manifestAuthorizer,
 });
 
 host.chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => {

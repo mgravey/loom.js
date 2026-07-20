@@ -13,6 +13,7 @@ import {
   ExtensionBrokerError,
   type ChromeExternalMessageListener,
   type ExtensionTokenService,
+  type OriginAuthorizer,
   type RefreshCredentialStore,
 } from '@loom/extension';
 
@@ -56,6 +57,7 @@ export interface CreateCodexExperimentalExtensionOptions {
   /** Required by the runtime service worker; optional only for auth-only composition tests. */
   readonly modelFetchRequest?: CodexModelFetch;
   readonly allowedOrigins?: readonly string[];
+  readonly manifestAuthorizer?: OriginAuthorizer;
 }
 
 export interface CodexExperimentalExtensionComposition {
@@ -205,9 +207,9 @@ export function createCodexExperimentalExtension(
       if (providerId === provider.id) await accountRoutingStore.delete();
     },
   });
-  const manifestAuthorizer = createOriginAuthorizer(
-    options.allowedOrigins ?? DEVELOPMENT_ALLOWED_ORIGINS,
-  );
+  const manifestAuthorizer =
+    options.manifestAuthorizer ??
+    createOriginAuthorizer(options.allowedOrigins ?? DEVELOPMENT_ALLOWED_ORIGINS);
   const authorizer = createGrantedOriginAuthorizer(manifestAuthorizer, originAccessStore);
   const handler = createCredentialBrokerMessageHandler({
     authorizer,

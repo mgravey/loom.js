@@ -35,10 +35,12 @@ extension ID selects a destination; it is not authorization by itself.
 
 Chrome's
 [`externally_connectable`](https://developer.chrome.com/docs/extensions/develop/concepts/messaging#external-webpage)
-manifest entry controls which pages Chrome will route to the extension. Match patterns cannot pin a
-localhost port, so the development manifest's `http://localhost/*` and `http://127.0.0.1/*` entries
-are deliberately only a coarse outer gate. The service worker then requires exactly
-`http://localhost:4173` or `http://127.0.0.1:4173`.
+manifest entry controls which pages Chrome will route to the extension. The experimental bridge
+routes HTTPS websites so they can request an explicit exact-origin grant. Match patterns cannot pin
+a localhost port, so the manifest's `http://localhost/*` and `http://127.0.0.1/*` entries are only a
+coarse outer gate. The service worker accepts only HTTPS origins or exactly `http://localhost:4173`
+and `http://127.0.0.1:4173`, then requires the separate user-approved exact origin before any
+credential or model operation.
 
 The authorizer accepts only configured HTTP(S) origins with no path, credentials, or trailing slash.
 For each request it validates `sender.origin` when present, derives the origin from `sender.url` as

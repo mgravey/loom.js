@@ -40,6 +40,8 @@ docs/assets/brand/.scratch/
 packages/extension-codex-experimental/icons/.scratch/
 packages/example-codex-experimental/.direct-request-debug/
 packages/extension-codex-experimental/.persistent-auth-debug/
+# Optional disposable Chrome profile used while testing the unpacked extension.
+.chrome-dev-profile/
 
 # Adobe After Effects autosaves and local render previews.
 Adobe After Effects Auto-Save/

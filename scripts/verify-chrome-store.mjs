@@ -46,8 +46,13 @@ const manifest = JSON.parse(
   execFileSync('unzip', ['-p', archive, 'manifest.json'], { encoding: 'utf8' }),
 );
 const expectedOrigin = 'https://store-verification.loom.example';
-if (manifest.externally_connectable?.matches?.[0] !== `${expectedOrigin}/*`) {
-  throw new Error('Store manifest does not contain the exact verification origin.');
+const expectedMatches = ['https://*/*', 'http://localhost/*', 'http://127.0.0.1/*'].sort();
+if (
+  !Array.isArray(manifest.externally_connectable?.matches) ||
+  JSON.stringify([...manifest.externally_connectable.matches].sort()) !==
+    JSON.stringify(expectedMatches)
+) {
+  throw new Error('Store manifest does not contain the reviewed external routing patterns.');
 }
 if (manifest.homepage_url !== `${expectedOrigin}/loom.js/`) {
   throw new Error('Store manifest homepage was not configured.');

@@ -46,6 +46,13 @@ Then:
 6. Open **Details → Extension options**.
 7. Read the data disclosure, explicitly enable the bridge, and authenticate.
 
+The manifest routes external messages from HTTPS websites to the service worker so a site can ask to
+appear in **Waiting for approval**. That routing is not authorization: credential, status, logout,
+and model-relay operations remain blocked until the user approves the sender's exact origin in
+trusted extension UI. For local development, only `localhost:4173` and `127.0.0.1:4173` pass the
+service-worker check. After rebuilding, select **Reload** on the extension card so Chrome applies
+manifest changes.
+
 Authorization uses trusted session storage by default and is lost when Chrome closes. On a private
 computer, select **Remember sign-in on this Chrome profile** and confirm the warning to migrate the
 refresh credential and account-routing ID to trusted local extension storage. The setting is tied to
@@ -81,6 +88,12 @@ Enter the extension ID. The page checks it automatically; select **Reconnect** o
 extension opens its options page on first contact; approve the displayed exact origin, return to the
 workbench, and reload. The approval is remembered in trusted local extension storage until revoked
 or the bridge is disabled.
+
+If the page logs `origin.access.request` but the extension logs no `message.received` event and no
+origin appears under **Waiting for approval**, Chrome rejected the message before the service worker
+received it. Rebuild the extension, reload it at `chrome://extensions`, confirm that
+`dist/manifest.json` includes `https://*/*` under `externally_connectable.matches`, and retry using
+the ID displayed on that same extension card.
 
 The development ID is supplied in three descending-priority ways:
 
@@ -126,7 +139,8 @@ companion website's generated deployment configuration consumes it after the rep
 set. Environment variables can override the defaults for another deployment. The release commands:
 
 - require a real public HTTPS origin rather than localhost or reserved example domains;
-- replace `externally_connectable.matches` with the exact production origin;
+- retain broad HTTPS message routing while enforcing the separately approved exact origin in the
+  service worker;
 - verify Manifest V3, description length, every declared icon dimension, and public contact links;
 - excludes declarations, maps, build metadata, and library-only entrypoints;
 - includes the required `lottie-web` MIT copyright and license notice;
@@ -149,7 +163,7 @@ ZIP inventory, checksum, promotional image, and screenshot before every dashboar
 | `http://localhost:1455/*`                 | Match only the provider's registered loopback callback target. No localhost server is contacted.                                                                                                                                     |
 | `https://auth.openai.com/*`               | User-initiated authorization, device-code exchange, and token refresh.                                                                                                                                                               |
 | `https://chatgpt.com/backend-api/codex/*` | Direct-first fallback only: relay a model request when the page receives no HTTP response.                                                                                                                                           |
-| `externally_connectable`                  | Let Chrome route origin-access and auth messages only from the exact development or production Loom origin; extension storage then enforces the user's separate exact-origin grant.                                                  |
+| `externally_connectable`                  | Let HTTPS websites request connection approval. The service worker separately requires the user-approved exact origin before auth or model operations; only the fixed local development origins are routed over HTTP.                |
 
 The extension does not request `history`, `cookies`, `scripting`, `activeTab`, broad website access,
 or background analytics.

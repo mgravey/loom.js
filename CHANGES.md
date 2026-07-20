@@ -18,6 +18,16 @@ This project follows a lightweight milestone changelog while packages remain pri
   bundled/public privacy disclosures, terms, legal notice, support and installation pages, a
   production-origin ZIP packager and verification gate, and a submission dossier with
   listing/privacy/reviewer fields.
+- Deterministic Chrome Web Store release exports: normalized ZIP metadata, exact archive inventory,
+  public-origin and contact validation, icon-dimension checks, SHA-256 checksums, and generated
+  440×280 promotional media plus a real 1280×800 packaged-options screenshot. Support and security
+  contacts now use `sideproject@mgravey.com`; the submitted archive also preserves the bundled
+  `lottie-web` MIT notice.
+- A GitHub Pages production workflow and validated static-site artifact for
+  `https://mgravey.com/loom.js/`. The deployment generates production browser configuration from
+  non-secret repository variables, while the Store packager now defaults to the same homepage,
+  privacy, support, and exact-origin values.
+- The deployed static artifact now includes the bundled `lottie-web` MIT notice.
 - `@loom/coding`, a reusable session-level orchestration API for streamed prompts, follow-ups,
   transcript events, cancellation, injected execution runtimes, and deterministic disposal.
 - Binary-capable `ProjectWorkspace` contracts, a memory implementation, expanded FSA/OPFS adapter,

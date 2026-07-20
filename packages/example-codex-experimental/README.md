@@ -8,6 +8,10 @@ This package contains three deliberately separate browser surfaces:
 - `install.html`, `privacy.html`, `terms.html`, `legal.html`, and `support.html` provide the
   unpacked installation and future Store-facing policy/support surfaces.
 
+The GitHub Pages workflow publishes these static surfaces at <https://mgravey.com/loom.js/>. The
+workbench is available at <https://mgravey.com/loom.js/workbench.html> after the Pages deployment
+succeeds.
+
 The private example is a multi-mode browser coding workbench built on `@loom/coding`. The extension
 owns ChatGPT/Codex login, refresh credentials, ID-token parsing, and account-routing persistence.
 For a model run it returns a short-lived access token plus the routing ID to the exact authorized

@@ -25,6 +25,11 @@ library provides, read the guided documentation, and then enter the clearly sepa
 workbench. The same onboarding is available as
 [repository documentation](./docs/getting-started.md).
 
+The production GitHub Pages target is `https://mgravey.com/loom.js/`. A dedicated Actions workflow
+builds only the static welcome/docs/workbench assets and deploys them as the `loom.js` project site.
+See [GitHub Pages deployment](./docs/github-pages.md) for the one-time repository setting, inherited
+custom-domain behavior, deployment variables, local artifact check, and hosting limitations.
+
 ### Install the Chrome extension during development
 
 The unpacked extension ID currently observed for this checkout is
@@ -298,8 +303,15 @@ QuickJS/WebContainer/Pyodide execution.
 
 The [Chrome Web Store submission dossier](./docs/chrome-web-store-submission.md) contains the draft
 listing, privacy declarations, reviewer instructions, required media, production-origin package
-command, legal/support inventory, and pre-submission gate. The current provider compatibility and
-publisher/legal placeholders are explicit hard blockers.
+command, deterministic ZIP/checksum workflow, generated listing media, legal/support inventory, and
+pre-submission gate. The extension is technically packageable for a private draft. Public review
+still requires a supported provider contract, final HTTPS origin, permanent Store ID, verified
+publisher identity/postal address, and legal review. Support and security mail use
+`sideproject@mgravey.com`.
+
+After the Pages site is live, `pnpm chrome:store:release` uses `https://mgravey.com/loom.js/`, its
+privacy page, and its support page by default. Environment variables remain available when building
+for another origin or path.
 
 The interactive [browser example](./packages/example-browser/README.md) composes the scripted agent
 with an application-selected directory using the Phase 3 plugins. The

@@ -108,6 +108,10 @@ test('built experimental extension is isolated, installable, and self-contained'
   const optionsPage = await readFile(join(extensionDirectory, 'options.html'), 'utf8');
   const callbackPage = await readFile(join(extensionDirectory, 'callback.html'), 'utf8');
   const privacyPage = await readFile(join(extensionDirectory, 'privacy.html'), 'utf8');
+  const thirdPartyNotices = await readFile(
+    join(extensionDirectory, 'THIRD_PARTY_NOTICES.txt'),
+    'utf8',
+  );
   const icon128 = await readFile(join(extensionDirectory, 'icons', 'icon128.png'));
 
   expect(manifest).toMatchObject({
@@ -142,6 +146,8 @@ test('built experimental extension is isolated, installable, and self-contained'
   expect(optionsPage).toContain('src="icons/icon128.png"');
   expect(callbackPage).toContain('src="icons/icon128.png"');
   expect(callbackPage).toContain('href="icons/icon32.png"');
+  expect(thirdPartyNotices).toContain('lottie-web 5.13.0');
+  expect(thirdPartyNotices).toContain('The MIT License (MIT)');
   expect(brandAnimationScript).toContain('Reference_Weave_Draw');
   expect(icon128.byteLength).toBeGreaterThan(0);
 });

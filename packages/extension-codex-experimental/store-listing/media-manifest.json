@@ -1,0 +1,19 @@
+{
+  "generatedAt": "2026-07-20T15:00:52.964Z",
+  "media": [
+    {
+      "file": "promo-small-440x280.png",
+      "width": 440,
+      "height": 280,
+      "sha256": "277b2749ea2860eb7255922a1709347e6176ba31e5e77974f75f2404f8e26b9b",
+      "source": "Existing Loom Direction 08 mark and deterministic CSS composition."
+    },
+    {
+      "file": "screenshot-options-1280x800.png",
+      "width": 1280,
+      "height": 800,
+      "sha256": "fd70adfd049c3fa48ff95424957df4ffbcb26e4d09f89a7ee70a66b6d408646f",
+      "source": "Actual packaged extension options page rendered from packages/extension-codex-experimental/dist/options.html."
+    }
+  ]
+}

@@ -1,0 +1,68 @@
+name: Deploy Loom.js site
+
+on:
+  push:
+    branches: [master, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build static Pages artifact
+        run: pnpm site:pages:build
+        env:
+          LOOM_SITE_ORIGIN: https://mgravey.com
+          LOOM_SITE_BASE_PATH: /loom.js
+          LOOM_CHROME_EXTENSION_ID: ${{ vars.LOOM_CHROME_EXTENSION_ID }}
+          LOOM_CHROME_WEB_STORE_URL: ${{ vars.LOOM_CHROME_WEB_STORE_URL }}
+          LOOM_LEGAL_NAME: ${{ vars.LOOM_LEGAL_NAME }}
+          LOOM_LEGAL_ADDRESS: ${{ vars.LOOM_LEGAL_ADDRESS }}
+          LOOM_SUPPORT_EMAIL: sideproject@mgravey.com
+          LOOM_SECURITY_EMAIL: sideproject@mgravey.com
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: site-preview
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

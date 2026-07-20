@@ -20,7 +20,10 @@
     "format:check": "prettier --check .",
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test:coverage && pnpm build && pnpm chrome:store:verify && pnpm test:browser",
     "chrome:store:package": "pnpm --filter @loom/extension-codex-experimental build && node scripts/prepare-chrome-store.mjs",
-    "chrome:store:verify": "node scripts/verify-chrome-store.mjs"
+    "chrome:store:media": "pnpm --filter @loom/extension-codex-experimental build && node scripts/prepare-chrome-store-media.mjs",
+    "chrome:store:release": "pnpm chrome:store:package && node scripts/prepare-chrome-store-media.mjs",
+    "chrome:store:verify": "node scripts/verify-chrome-store.mjs",
+    "site:pages:build": "pnpm --filter @loom/example-codex-experimental build && node scripts/prepare-github-pages.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.31.0",

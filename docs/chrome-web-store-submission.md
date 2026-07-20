@@ -1,12 +1,12 @@
 # Chrome Web Store submission dossier
 
-- Status: **not ready for submission**
-- Prepared: 18 July 2026
+- Status: **technical draft package ready; external release blockers remain**
+- Prepared: 20 July 2026
 
 Target package: `@loom/extension-codex-experimental` / **Loom Secure Model Bridge**
 
 This dossier is the engineering, privacy, listing, testing, and reviewer handoff for a future Chrome
-Web Store submission. It follows the official requirements reviewed on 18 July 2026. Chrome policy
+Web Store submission. It follows the official requirements reviewed on 20 July 2026. Chrome policy
 and applicable law can change; re-audit the linked sources immediately before every submission.
 
 ## 1. Hard release blockers
@@ -17,17 +17,21 @@ Do not upload for public review until every item is resolved.
       third-party extension may use the current ChatGPT/Codex authentication and inference
       contracts. The current paths are audited compatibility behavior, not a documented public
       OpenAI OAuth product.
-- [ ] Select the actual publishing person/entity and software license.
-- [ ] Replace `REPLACE_*` and `.invalid` values in
+- [ ] Confirm the actual publishing person/entity, postal address, and software license.
+- [ ] Replace the remaining publisher/address `REPLACE_*` values in
       `packages/example-codex-experimental/deployment-config.js`.
 - [ ] Have qualified counsel review privacy, terms, legal notice/imprint, consumer, data-transfer,
       and target-country obligations.
-- [ ] Register and verify the final HTTPS domain, support email, security email, and publisher
-      contact details.
+- [x] Configure support and security mail as `sideproject@mgravey.com` in the site, bundled
+      disclosure, packaging metadata, and release instructions.
+- [ ] Verify `sideproject@mgravey.com`, confirm the inherited `https://mgravey.com/loom.js/` Pages
+      deployment is live over HTTPS, and complete publisher contact details in the Developer
+      Dashboard.
 - [ ] Complete a live end-to-end test with the release provider account and production origin.
 - [ ] Upload a private draft to allocate the permanent Chrome Web Store extension ID, then update
       the website deployment configuration.
-- [ ] Produce and review the required Store images and listing copy.
+- [x] Produce the required 440×280 promotional image and one 1280×800 real extension screenshot.
+- [ ] Manually review the generated media and upload it with the listing copy.
 - [ ] Decide distribution: trusted testers/unlisted first is recommended; public only after the
       compatibility and legal blockers are closed.
 - [ ] Confirm that the default session-only authorization and the separately confirmed
@@ -157,16 +161,17 @@ Certify only after verifying the final build:
 
 Required before submission:
 
-| Purpose              | Target                          |
-| -------------------- | ------------------------------- |
-| Homepage             | `https://<domain>/`             |
-| Privacy policy       | `https://<domain>/privacy.html` |
-| Support              | `https://<domain>/support.html` |
-| Terms                | `https://<domain>/terms.html`   |
-| Legal notice/imprint | `https://<domain>/legal.html`   |
+| Purpose              | Target                                     |
+| -------------------- | ------------------------------------------ |
+| Homepage             | `https://mgravey.com/loom.js/`             |
+| Privacy policy       | `https://mgravey.com/loom.js/privacy.html` |
+| Support              | `https://mgravey.com/loom.js/support.html` |
+| Terms                | `https://mgravey.com/loom.js/terms.html`   |
+| Legal notice/imprint | `https://mgravey.com/loom.js/legal.html`   |
 
 Templates exist in `packages/example-codex-experimental/`. They intentionally show a draft warning
-until the publishing identity and real contacts are configured.
+until the publishing identity and postal address are configured and legally reviewed. Support and
+security mail is already set to `sideproject@mgravey.com`.
 
 The privacy policy must describe collection, use, sharing/recipients, storage, retention, deletion,
 security, user choices, applicable rights, international/provider processing, children, changes, and
@@ -183,8 +188,10 @@ screenshot.
       almost the full 16px toolbar canvas. The options page uses the full self-contained Lottie
       weave in its heading, as does the bundled privacy page. Both retain the compact 128px asset as
       their reduced-motion and rendering fallback.
-- [ ] Required small promotional image: 440×280 PNG/JPEG, brand-led and readable when reduced.
-- [ ] At least one screenshot, preferably 3–5: 1280×800 or 640×400, full bleed, actual experience.
+- [x] Required small promotional image: `store-listing/promo-small-440x280.png`, brand-led and
+      readable when reduced.
+- [x] Required real-experience screenshot: `store-listing/screenshot-options-1280x800.png`, full
+      bleed at 1280×800.
 - [ ] Optional marquee image: 1400×560 for future featuring.
 
 Recommended screenshots:
@@ -225,36 +232,42 @@ expose a personal credential. Never place secrets in this repository or listing 
 ## 8. Build the submitted ZIP
 
 ```sh
-LOOM_SITE_ORIGIN=https://<domain> \
-LOOM_PRIVACY_URL=https://<domain>/privacy.html \
-LOOM_SUPPORT_URL=https://<domain>/support.html \
-LOOM_CHROME_EXTENSION_ID=<permanent-store-id> \
-pnpm chrome:store:package
+pnpm chrome:store:release
 ```
 
 For the first private draft, omit `LOOM_CHROME_EXTENSION_ID`. The Store assigns the permanent ID.
 Then update `deployment-config.js`, deploy the public site configuration, rebuild, and re-upload a
 higher manifest version if the submitted package changed.
 
-The packaging variables configure the exact external origin, manifest homepage, public privacy and
-support links, and submission metadata. `LOOM_CHROME_EXTENSION_ID` is metadata-only; the extension
-does not need to know its own assigned ID. Configure that ID in the companion website instead.
+The defaults configure the `https://mgravey.com` external origin, `/loom.js/` homepage, public
+privacy/support links, `sideproject@mgravey.com`, and submission metadata. Environment variables can
+override them for another deployment. `LOOM_CHROME_EXTENSION_ID` is metadata-only; the extension
+does not need to know its own assigned ID. Configure the matching repository variable for the
+companion website after the first draft assigns it.
 
 The ZIP is written under ignored `store-artifacts/` with `manifest.json` at its root. Inspect its
 contents manually:
 
 ```sh
 unzip -l store-artifacts/loom-secure-model-bridge-*.zip
+shasum -a 256 -c store-artifacts/loom-secure-model-bridge-*.zip.sha256
 ```
 
 Confirm:
 
-- [ ] only runtime HTML/JS, icons, privacy disclosure, and manifest are present;
+- [ ] only runtime HTML/JS, icons, privacy disclosure, third-party license notices, and manifest are
+      present;
 - [ ] `externally_connectable.matches` contains only the exact production HTTPS origin;
 - [ ] required localhost/auth/model host permissions are unchanged;
 - [ ] no source maps, declarations, `.tsbuildinfo`, test files, credentials, or private keys exist;
 - [ ] manifest name, description, version, icons, and minimum Chrome version are correct; and
 - [ ] a clean Chrome profile can complete reviewer instructions.
+
+The packager performs the structural checks above, normalizes ZIP timestamps, validates icon
+dimensions, rejects reserved/test hostnames, scans for unresolved placeholders and common remote
+code signals, checks the final archive inventory, and writes a SHA-256 digest. The separate media
+step renders exact-size PNGs and records their provenance and hashes in
+`packages/extension-codex-experimental/store-listing/media-manifest.json`.
 
 ## 9. Submission sequence
 

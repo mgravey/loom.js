@@ -20,10 +20,11 @@
     "manifest.json",
     "options.html",
     "privacy.html",
+    "THIRD_PARTY_NOTICES.txt",
     "icons"
   ],
   "scripts": {
-    "build": "tsup src/index.ts --format esm --dts --clean --tsconfig tsconfig.build.json && tsup --config tsup.extension.config.ts && cp manifest.json options.html callback.html privacy.html dist/ && rm -rf dist/icons && cp -R icons dist/icons",
+    "build": "tsup src/index.ts --format esm --dts --clean --tsconfig tsconfig.build.json && tsup --config tsup.extension.config.ts && cp manifest.json options.html callback.html privacy.html THIRD_PARTY_NOTICES.txt dist/ && rm -rf dist/icons && cp -R icons dist/icons",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run --root ../.. packages/extension-codex-experimental/test"
   },

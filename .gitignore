@@ -10,6 +10,7 @@ blob-report/
 playwright/.auth/
 .playwright-cli/
 output/
+# Generated preview and release archives; approved Store listing media remains tracked separately.
 site-preview/
 store-artifacts/
 packages/extension-codex-experimental/.chrome-store-staging/

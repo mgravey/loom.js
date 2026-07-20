@@ -14,7 +14,7 @@ provider/client-registration blocker in `docs/chrome-web-store-submission.md` is
 
 ## Current development ID
 
-The unpacked extension ID observed for this repository checkout on 18 July 2026 is:
+The unpacked extension ID observed for this repository checkout on 20 July 2026 is:
 
 ```text
 foofdcgdelahbdgdfgocoeajdodhjbjo
@@ -109,32 +109,36 @@ Google recommends making application code insensitive to an extension manifest `
 that model: internal extension pages use `chrome.runtime.getURL()`, while the separate website keeps
 the install-specific extension ID in deployment configuration.
 
-## Create the production Store ZIP
+## Create the production Store release files
 
-Build with exact, public HTTPS URLs:
+After <https://mgravey.com/loom.js/> is deployed, build the exact submission ZIP, checksum,
+metadata, and mandatory listing media with:
 
 ```sh
-LOOM_SITE_ORIGIN=https://loom.example \
-LOOM_PRIVACY_URL=https://loom.example/privacy.html \
-LOOM_SUPPORT_URL=https://loom.example/support.html \
-LOOM_CHROME_EXTENSION_ID=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
-pnpm chrome:store:package
+pnpm chrome:store:release
 ```
 
-Replace every example value. `LOOM_CHROME_EXTENSION_ID` may be omitted for the first draft upload.
-The site, privacy, and support values configure the packaged manifest/disclosure. The extension ID
-is recorded in submission metadata only because Chrome assigns and owns that ID; the companion
-website's `deployment-config.js` is the place that must consume it. The packager:
+The command defaults to the `https://mgravey.com` origin, `/loom.js` base path,
+`https://mgravey.com/loom.js/privacy.html`, `https://mgravey.com/loom.js/support.html`, and
+`sideproject@mgravey.com`. `LOOM_CHROME_EXTENSION_ID` may be omitted for the first draft upload. The
+extension ID is recorded in submission metadata only because Chrome assigns and owns it; the
+companion website's generated deployment configuration consumes it after the repository variable is
+set. Environment variables can override the defaults for another deployment. The release commands:
 
-- requires HTTPS public URLs;
-- replaces `externally_connectable.matches` with the exact production origin;
-- verifies Manifest V3, description length, and the required 128px icon;
+- require a real public HTTPS origin rather than localhost or reserved example domains;
+- replace `externally_connectable.matches` with the exact production origin;
+- verify Manifest V3, description length, every declared icon dimension, and public contact links;
 - excludes declarations, maps, build metadata, and library-only entrypoints;
+- includes the required `lottie-web` MIT copyright and license notice;
 - checks the runtime bundle for common dynamic-code primitives;
-- writes `store-artifacts/loom-secure-model-bridge-<version>.zip`; and
-- writes non-secret submission metadata beside the ZIP.
+- writes a deterministic `store-artifacts/loom-secure-model-bridge-<version>.zip` with a root
+  `manifest.json`, exact allowlisted inventory, SHA-256 file, and non-secret submission metadata;
+  and
+- renders the required 440×280 promotional image and a 1280×800 screenshot of the actual packaged
+  options page under `store-listing/`.
 
-`manifest.json` is placed at the ZIP root as required by the Store.
+Store media is uploaded separately and is intentionally excluded from the extension ZIP. Review the
+ZIP inventory, checksum, promotional image, and screenshot before every dashboard upload.
 
 ## Permissions and hosts
 
@@ -160,8 +164,8 @@ or background analytics.
 - `packages/example-codex-experimental/support.html` — support and data-deletion instructions.
 - `privacy.html` — disclosure bundled inside the extension.
 
-All public legal templates contain visible placeholders and are intentionally not publication-ready
-until the actual publisher and counsel approve them.
+The public templates use `sideproject@mgravey.com` for support and security. Publisher identity and
+postal-address placeholders remain visible until the actual publisher and counsel approve them.
 
 ## Official Chrome references
 

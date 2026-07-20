@@ -9,8 +9,11 @@ phases.
   coding session, plugin composition, typed and model-callable website tools, model transports,
   runtimes, and current limitations
 - [Chrome Web Store submission dossier](./docs/chrome-web-store-submission.md) — development/store
-  extension IDs, production packaging, listing copy, permission justifications, privacy answers,
-  legal/support pages, reviewer instructions, assets, blockers, and release checklist
+  extension IDs, deterministic production ZIP/checksum packaging, generated Store media, listing
+  copy, permission justifications, privacy answers, legal/support pages, reviewer instructions,
+  blockers, and release checklist
+- [GitHub Pages deployment](./docs/github-pages.md) — production `/loom.js/` artifact, Actions
+  workflow, inherited `mgravey.com` domain, repository variables, and static-host limitations
 - [Minimal coding agent](./docs/minimal-agent.md) — Phase 2 composition and protocol boundaries
 - [OpenAI Platform Responses](./docs/openai-responses.md) — supported Responses API adapter,
   Programmatic Tool Calling, continuation, and API-key trust boundary

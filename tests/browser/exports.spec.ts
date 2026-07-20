@@ -116,7 +116,7 @@ test('built experimental extension is isolated, installable, and self-contained'
 
   expect(manifest).toMatchObject({
     manifest_version: 3,
-    name: 'Loom Secure Model Bridge',
+    name: 'Loom.js Companion',
     description:
       'Authenticates Loom sessions and relays model requests only when direct browser access fails.',
     icons: {

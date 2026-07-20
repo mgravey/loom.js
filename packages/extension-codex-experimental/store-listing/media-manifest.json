@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-20T15:00:52.964Z",
+  "generatedAt": "2026-07-20T17:25:42.449Z",
   "media": [
     {
       "file": "promo-small-440x280.png",
@@ -12,7 +12,7 @@
       "file": "screenshot-options-1280x800.png",
       "width": 1280,
       "height": 800,
-      "sha256": "fd70adfd049c3fa48ff95424957df4ffbcb26e4d09f89a7ee70a66b6d408646f",
+      "sha256": "0f7d832f970db90e43cf9ab33fae131e75d73d60f8d83a4a117834c9e3f7f5f1",
       "source": "Actual packaged extension options page rendered from packages/extension-codex-experimental/dist/options.html."
     }
   ]

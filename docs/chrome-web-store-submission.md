@@ -3,7 +3,7 @@
 - Status: **technical draft package ready; external release blockers remain**
 - Prepared: 20 July 2026
 
-Target package: `@loom/extension-codex-experimental` / **Loom Secure Model Bridge**
+Target package: `@loom/extension-codex-experimental` / **Loom.js Companion**
 
 This dossier is the engineering, privacy, listing, testing, and reviewer handoff for a future Chrome
 Web Store submission. It follows the official requirements reviewed on 20 July 2026. Chrome policy
@@ -17,7 +17,8 @@ Do not upload for public review until every item is resolved.
       third-party extension may use the current ChatGPT/Codex authentication and inference
       contracts. The current paths are audited compatibility behavior, not a documented public
       OpenAI OAuth product.
-- [ ] Confirm the actual publishing person/entity, postal address, and software license.
+- [x] Confirm the publishing person (`Mathieu Gravey`) and privacy contact.
+- [ ] Confirm the software license and any jurisdiction-specific legal-notice requirements.
 - [ ] Replace the remaining publisher/address `REPLACE_*` values in
       `packages/example-codex-experimental/deployment-config.js`.
 - [ ] Have qualified counsel review privacy, terms, legal notice/imprint, consumer, data-transfer,
@@ -65,7 +66,7 @@ website automation.
 
 ### Name
 
-`Loom Secure Model Bridge`
+`Loom.js Companion`
 
 The name is neutral and does not suggest that Google or OpenAI publishes or endorses the extension.
 
@@ -80,28 +81,33 @@ productivity/developer category shown by the current dashboard.
 
 ### Detailed description
 
-> Loom Secure Model Bridge is the login and refresh boundary for the Loom.js browser coding
-> workbench.
+> Loom.js Companion connects the Loom.js browser coding workbench to a user-initiated ChatGPT
+> sign-in while keeping long-lived authorization inside the extension.
 >
-> After you explicitly enable it and sign in, the extension stores authorization in trusted
-> extension session storage until Chrome exits. A separate “Remember sign-in on this Chrome profile”
-> control can retain the refresh credential and routing ID locally after a private-computer warning.
-> The Loom website can ask whether you are authenticated, request a short-lived access token plus
-> account-routing ID, or log out. It cannot read or request your refresh or ID credentials. The
-> workbench sends prompts, selected project excerpts, tool results, account-routing metadata, and
-> short-lived provider authentication to OpenAI/ChatGPT only to produce the model response you
-> request. If the direct browser request fails before an HTTP response, the extension processes and
-> relays that model traffic. HTTP errors and cancellation are not retried.
+> After you explicitly enable the extension and sign in, authorization is stored in trusted
+> extension session storage until Chrome exits. On a private computer, you can separately choose to
+> remember the sign-in on that Chrome profile.
 >
-> The bridge accepts messages only from the declared Loom website origin, and first contact still
-> requires a separate exact-origin approval in trusted extension UI. It does not inspect unrelated
-> tabs, browsing history, cookies, or page content. It contains no ads or developer analytics.
+> The extension lets you: • approve each workbench website by its exact origin; • check
+> authentication status and sign out; • provide a short-lived access token and account-routing ID to
+> an approved workbench; and • relay a model request only when the browser's direct request fails
+> before receiving an HTTP response.
 >
-> Project access remains controlled by the Loom website and browser permission prompts. Credentials
-> are not passed to project files, OPFS, QuickJS, WebContainer, or Pyodide.
+> Any HTTPS website can request to appear in the extension's approval list, but authentication and
+> model operations remain blocked until you approve that exact origin from the trusted extension
+> options page. Local HTTP access is restricted to the Loom.js development server.
 >
-> This product is independently developed and is not affiliated with, endorsed by, or supported by
-> Google or OpenAI. Provider account eligibility, availability, and terms still apply.
+> Loom.js Companion does not inspect unrelated tabs, browsing history, cookies, or page content. It
+> contains no advertising or developer analytics. Refresh and ID credentials are not exposed to
+> websites, project files, OPFS, QuickJS, WebContainer, or Pyodide.
+>
+> The approved Loom.js workbench sends prompts, selected project context, tool results,
+> account-routing metadata, and short-lived provider authentication to OpenAI/ChatGPT only to
+> produce the response you request.
+>
+> This is an experimental, independently developed integration. It is not affiliated with, endorsed
+> by, or supported by Google or OpenAI. Provider account eligibility, availability, and terms still
+> apply.
 
 Do not call the integration “official,” “supported by OpenAI,” or “the Codex extension” unless the
 relevant trademark owner has explicitly approved that representation.
@@ -169,9 +175,10 @@ Required before submission:
 | Terms                | `https://mgravey.com/loom.js/terms.html`   |
 | Legal notice/imprint | `https://mgravey.com/loom.js/legal.html`   |
 
-Templates exist in `packages/example-codex-experimental/`. They intentionally show a draft warning
-until the publishing identity and postal address are configured and legally reviewed. Support and
-security mail is already set to `sideproject@mgravey.com`.
+The privacy policy in `packages/example-codex-experimental/` identifies Mathieu Gravey as publisher
+and uses `sideproject@mgravey.com` for privacy and security contact. It intentionally discloses that
+no user data is sent to publisher-operated servers. The separate terms and legal notice retain draft
+warnings pending jurisdiction-specific review.
 
 The privacy policy must describe collection, use, sharing/recipients, storage, retention, deletion,
 security, user choices, applicable rights, international/provider processing, children, changes, and
@@ -249,8 +256,8 @@ The ZIP is written under ignored `store-artifacts/` with `manifest.json` at its 
 contents manually:
 
 ```sh
-unzip -l store-artifacts/loom-secure-model-bridge-*.zip
-shasum -a 256 -c store-artifacts/loom-secure-model-bridge-*.zip.sha256
+unzip -l store-artifacts/loom-js-companion-*.zip
+shasum -a 256 -c store-artifacts/loom-js-companion-*.zip.sha256
 ```
 
 Confirm:

@@ -43,7 +43,7 @@ test('serves installation, privacy, terms, legal, and support surfaces', async (
   await openBuiltEsmHarness(page);
 
   for (const [path, heading] of [
-    ['install.html', 'Install the secure model bridge'],
+    ['install.html', 'Install Loom.js Companion'],
     ['privacy.html', 'Privacy policy'],
     ['terms.html', 'Terms of use'],
     ['legal.html', 'Legal notice'],
@@ -58,6 +58,14 @@ test('serves installation, privacy, terms, legal, and support surfaces', async (
   }
 
   await page.goto(`${browserOrigin}/example-codex-experimental/privacy.html`);
-  await expect(page.getByText('Draft—not ready for public submission')).toBeVisible();
+  await expect(page.getByText('Draft—not ready for public submission')).toHaveCount(0);
+  await expect(page.getByText('Mathieu Gravey')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'sideproject@mgravey.com' }).first()).toHaveAttribute(
+    'href',
+    'mailto:sideproject@mgravey.com',
+  );
+  await expect(
+    page.getByText(/No user data is sent to a server operated by the publisher/u),
+  ).toBeVisible();
   await expect(page.getByText('Chrome Web Store Limited Use')).toBeVisible();
 });

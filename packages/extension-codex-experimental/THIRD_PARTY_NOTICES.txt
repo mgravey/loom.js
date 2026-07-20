@@ -1,4 +1,4 @@
-Loom Secure Model Bridge includes the following third-party software:
+Loom.js Companion includes the following third-party software:
 
 lottie-web 5.13.0
 https://github.com/airbnb/lottie-web

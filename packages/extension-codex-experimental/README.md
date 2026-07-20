@@ -1,4 +1,4 @@
-# Loom Secure Model Bridge
+# Loom.js Companion
 
 This Manifest V3 extension authenticates a user-initiated Loom session. External messages can query
 status or log out. A separate provider-specific message lets the exact authorized experimental
@@ -145,7 +145,7 @@ set. Environment variables can override the defaults for another deployment. The
 - excludes declarations, maps, build metadata, and library-only entrypoints;
 - includes the required `lottie-web` MIT copyright and license notice;
 - checks the runtime bundle for common dynamic-code primitives;
-- writes a deterministic `store-artifacts/loom-secure-model-bridge-<version>.zip` with a root
+- writes a deterministic `store-artifacts/loom-js-companion-<version>.zip` with a root
   `manifest.json`, exact allowlisted inventory, SHA-256 file, and non-secret submission metadata;
   and
 - renders the required 440×280 promotional image and a 1280×800 screenshot of the actual packaged

@@ -60,16 +60,15 @@ records `https://mgravey.com/loom.js/`.
 The workflow reads these optional non-secret variables from **Settings → Secrets and variables →
 Actions → Variables**:
 
-| Variable                    | When to set it                                                                   |
-| --------------------------- | -------------------------------------------------------------------------------- |
-| `LOOM_CHROME_EXTENSION_ID`  | After the first Chrome Web Store draft assigns the permanent 32-character ID.    |
-| `LOOM_CHROME_WEB_STORE_URL` | After the final `chromewebstore.google.com` listing URL exists.                  |
-| `LOOM_LEGAL_NAME`           | Before public Store review, using the legally reviewed publishing person/entity. |
-| `LOOM_LEGAL_ADDRESS`        | Before public Store review, using the legally reviewed publisher postal address. |
+| Variable                    | When to set it                                                                |
+| --------------------------- | ----------------------------------------------------------------------------- |
+| `LOOM_CHROME_EXTENSION_ID`  | After the first Chrome Web Store draft assigns the permanent 32-character ID. |
+| `LOOM_CHROME_WEB_STORE_URL` | After the final `chromewebstore.google.com` listing URL exists.               |
+| `LOOM_LEGAL_NAME`           | Optional override for the publisher name; defaults to `Mathieu Gravey`.       |
 
-Support and security contacts are fixed to `sideproject@mgravey.com`. Until both legal variables are
-configured, the deployed privacy, terms, and legal pages intentionally retain their visible draft
-warning.
+Support and security contacts are fixed to `sideproject@mgravey.com`. The privacy policy is
+publication-ready for the declared extension data flow. The separate terms and legal notice retain
+their own draft warnings because they require jurisdiction-specific review.
 
 ## Chrome extension origin
 

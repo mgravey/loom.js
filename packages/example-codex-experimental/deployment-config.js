@@ -6,8 +6,7 @@ globalThis.LOOM_DEPLOYMENT_CONFIG = Object.freeze({
   chromeExtensionId: 'foofdcgdelahbdgdfgocoeajdodhjbjo',
   chromeWebStoreUrl: '',
   siteOrigin: 'http://localhost:4173',
-  legalName: 'REPLACE_WITH_PUBLISHING_PERSON_OR_ENTITY',
-  legalAddress: 'REPLACE_WITH_LEGAL_POSTAL_ADDRESS',
+  legalName: 'Mathieu Gravey',
   supportEmail: 'sideproject@mgravey.com',
   securityEmail: 'sideproject@mgravey.com',
 });

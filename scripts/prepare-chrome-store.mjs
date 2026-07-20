@@ -114,8 +114,8 @@ if (configuredId !== '' && !/^[a-p]{32}$/u.test(configuredId)) {
 
 const manifest = JSON.parse(await readFile(join(dist, 'manifest.json'), 'utf8'));
 if (manifest.manifest_version !== 3) throw new Error('Store package must use Manifest V3.');
-if (manifest.name !== 'Loom Secure Model Bridge') {
-  throw new Error('Store package must use the reviewed Loom Secure Model Bridge name.');
+if (manifest.name !== 'Loom.js Companion') {
+  throw new Error('Store package must use the reviewed Loom.js Companion name.');
 }
 if (!/^\d{1,5}(?:\.\d{1,5}){0,3}$/u.test(manifest.version)) {
   throw new Error('Manifest version must contain one to four numeric components.');
@@ -244,7 +244,7 @@ for (const file of runtimeFiles) {
 }
 
 await mkdir(artifacts, { recursive: true });
-const archive = join(artifacts, `loom-secure-model-bridge-${manifest.version}.zip`);
+const archive = join(artifacts, `loom-js-companion-${manifest.version}.zip`);
 await rm(archive, { force: true });
 const archiveFiles = [
   ...runtimeFiles,

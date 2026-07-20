@@ -60,8 +60,7 @@ function assertEmail(label, value) {
 const origin = publicOrigin();
 const basePath = publicBasePath();
 const siteUrl = `${origin}${basePath}/`;
-const legalName = process.env.LOOM_LEGAL_NAME?.trim() || 'REPLACE_WITH_PUBLISHING_PERSON_OR_ENTITY';
-const legalAddress = process.env.LOOM_LEGAL_ADDRESS?.trim() || 'REPLACE_WITH_LEGAL_POSTAL_ADDRESS';
+const legalName = process.env.LOOM_LEGAL_NAME?.trim() || 'Mathieu Gravey';
 assertEmail('LOOM_SUPPORT_EMAIL', supportEmail);
 assertEmail('LOOM_SECURITY_EMAIL', securityEmail);
 
@@ -98,7 +97,6 @@ globalThis.LOOM_DEPLOYMENT_CONFIG = Object.freeze(${JSON.stringify(
     siteBasePath: basePath,
     siteUrl,
     legalName,
-    legalAddress,
     supportEmail,
     securityEmail,
   },
@@ -118,8 +116,7 @@ await writeFile(
       basePath,
       extensionConfigured: optionalExtensionId() !== '',
       chromeWebStoreUrlConfigured: optionalStoreUrl() !== '',
-      publisherConfigured:
-        !legalName.startsWith('REPLACE_') && !legalAddress.startsWith('REPLACE_'),
+      publisherConfigured: !legalName.startsWith('REPLACE_'),
       supportEmail,
       files: [
         ...files,

@@ -41,10 +41,11 @@ Chrome's value in `chrome://extensions` is authoritative and may differ for anot
 pnpm --filter @loom/extension-codex-experimental build
 ```
 
-Load `packages/extension-codex-experimental/dist` from `chrome://extensions` with Developer mode
-enabled. Its external messaging route accepts HTTPS websites, but each exact origin must still be
-approved from the trusted extension options page before it can use authentication or model relay.
-Only the fixed `localhost:4173` development origins are accepted over HTTP. See the
+Load **Loom.js Companion** from `packages/extension-codex-experimental/dist` in
+`chrome://extensions` with Developer mode enabled. Its external messaging route accepts HTTPS
+websites, but each exact origin must still be approved from the trusted extension options page
+before it can use authentication or model relay. Only the fixed `localhost:4173` development origins
+are accepted over HTTP. See the
 [extension installation and packaging README](./packages/extension-codex-experimental/README.md) for
 the complete unpacked workflow, extension-ID transition, permission rationale, production ZIP
 command, and Chrome Web Store blockers.
@@ -308,9 +309,9 @@ The [Chrome Web Store submission dossier](./docs/chrome-web-store-submission.md)
 listing, privacy declarations, reviewer instructions, required media, production-origin package
 command, deterministic ZIP/checksum workflow, generated listing media, legal/support inventory, and
 pre-submission gate. The extension is technically packageable for a private draft. Public review
-still requires a supported provider contract, final HTTPS origin, permanent Store ID, verified
-publisher identity/postal address, and legal review. Support and security mail use
-`sideproject@mgravey.com`.
+still requires a supported provider contract, final HTTPS origin, permanent Store ID, software
+license confirmation, and jurisdiction-specific legal review. The privacy policy identifies Mathieu
+Gravey as publisher; privacy, support, and security mail use `sideproject@mgravey.com`.
 
 After the Pages site is live, `pnpm chrome:store:release` uses `https://mgravey.com/loom.js/`, its
 privacy page, and its support page by default. Environment variables remain available when building

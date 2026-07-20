@@ -16,7 +16,6 @@ for (const link of document.querySelectorAll('[data-extension-install]')) {
 
 const legalValues = {
   legalName: configuration.legalName,
-  legalAddress: configuration.legalAddress,
   supportEmail: configuration.supportEmail,
   securityEmail: configuration.securityEmail,
 };
@@ -29,11 +28,4 @@ for (const [name, value] of Object.entries(legalValues)) {
       element.href = `mailto:${value}`;
     }
   }
-}
-
-const hasPlaceholder = Object.values(legalValues).some(
-  (value) => typeof value !== 'string' || value.includes('REPLACE_') || value.endsWith('.invalid'),
-);
-for (const notice of document.querySelectorAll('[data-legal-draft]')) {
-  if (notice instanceof HTMLElement) notice.hidden = !hasPlaceholder;
 }

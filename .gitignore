@@ -10,7 +10,7 @@ blob-report/
 playwright/.auth/
 .playwright-cli/
 output/
-# Generated GitHub Pages preview and release archives; approved Store media remains tracked.
+# Generated GitHub Pages preview and Loom.js Companion release archives; Store media remains tracked.
 site-preview/
 store-artifacts/
 packages/extension-codex-experimental/.chrome-store-staging/

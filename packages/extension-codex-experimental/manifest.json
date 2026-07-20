@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Loom Secure Model Bridge",
+  "name": "Loom.js Companion",
   "version": "0.1.0",
   "minimum_chrome_version": "116",
   "description": "Authenticates Loom sessions and relays model requests only when direct browser access fails.",

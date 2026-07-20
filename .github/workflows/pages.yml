@@ -41,7 +41,6 @@ jobs:
           LOOM_CHROME_EXTENSION_ID: ${{ vars.LOOM_CHROME_EXTENSION_ID }}
           LOOM_CHROME_WEB_STORE_URL: ${{ vars.LOOM_CHROME_WEB_STORE_URL }}
           LOOM_LEGAL_NAME: ${{ vars.LOOM_LEGAL_NAME }}
-          LOOM_LEGAL_ADDRESS: ${{ vars.LOOM_LEGAL_ADDRESS }}
           LOOM_SUPPORT_EMAIL: sideproject@mgravey.com
           LOOM_SECURITY_EMAIL: sideproject@mgravey.com
 

@@ -58,6 +58,10 @@ function assertEmail(label, value) {
   }
 }
 
+function encodeEmail(value) {
+  return Buffer.from(value, 'utf8').toString('base64');
+}
+
 const origin = publicOrigin();
 const basePath = publicBasePath();
 const siteUrl = `${origin}${basePath}/`;
@@ -98,8 +102,10 @@ globalThis.LOOM_DEPLOYMENT_CONFIG = Object.freeze(${JSON.stringify(
     siteBasePath: basePath,
     siteUrl,
     legalName,
-    supportEmail,
-    securityEmail,
+    emailContacts: Object.freeze({
+      support: encodeEmail(supportEmail),
+      security: encodeEmail(securityEmail),
+    }),
   },
   null,
   2,
@@ -118,7 +124,7 @@ await writeFile(
       extensionConfigured: optionalExtensionId() !== '',
       chromeWebStoreUrlConfigured: optionalStoreUrl() !== '',
       publisherConfigured: !legalName.startsWith('REPLACE_'),
-      supportEmail,
+      supportContactConfigured: true,
       files: [
         ...files,
         'assets/',

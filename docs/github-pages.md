@@ -69,8 +69,10 @@ Actions → Variables**:
 Support and security contacts are fixed to `sideproject@mgravey.com`. The privacy policy is
 publication-ready for the declared extension data flow. The separate terms and legal notice retain
 their own draft warnings because they require jurisdiction-specific review. Public pages present
-labeled contact links instead of displaying the address as visible text; the links retain a working
-`mailto:` target.
+labeled contact links instead of displaying the address as visible text. The generated deployment
+configuration contains only a Base64-encoded value, and the browser decodes and installs the
+`mailto:` target only when a visitor activates a contact link. This is scraper friction, not
+encryption or a security boundary.
 
 The generated production configuration defaults to the assigned Store ID. The workbench checks it on
 load and replaces the known legacy unpacked ID retained by an earlier production visit. A query

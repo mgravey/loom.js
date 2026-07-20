@@ -65,14 +65,26 @@ test('serves installation, privacy, terms, legal, and support surfaces', async (
   await expect(page.getByText('Draft—not ready for public submission')).toHaveCount(0);
   await expect(page.getByText('Mathieu Gravey')).toBeVisible();
   await expect(page.getByText('sideproject@mgravey.com')).toHaveCount(0);
-  await expect(page.getByRole('link', { name: 'Contact privacy support' }).first()).toHaveAttribute(
-    'href',
-    'mailto:sideproject@mgravey.com',
-  );
+  const privacyContact = page.getByRole('link', { name: 'Contact privacy support' }).first();
+  await expect(privacyContact).toHaveAttribute('href', '#contact');
+  const revealedHref = await privacyContact.evaluate((element) => {
+    element.addEventListener('click', (event) => event.preventDefault(), {
+      capture: true,
+      once: true,
+    });
+    if (element instanceof HTMLAnchorElement) element.click();
+    return element.getAttribute('href');
+  });
+  expect(revealedHref).toBe('mailto:sideproject@mgravey.com');
   await expect(page.getByRole('link', { name: 'Report a security issue' })).toHaveAttribute(
-    'href',
-    'mailto:sideproject@mgravey.com',
+    'data-email-contact',
+    'security',
   );
+  const deploymentConfig = await page.evaluate(() =>
+    fetch('./deployment-config.js').then((response) => response.text()),
+  );
+  expect(deploymentConfig).not.toContain('sideproject@mgravey.com');
+  expect(deploymentConfig).toContain('c2lkZXByb2plY3RAbWdyYXZleS5jb20=');
   await expect(
     page.getByText(/No user data is sent to a server operated by the publisher/u),
   ).toBeVisible();

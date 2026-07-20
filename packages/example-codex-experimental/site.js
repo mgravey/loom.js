@@ -23,9 +23,10 @@ const legalValues = {
 for (const [name, value] of Object.entries(legalValues)) {
   if (typeof value !== 'string') continue;
   for (const element of document.querySelectorAll(`[data-legal-value="${name}"]`)) {
-    element.textContent = value;
     if (element instanceof HTMLAnchorElement && name.endsWith('Email')) {
       element.href = `mailto:${value}`;
+    } else {
+      element.textContent = value;
     }
   }
 }

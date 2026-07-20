@@ -68,7 +68,9 @@ Actions → Variables**:
 
 Support and security contacts are fixed to `sideproject@mgravey.com`. The privacy policy is
 publication-ready for the declared extension data flow. The separate terms and legal notice retain
-their own draft warnings because they require jurisdiction-specific review.
+their own draft warnings because they require jurisdiction-specific review. Public pages present
+labeled contact links instead of displaying the address as visible text; the links retain a working
+`mailto:` target.
 
 ## Chrome extension origin
 

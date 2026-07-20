@@ -42,6 +42,8 @@ packages/example-codex-experimental/.direct-request-debug/
 packages/extension-codex-experimental/.persistent-auth-debug/
 # Optional disposable Chrome profile used while testing the unpacked extension.
 .chrome-dev-profile/
+# Private local exports of support or privacy correspondence.
+support-correspondence/
 
 # Adobe After Effects autosaves and local render previews.
 Adobe After Effects Auto-Save/

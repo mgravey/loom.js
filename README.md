@@ -311,7 +311,8 @@ command, deterministic ZIP/checksum workflow, generated listing media, legal/sup
 pre-submission gate. The extension is technically packageable for a private draft. Public review
 still requires a supported provider contract, final HTTPS origin, permanent Store ID, software
 license confirmation, and jurisdiction-specific legal review. The privacy policy identifies Mathieu
-Gravey as publisher; privacy, support, and security mail use `sideproject@mgravey.com`.
+Gravey as publisher. Privacy, support, and security use labeled email links so the address is not
+rendered as visible page text.
 
 After the Pages site is live, `pnpm chrome:store:release` uses `https://mgravey.com/loom.js/`, its
 privacy page, and its support page by default. Environment variables remain available when building

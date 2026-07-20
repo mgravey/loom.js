@@ -60,7 +60,12 @@ test('serves installation, privacy, terms, legal, and support surfaces', async (
   await page.goto(`${browserOrigin}/example-codex-experimental/privacy.html`);
   await expect(page.getByText('Draft—not ready for public submission')).toHaveCount(0);
   await expect(page.getByText('Mathieu Gravey')).toBeVisible();
-  await expect(page.getByRole('link', { name: 'sideproject@mgravey.com' }).first()).toHaveAttribute(
+  await expect(page.getByText('sideproject@mgravey.com')).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Contact privacy support' }).first()).toHaveAttribute(
+    'href',
+    'mailto:sideproject@mgravey.com',
+  );
+  await expect(page.getByRole('link', { name: 'Report a security issue' })).toHaveAttribute(
     'href',
     'mailto:sideproject@mgravey.com',
   );

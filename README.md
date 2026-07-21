@@ -5,6 +5,24 @@ environments. Its core behaves like a small operating system: plugins declare wh
 runtime validates and orders them, and consumers resolve capabilities through stable public
 contracts.
 
+## Build Week: Codex and GPT-5.6
+
+Loom.js was developed with Codex as a primary engineering collaborator. GPT-5.6-sol powered Codex
+sessions used to refine the package architecture, implement and review features, write tests,
+diagnose browser and extension behavior, improve documentation, and prepare the Build Week
+submission. Codex worked against the real repository and acceptance suite rather than generating an
+isolated prototype.
+
+GPT-5.6-sol is also part of the runnable demonstration. The experimental browser workbench defaults
+to `gpt-5.6-sol`, translates its Codex-style streamed responses into Loom session events, exposes
+schema-described workspace and execution tools, and carries tool results into follow-up model turns.
+The current demo connects through an experimental ChatGPT/Codex-compatible Chrome companion; this
+is an unsupported interoperability experiment, while the runtime itself is designed for replaceable
+model and transport providers.
+
+See the [Build Week judge guide](./docs/build-week-judges.md) for the public links, architecture
+summary, supported environment, and reproducible testing instructions.
+
 Phases 1 through 5.5 are consolidated on `master`. Phase 1 established the architecture-only
 runtime. Phase 2 added a minimal Codex-style orchestration plugin and text-workspace tools. Phase 3
 added replaceable browser plugins for explicit host capabilities, IndexedDB storage, and File System
@@ -73,6 +91,15 @@ The [final After Effects builder](./scripts/after-effects/loom-logo-lottie-smoot
 accepted closed ribbon contours from the standalone SVG mark. Centerline Trim Paths reveal those
 fixed silhouettes from left to right, preserving the original S-curves, crossings, and endpoint
 proportions without scaling the logo.
+
+The submission-ready [Build Week thumbnail](./docs/assets/build-week/loomjs-build-week-thumbnail.jpg)
+uses a 3:2 landscape crop and stays below the 5 MB upload limit.
+
+The upload-ready [Build Week media gallery](./docs/assets/build-week/gallery/) contains six 3:2
+images covering the landing-page architecture, an open project, an agent editing and executing
+workspace files, QuickJS output, the three workspace modes, and the Chrome companion's explicit
+origin-approval screen. The browser and extension captures use real product states; the workspace
+mode overview is a presentation graphic based on the implemented storage options.
 
 The browser examples and experimental Chrome extension now use Direction 08 consistently. The
 landing page and extension onboarding surfaces play the self-contained Lottie weave, navigation,

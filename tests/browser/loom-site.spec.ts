@@ -25,9 +25,9 @@ test('presents Loom as a library before linking to the experimental workbench', 
     'Carefully vibe coded agentically engineered.',
   );
   await expect(page.locator('.footer-maker-note s')).toHaveText('vibe coded');
-  await expect(page.getByRole('link', { name: 'Install unpacked extension' })).toHaveAttribute(
+  await expect(page.getByRole('link', { name: 'Install from Chrome Web Store' })).toHaveAttribute(
     'href',
-    './install.html',
+    'https://chrome.google.com/webstore/detail/gdcebopdllcifgleoefgbobdopiaholg',
   );
 
   await page.getByRole('link', { name: 'Start building' }).click();

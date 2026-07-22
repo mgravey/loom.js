@@ -3,7 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Install Loom.js Companion for development." />
+    <meta
+      name="description"
+      content="Install the approved Loom.js Companion extension from the Chrome Web Store."
+    />
     <title>Install the Chrome extension · Loom.js</title>
     <link rel="icon" type="image/png" sizes="32x32" href="./assets/favicon.png" />
     <link rel="stylesheet" href="./site.css" />
@@ -25,22 +28,38 @@
     <div class="shell docs-layout">
       <aside class="docs-sidebar">
         <strong>Installation</strong>
+        <a href="#store">Chrome Web Store</a>
         <a href="#current-id">Current ID</a>
         <a href="#build">Build</a>
         <a href="#load">Load unpacked</a>
         <a href="#connect">Connect the site</a>
-        <a href="#store">After publication</a>
+        <a href="#deployment">Deployment configuration</a>
       </aside>
       <main class="docs-main">
         <header>
-          <span class="eyebrow">Development installation</span>
+          <span class="eyebrow">Chrome extension</span>
           <h1>Install Loom.js Companion</h1>
           <p>
-            Until the extension is published, Chrome loads it from the repository. The ID below is
-            the current development value observed for this checkout; always trust the value shown
-            by your own <code>chrome://extensions</code> page.
+            Loom.js Companion has passed Chrome Web Store review. Install the approved release
+            directly from the Store—no repository build or Developer mode setup is required.
           </p>
         </header>
+
+        <section class="doc-section" id="store">
+          <h2>Install from the Chrome Web Store</h2>
+          <p>
+            <a
+              class="button primary"
+              href="https://chrome.google.com/webstore/detail/gdcebopdllcifgleoefgbobdopiaholg"
+              rel="noopener noreferrer"
+              >Add Loom.js Companion to Chrome</a
+            >
+          </p>
+          <p>
+            After installation, open the extension options, review the disclosure, and explicitly
+            enable the bridge before connecting the workbench.
+          </p>
+        </section>
 
         <section class="doc-section" id="current-id">
           <h2>Current development ID</h2>
@@ -108,14 +127,17 @@ python3 -m http.server 4173 --directory packages</code></pre>
           </p>
         </section>
 
-        <section class="doc-section" id="store">
-          <h2>4. Production Store connection</h2>
+        <section class="doc-section" id="deployment">
+          <h2>4. Deployment configuration</h2>
           <ol>
             <li>
               Production defaults to Store ID <code>gdcebopdllcifgleoefgbobdopiaholg</code> and
               checks it when the workbench loads.
             </li>
-            <li>Set <code>chromeWebStoreUrl</code> when the final listing URL is available.</li>
+            <li>
+              The approved listing URL is configured as <code>chromeWebStoreUrl</code> so public
+              installation links open the Store.
+            </li>
             <li>Confirm the production HTTPS origin and verified legal/support details.</li>
             <li>
               Build the Store ZIP with the production-origin packaging command documented in the
@@ -126,9 +148,8 @@ python3 -m http.server 4173 --directory packages</code></pre>
             </li>
           </ol>
           <p>
-            See the repository’s <code>docs/chrome-web-store-submission.md</code> dossier before
-            uploading. Publishing is blocked until the provider integration is authorized and every
-            legal placeholder is replaced.
+            See the repository’s <code>docs/chrome-web-store-submission.md</code> dossier for the
+            review and packaging record.
           </p>
         </section>
       </main>

@@ -18,6 +18,7 @@ packages/extension-codex-experimental/.chrome-store-staging/
 .loom-runs/
 .loom/
 loom-project.zip
+# Locally downloaded or packed Chrome extension bundles; installation uses the approved Store listing.
 packages/*/*.crx
 packages/*/*.pem
 packages/*/*.key

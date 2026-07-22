@@ -7,6 +7,8 @@ const output = join(root, 'site-preview');
 const defaultOrigin = 'https://mgravey.com';
 const defaultBasePath = '/loom.js';
 const defaultChromeExtensionId = 'gdcebopdllcifgleoefgbobdopiaholg';
+const defaultChromeWebStoreUrl =
+  'https://chrome.google.com/webstore/detail/gdcebopdllcifgleoefgbobdopiaholg';
 const supportEmail = process.env.LOOM_SUPPORT_EMAIL?.trim() || 'sideproject@mgravey.com';
 const securityEmail = process.env.LOOM_SECURITY_EMAIL?.trim() || supportEmail;
 
@@ -43,10 +45,10 @@ function optionalExtensionId() {
 }
 
 function optionalStoreUrl() {
-  const raw = process.env.LOOM_CHROME_WEB_STORE_URL?.trim() || '';
-  if (raw === '') return '';
+  const raw = process.env.LOOM_CHROME_WEB_STORE_URL?.trim() || defaultChromeWebStoreUrl;
   const value = new URL(raw);
-  if (value.protocol !== 'https:' || value.hostname !== 'chromewebstore.google.com') {
+  const allowedHosts = new Set(['chrome.google.com', 'chromewebstore.google.com']);
+  if (value.protocol !== 'https:' || !allowedHosts.has(value.hostname)) {
     throw new Error('LOOM_CHROME_WEB_STORE_URL must be an HTTPS Chrome Web Store URL.');
   }
   return value.href;

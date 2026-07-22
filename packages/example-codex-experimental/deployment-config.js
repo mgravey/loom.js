@@ -4,7 +4,7 @@
 globalThis.LOOM_DEPLOYMENT_CONFIG = Object.freeze({
   environment: 'development',
   chromeExtensionId: 'foofdcgdelahbdgdfgocoeajdodhjbjo',
-  chromeWebStoreUrl: '',
+  chromeWebStoreUrl: 'https://chrome.google.com/webstore/detail/gdcebopdllcifgleoefgbobdopiaholg',
   siteOrigin: 'http://localhost:4173',
   legalName: 'Mathieu Gravey',
   emailContacts: Object.freeze({

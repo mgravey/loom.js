@@ -16,8 +16,8 @@ isolated prototype.
 GPT-5.6-sol is also part of the runnable demonstration. The experimental browser workbench defaults
 to `gpt-5.6-sol`, translates its Codex-style streamed responses into Loom session events, exposes
 schema-described workspace and execution tools, and carries tool results into follow-up model turns.
-The current demo connects through an experimental ChatGPT/Codex-compatible Chrome companion; this
-is an unsupported interoperability experiment, while the runtime itself is designed for replaceable
+The current demo connects through an experimental ChatGPT/Codex-compatible Chrome companion; this is
+an unsupported interoperability experiment, while the runtime itself is designed for replaceable
 model and transport providers.
 
 See the [Build Week judge guide](./docs/build-week-judges.md) for the public links, architecture
@@ -52,7 +52,14 @@ welcome page footer includes the project's deliberately tongue-in-cheek maker's 
 production artifact defaults to the Store Companion ID `gdcebopdllcifgleoefgbobdopiaholg`, so the
 workbench attempts that connection automatically.
 
-### Install the Chrome extension during development
+### Install the Chrome extension
+
+Loom.js Companion is approved and available from the
+[Chrome Web Store](https://chrome.google.com/webstore/detail/gdcebopdllcifgleoefgbobdopiaholg).
+Install it from the Store for the production workbench; no manual build or Developer mode setup is
+required.
+
+#### Install an unpacked development build
 
 The unpacked extension ID currently observed for this checkout is
 `foofdcgdelahbdgdfgocoeajdodhjbjo`. It is prefilled in the website deployment configuration, but
@@ -92,8 +99,9 @@ accepted closed ribbon contours from the standalone SVG mark. Centerline Trim Pa
 fixed silhouettes from left to right, preserving the original S-curves, crossings, and endpoint
 proportions without scaling the logo.
 
-The submission-ready [Build Week thumbnail](./docs/assets/build-week/loomjs-build-week-thumbnail.jpg)
-uses a 3:2 landscape crop and stays below the 5 MB upload limit.
+The submission-ready
+[Build Week thumbnail](./docs/assets/build-week/loomjs-build-week-thumbnail.jpg) uses a 3:2
+landscape crop and stays below the 5 MB upload limit.
 
 The upload-ready [Build Week media gallery](./docs/assets/build-week/gallery/) contains six 3:2
 images covering the landing-page architecture, an open project, an agent editing and executing
@@ -336,14 +344,14 @@ The [browser coding workbench guide](./docs/browser-coding-workbench.md) covers 
 `@loom/coding` API, extension callback bridge, project modes, folder/ZIP transfer, and
 QuickJS/WebContainer/Pyodide execution.
 
-The [Chrome Web Store submission dossier](./docs/chrome-web-store-submission.md) contains the draft
+The [Chrome Web Store submission dossier](./docs/chrome-web-store-submission.md) records the
 listing, privacy declarations, reviewer instructions, required media, production-origin package
-command, deterministic ZIP/checksum workflow, generated listing media, legal/support inventory, and
-pre-submission gate. The extension is technically packageable for a private draft. Public review
-still requires a supported provider contract, final HTTPS origin, permanent Store ID, software
-license confirmation, and jurisdiction-specific legal review. The privacy policy identifies Mathieu
-Gravey as publisher. Privacy, support, and security use labeled links backed by an encoded
-deployment value that is decoded into a `mailto:` target only when the visitor activates the link.
+command, deterministic ZIP/checksum workflow, generated listing media, and legal/support inventory.
+The extension has passed Chrome Web Store review and is available from its
+[approved listing](https://chrome.google.com/webstore/detail/gdcebopdllcifgleoefgbobdopiaholg). The
+privacy policy identifies Mathieu Gravey as publisher. Privacy, support, and security use labeled
+links backed by an encoded deployment value that is decoded into a `mailto:` target only when the
+visitor activates the link.
 
 After the Pages site is live, `pnpm chrome:store:release` uses `https://mgravey.com/loom.js/`, its
 privacy page, and its support page by default. Environment variables remain available when building

@@ -16,7 +16,7 @@ import {
   type GetAccessTokenInput,
   type GetAccessTokenRequest,
   type LogoutInput,
-} from '@loom/credential-broker-api';
+} from '@mgravey/loom-credential-broker-api';
 
 /** The minimal injected surface needed from an extension external-message runtime. */
 export interface ExternalMessageRuntime {

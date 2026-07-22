@@ -1,4 +1,4 @@
-import type { JsonObject } from '@loom/types';
+import type { JsonObject } from '@mgravey/loom-types';
 import { describe, expect, it } from 'vitest';
 
 import { createConfigurationStore } from '../src/configuration.js';

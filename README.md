@@ -67,7 +67,7 @@ Chrome's value in `chrome://extensions` is authoritative and may differ for anot
 local development ID is separate from the Store ID used by the production Pages artifact.
 
 ```sh
-pnpm --filter @loom/extension-codex-experimental build
+pnpm --filter @mgravey/loom-extension-codex-experimental build
 ```
 
 Load **Loom.js Companion** from `packages/extension-codex-experimental/dist` in
@@ -117,60 +117,83 @@ reduced-motion and loading fallback.
 
 ## Packages
 
-| Package                              | Responsibility                                                                      |
-| ------------------------------------ | ----------------------------------------------------------------------------------- |
-| `@loom/types`                        | Dependency-free primitives shared across the ecosystem                              |
-| `@loom/plugin-api`                   | Contracts used by plugin authors                                                    |
-| `@loom/core`                         | Runtime composition, lifecycle, registries, DI, events, configuration, and sessions |
-| `@loom/tool-workspace`               | Text/binary projects, safe archives, strict patches, and workspace tools            |
-| `@loom/agent-codex`                  | Minimal streamed model/tool orchestration; no provider integration                  |
-| `@loom/coding`                       | Coding sessions, follow-ups, cancellation, transcripts, and runtime dispatch        |
-| `@loom/execution-browser`            | Credential-free QuickJS, WebContainer, and Pyodide execution adapters               |
-| `@loom/model-openai-responses`       | Documented Platform Responses adapter with programmatic tool continuations          |
-| `@loom/platform-browser`             | Explicitly supplied browser host capability                                         |
-| `@loom/storage-indexeddb`            | Namespaced byte storage implemented with IndexedDB                                  |
-| `@loom/workspace-fsa`                | File System Access and OPFS implementation of binary project workspaces             |
-| `@loom/credential-broker-api`        | Transport-neutral, validated access-token request/response protocol                 |
-| `@loom/credential-provider-api`      | Host-neutral provider, refresh, and interactive-authorization contracts             |
-| `@loom/auth-extension`               | External-message client and Loom `AuthProvider` adapter                             |
-| `@loom/extension`                    | Manifest V3 credential broker with extension-owned refresh state                    |
-| `@loom/auth-codex-experimental`      | Audited Codex PKCE/device-auth experiment with injected host services               |
-| `@loom/extension-codex-experimental` | Separate disabled-by-default Manifest V3 experiment composition                     |
-| `@loom/model-codex-experimental`     | Experimental Responses/SSE adapter with an injected credential-free transport       |
-| `@loom/examples`                     | Provider-neutral examples that use public package exports only                      |
-| `@loom/example-browser`              | Browser application demonstrating explicit Phase 3 composition                      |
-| `@loom/example-extension`            | Browser application demonstrating the Phase 4 extension boundary                    |
-| `@loom/example-codex-experimental`   | Project welcome/docs site plus a separate experimental browser coding workbench     |
+| Package                                      | Responsibility                                                                      |
+| -------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `@mgravey/loom-types`                        | Dependency-free primitives shared across the ecosystem                              |
+| `@mgravey/loom-plugin-api`                   | Contracts used by plugin authors                                                    |
+| `@mgravey/loom-core`                         | Runtime composition, lifecycle, registries, DI, events, configuration, and sessions |
+| `@mgravey/loom-tool-workspace`               | Text/binary projects, safe archives, strict patches, and workspace tools            |
+| `@mgravey/loom-agent-codex`                  | Minimal streamed model/tool orchestration; no provider integration                  |
+| `@mgravey/loom-coding`                       | Coding sessions, follow-ups, cancellation, transcripts, and runtime dispatch        |
+| `@mgravey/loom-execution-browser`            | Credential-free QuickJS, WebContainer, and Pyodide execution adapters               |
+| `@mgravey/loom-model-openai-responses`       | Documented Platform Responses adapter with programmatic tool continuations          |
+| `@mgravey/loom-platform-browser`             | Explicitly supplied browser host capability                                         |
+| `@mgravey/loom-storage-indexeddb`            | Namespaced byte storage implemented with IndexedDB                                  |
+| `@mgravey/loom-workspace-fsa`                | File System Access and OPFS implementation of binary project workspaces             |
+| `@mgravey/loom-credential-broker-api`        | Transport-neutral, validated access-token request/response protocol                 |
+| `@mgravey/loom-credential-provider-api`      | Host-neutral provider, refresh, and interactive-authorization contracts             |
+| `@mgravey/loom-auth-extension`               | External-message client and Loom `AuthProvider` adapter                             |
+| `@mgravey/loom-extension`                    | Manifest V3 credential broker with extension-owned refresh state                    |
+| `@mgravey/loom-auth-codex-experimental`      | Audited Codex PKCE/device-auth experiment with injected host services               |
+| `@mgravey/loom-extension-codex-experimental` | Separate disabled-by-default Manifest V3 experiment composition                     |
+| `@mgravey/loom-model-codex-experimental`     | Experimental Responses/SSE adapter with an injected credential-free transport       |
+| `@mgravey/loom-examples`                     | Provider-neutral examples that use public package exports only                      |
+| `@mgravey/loom-example-browser`              | Browser application demonstrating explicit Phase 3 composition                      |
+| `@mgravey/loom-example-extension`            | Browser application demonstrating the Phase 4 extension boundary                    |
+| `@mgravey/loom-example-codex-experimental`   | Project welcome/docs site plus a separate experimental browser coding workbench     |
 
 Dependency direction is intentional:
 
 ```text
-@loom/types <- @loom/plugin-api <- @loom/core
+@mgravey/loom-types <- @mgravey/loom-plugin-api <- @mgravey/loom-core
              ^       ^
-             |       +-- @loom/tool-workspace <- @loom/agent-codex
+             |       +-- @mgravey/loom-tool-workspace <- @mgravey/loom-agent-codex
              +------------------------- browser plugins and examples
 
-@loom/credential-broker-api <- @loom/auth-extension <- @loom/example-extension
+@mgravey/loom-credential-broker-api <- @mgravey/loom-auth-extension <- @mgravey/loom-example-extension
              ^
-             +-- @loom/extension <- @loom/extension-codex-experimental
+             +-- @mgravey/loom-extension <- @mgravey/loom-extension-codex-experimental
 
-@loom/credential-provider-api <- @loom/extension
+@mgravey/loom-credential-provider-api <- @mgravey/loom-extension
              ^
-             +-- @loom/auth-codex-experimental <- @loom/extension-codex-experimental
+             +-- @mgravey/loom-auth-codex-experimental <- @mgravey/loom-extension-codex-experimental
 
-@loom/agent-codex <- @loom/model-codex-experimental <- @loom/example-codex-experimental
+@mgravey/loom-agent-codex <- @mgravey/loom-model-codex-experimental <- @mgravey/loom-example-codex-experimental
         ^
-        +-------------- @loom/model-openai-responses
-        `-------------- @loom/coding
+        +-------------- @mgravey/loom-model-openai-responses
+        `-------------- @mgravey/loom-coding
 
-@loom/tool-workspace <- @loom/workspace-fsa
+@mgravey/loom-tool-workspace <- @mgravey/loom-workspace-fsa
         ^
         +-------------- browser workbench
-@loom/execution-browser --------------^
+@mgravey/loom-execution-browser --------------^
 ```
 
 Plugins may use the public runtime composition API when acting as an application entry point, but
-must never import core internals. `@loom/types` cannot depend on another Loom package.
+must never import core internals. `@mgravey/loom-types` cannot depend on another Loom package.
+
+`@mgravey/loom-core` is the provider-neutral composition runtime; it does not communicate with
+Chrome directly. A website talks to a Chrome credential broker through
+`@mgravey/loom-auth-extension` and the shared `@mgravey/loom-credential-broker-api` protocol. The
+extension side is implemented by `@mgravey/loom-extension` and provider implementations conform to
+`@mgravey/loom-credential-provider-api`. Keeping that transport outside Core preserves non-Chrome
+hosts and makes the trust boundary explicit.
+
+## Install as a library
+
+The minimal Core and website-to-extension credential packages are published on npm at `0.1.0`.
+Install only the two top-level capabilities; npm resolves their three shared packages automatically:
+
+```sh
+pnpm add @mgravey/loom-core
+pnpm add @mgravey/loom-auth-extension
+```
+
+The published dependency set is `loom-types`, `loom-plugin-api`, `loom-core`,
+`loom-credential-broker-api`, and `loom-auth-extension`. Other stable packages are prepared but have
+not yet had their first registry release; examples and all `*-experimental` packages remain private.
+See [Publishing](./docs/publishing.md) for release status, tarball verification, versioning, and npm
+trusted-publishing procedure.
 
 ## Getting started
 
@@ -217,8 +240,8 @@ registered operation and caller policy, invokes the exact registered implementat
 JSON result to the next turn.
 
 ```ts
-import type { CodexTool } from '@loom/agent-codex';
-import { createCodingSession } from '@loom/coding';
+import type { CodexTool } from '@mgravey/loom-agent-codex';
+import { createCodingSession } from '@mgravey/loom-coding';
 
 const cartSummary: CodexTool = Object.freeze({
   name: 'cart_summary',
@@ -341,7 +364,7 @@ clean the complete `.loom` directory—including generated figures—after expli
 Conversation records stay inside the selected local, temporary, or persistent browser workspace.
 
 The [browser coding workbench guide](./docs/browser-coding-workbench.md) covers the reusable
-`@loom/coding` API, extension callback bridge, project modes, folder/ZIP transfer, and
+`@mgravey/loom-coding` API, extension callback bridge, project modes, folder/ZIP transfer, and
 QuickJS/WebContainer/Pyodide execution.
 
 The [Chrome Web Store submission dossier](./docs/chrome-web-store-submission.md) records the
@@ -368,12 +391,18 @@ browser-to-extension real-provider composition and remains explicitly unsupporte
 
 ## Project status
 
-Loom.js packages remain private at `0.1.0`. The Platform Responses adapter targets the documented
-API but does not ship credentials, a backend proxy, billing configuration, or a production model
-entitlement. The generic Phase 4 extension remains development-only and ships a mock provider. The
-separate Phase 5.5 provider is unsupported, disabled by default, and must not be described as
-production ChatGPT/Codex authentication. The extension callback bridge reuses the audited localhost
-redirect but remains an undocumented third-party compatibility experiment; device authorization can
-also be server-disabled. Publishing, license selection, Changesets, public namespace ownership, hot
-plugin mutation, version-range negotiation, and multi-browser CI are intentionally deferred. See
+Stable Loom.js packages are MPL-2.0 licensed under `@mgravey/loom-*`. The five-package minimal Core
+and website-to-extension credential set is published at `0.1.0`; the remaining stable adapters are
+prepared but not yet released. The Platform Responses adapter targets the documented API but does
+not ship credentials, a backend proxy, billing configuration, or a production model entitlement. The
+generic Phase 4 extension remains development-only and ships a mock provider. The separate Phase 5.5
+provider is unsupported, disabled by default, and must not be described as production ChatGPT/Codex
+authentication. The extension callback bridge reuses the audited localhost redirect but remains an
+undocumented third-party compatibility experiment; device authorization can also be server-disabled.
+Hot plugin mutation, cross-version negotiation, and multi-browser CI remain deferred. See
 [CHANGES.md](./CHANGES.md) for milestone history.
+
+## License
+
+Loom.js source and public package artifacts are available under the
+[Mozilla Public License 2.0](./LICENSE).

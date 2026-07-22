@@ -5,7 +5,7 @@ import type {
   JsonValue,
   RuntimeConfiguration as LoomRuntimeConfiguration,
   SessionConfigurationOverlay,
-} from '@loom/types';
+} from '@mgravey/loom-types';
 
 import { CoreError } from './errors.js';
 import { assertNonEmpty } from './internal.js';

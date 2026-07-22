@@ -1,4 +1,4 @@
-import { createEventKey } from '@loom/plugin-api';
+import { createEventKey } from '@mgravey/loom-plugin-api';
 import { describe, expect, it } from 'vitest';
 
 import { createEventBus } from '../src/event-bus.js';

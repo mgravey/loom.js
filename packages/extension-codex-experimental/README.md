@@ -34,7 +34,7 @@ From the repository root:
 
 ```sh
 pnpm install --frozen-lockfile
-pnpm --filter @loom/extension-codex-experimental build
+pnpm --filter @mgravey/loom-extension-codex-experimental build
 ```
 
 Then:

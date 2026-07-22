@@ -3,9 +3,9 @@ import type {
   CodexModelEvent,
   CodexModelMessage,
   CodexModelRequest,
-} from '@loom/agent-codex';
-import type { OperationContext } from '@loom/plugin-api';
-import type { JsonObject, JsonValue } from '@loom/types';
+} from '@mgravey/loom-agent-codex';
+import type { OperationContext } from '@mgravey/loom-plugin-api';
+import type { JsonObject, JsonValue } from '@mgravey/loom-types';
 
 import type {
   AccessTokenSupplier,

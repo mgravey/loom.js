@@ -4,8 +4,8 @@ import {
   definePlugin,
   registerAuth,
   type LoomPlugin,
-} from '@loom/plugin-api';
-import { capabilityId, pluginId, semanticVersion } from '@loom/types';
+} from '@mgravey/loom-plugin-api';
+import { capabilityId, pluginId, semanticVersion } from '@mgravey/loom-types';
 
 import {
   createExtensionAuthProvider,

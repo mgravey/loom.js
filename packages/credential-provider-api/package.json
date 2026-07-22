@@ -1,7 +1,25 @@
 {
-  "name": "@loom/credential-provider-api",
+  "name": "@mgravey/loom-credential-provider-api",
   "version": "0.1.0",
-  "private": true,
+  "description": "Host-neutral credential provider, refresh, and interactive authorization contracts for Loom.js.",
+  "license": "MPL-2.0",
+  "author": "Mathieu Gravey",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mgravey/loom.js.git",
+    "directory": "packages/credential-provider-api"
+  },
+  "homepage": "https://mgravey.com/loom.js/",
+  "bugs": {
+    "url": "https://github.com/mgravey/loom.js/issues"
+  },
+  "keywords": [
+    "loom",
+    "credentials",
+    "authentication",
+    "provider",
+    "typescript"
+  ],
   "type": "module",
   "sideEffects": false,
   "exports": {
@@ -11,10 +29,21 @@
     }
   },
   "files": [
-    "dist"
+    "dist/index.js",
+    "dist/index.d.ts",
+    "README.md",
+    "LICENSE"
   ],
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts --clean --tsconfig tsconfig.build.json",
+    "prepack": "pnpm run build && node ../../scripts/prepare-package.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },

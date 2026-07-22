@@ -17,9 +17,10 @@ SSE events, account routing, and provider endpoint selection do not belong in th
 
 ## Decision
 
-Add `@loom/model-codex-experimental` as a removable leaf above the agent-owned model protocol. Its
-preferred mode accepts a credential-free transport and maps generic agent messages and tool calls to
-the currently audited Responses-style body. It parses streamed SSE into the Phase 2 agent protocol.
+Add `@mgravey/loom-model-codex-experimental` as a removable leaf above the agent-owned model
+protocol. Its preferred mode accepts a credential-free transport and maps generic agent messages and
+tool calls to the currently audited Responses-style body. It parses streamed SSE into the Phase 2
+agent protocol.
 
 Add a separate, versioned `chrome.runtime.Port` transport to the experimental extension. The port
 accepts one bounded model request from an exact authorized origin. The extension resolves its own
@@ -30,8 +31,8 @@ not returned for rejected HTTP statuses.
 
 Parse the initial ID token in trusted extension code and persist only the non-bearer account routing
 ID in trusted storage. Do not retain or expose the raw ID token for inference routing. Keep the
-model port protocol separate from `@loom/credential-broker-api`; do not change Core or the generic
-agent contract.
+model port protocol separate from `@mgravey/loom-credential-broker-api`; do not change Core or the
+generic agent contract.
 
 Automated tests use only local fixtures and synthetic credentials. Live compatibility remains an
 explicit, disabled-by-default manual experiment.
@@ -40,8 +41,8 @@ explicit, disabled-by-default manual experiment.
 
 The page can run a real Loom runtime and workspace agent without possessing provider credentials.
 The extension grows beyond a credential-only broker, but only in the provider-specific experimental
-composition root. Removing `@loom/extension-codex-experimental` and `@loom/model-codex-experimental`
-leaves the generic broker, Core, and agent unchanged.
+composition root. Removing `@mgravey/loom-extension-codex-experimental` and
+`@mgravey/loom-model-codex-experimental` leaves the generic broker, Core, and agent unchanged.
 
 The transport inherits the instability of an undocumented provider backend and current event shapes.
 Model IDs, headers, endpoints, and events require source re-audit before release. The extension host

@@ -1,4 +1,7 @@
-import { createChromeRefreshCredentialStore, type ChromeStorageArea } from '@loom/extension';
+import {
+  createChromeRefreshCredentialStore,
+  type ChromeStorageArea,
+} from '@mgravey/loom-extension';
 import { describe, expect, it } from 'vitest';
 
 import { createCodexAccountRoutingStore } from '../src/account-routing.js';

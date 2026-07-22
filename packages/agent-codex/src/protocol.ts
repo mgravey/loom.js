@@ -1,5 +1,5 @@
-import type { Model, Tool } from '@loom/plugin-api';
-import type { JsonObject, JsonValue } from '@loom/types';
+import type { Model, Tool } from '@mgravey/loom-plugin-api';
+import type { JsonObject, JsonValue } from '@mgravey/loom-types';
 
 export type CodexToolCaller = 'direct' | 'programmatic';
 

@@ -1,6 +1,16 @@
-import type { Agent, AgentDependencies, AgentFactory, OperationContext } from '@loom/plugin-api';
-import { WORKSPACE_OPERATIONS, type WorkspaceTool } from '@loom/tool-workspace';
-import { immutableJson, type DeepReadonly, type JsonObject, type JsonValue } from '@loom/types';
+import type {
+  Agent,
+  AgentDependencies,
+  AgentFactory,
+  OperationContext,
+} from '@mgravey/loom-plugin-api';
+import { WORKSPACE_OPERATIONS, type WorkspaceTool } from '@mgravey/loom-tool-workspace';
+import {
+  immutableJson,
+  type DeepReadonly,
+  type JsonObject,
+  type JsonValue,
+} from '@mgravey/loom-types';
 
 import { CodexAgentError } from './errors.js';
 import type {

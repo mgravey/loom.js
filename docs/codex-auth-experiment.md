@@ -120,29 +120,30 @@ unsupported for third-party use before the user starts it.
 The concrete provider remains outside Loom Core and the provider-neutral broker:
 
 ```text
-@loom/credential-broker-api
+@mgravey/loom-credential-broker-api
             |
             v
-@loom/credential-provider-api
+@mgravey/loom-credential-provider-api
        |                  |
        v                  v
-@loom/extension   @loom/auth-codex-experimental
+@mgravey/loom-extension   @mgravey/loom-auth-codex-experimental
        |                  |
        +---------+--------+
                  v
   experimental extension composition root
 ```
 
-- `@loom/credential-broker-api` remains the versioned, provider-neutral page/extension protocol.
-- `@loom/credential-provider-api` contains only structural credential-provider contracts and typed
-  provider failures.
-- `@loom/extension` owns generic origin authorization, trusted storage, token caching, refresh
-  coordination, and error sanitization. It contains no Codex endpoints or parameters.
-- `@loom/auth-codex-experimental` contains the audited provider-specific request construction and
-  parsing for explicit device-code and direct-browser modes. Secure randomness, SHA-256, HTTP
-  transport, clock, redirect launch, polling/sleep, and authorization transaction storage are
-  injected interfaces. Redirect request creation and callback completion are split so the extension
-  can persist and resume a short-lived transaction safely.
+- `@mgravey/loom-credential-broker-api` remains the versioned, provider-neutral page/extension
+  protocol.
+- `@mgravey/loom-credential-provider-api` contains only structural credential-provider contracts and
+  typed provider failures.
+- `@mgravey/loom-extension` owns generic origin authorization, trusted storage, token caching,
+  refresh coordination, and error sanitization. It contains no Codex endpoints or parameters.
+- `@mgravey/loom-auth-codex-experimental` contains the audited provider-specific request
+  construction and parsing for explicit device-code and direct-browser modes. Secure randomness,
+  SHA-256, HTTP transport, clock, redirect launch, polling/sleep, and authorization transaction
+  storage are injected interfaces. Redirect request creation and callback completion are split so
+  the extension can persist and resume a short-lived transaction safely.
 - A leaf extension composition root may bind those interfaces to `crypto`, `fetch`, `chrome.tabs`,
   tab-scoped DNR session rules, `chrome.storage.session`, and `chrome.storage.local`. Removing that
   leaf must leave Loom Core and the shared broker unchanged.

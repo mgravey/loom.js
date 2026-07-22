@@ -4,7 +4,7 @@ import {
   type ChromeMessageSender,
   type ExtensionTokenService,
   type OriginAuthorizer,
-} from '@loom/extension';
+} from '@mgravey/loom-extension';
 
 import type { CodexAccountRoutingStore } from './account-routing.js';
 

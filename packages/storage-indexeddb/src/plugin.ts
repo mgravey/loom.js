@@ -1,5 +1,10 @@
-import { PLUGIN_API_VERSION, definePlugin, storageKey, type LoomPlugin } from '@loom/plugin-api';
-import { capabilityId, pluginId, semanticVersion } from '@loom/types';
+import {
+  PLUGIN_API_VERSION,
+  definePlugin,
+  storageKey,
+  type LoomPlugin,
+} from '@mgravey/loom-plugin-api';
+import { capabilityId, pluginId, semanticVersion } from '@mgravey/loom-types';
 
 import { createIndexedDbStorage, type CreateIndexedDbStorageOptions } from './storage.js';
 

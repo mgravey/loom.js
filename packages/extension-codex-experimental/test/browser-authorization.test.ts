@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 
-import type { ChromeStorageArea } from '@loom/extension';
+import type { ChromeStorageArea } from '@mgravey/loom-extension';
 import { describe, expect, it, vi } from 'vitest';
 
 import {

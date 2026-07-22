@@ -2,7 +2,7 @@ import type {
   AccessTokenResult,
   CredentialProvider,
   InteractiveCredentialAuthorization,
-} from '@loom/credential-provider-api';
+} from '@mgravey/loom-credential-provider-api';
 
 export interface CodexOAuthConfiguration {
   readonly issuer: string;

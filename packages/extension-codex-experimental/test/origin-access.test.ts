@@ -1,4 +1,4 @@
-import { createOriginAuthorizer, type ChromeStorageArea } from '@loom/extension';
+import { createOriginAuthorizer, type ChromeStorageArea } from '@mgravey/loom-extension';
 import { describe, expect, it, vi } from 'vitest';
 
 import {

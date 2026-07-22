@@ -1,8 +1,8 @@
 import {
   completeCodexExperimentalRedirectAuthorization,
   createCodexExperimentalRedirectAuthorizationRequest,
-} from '@loom/auth-codex-experimental';
-import type { ChromeStorageArea } from '@loom/extension';
+} from '@mgravey/loom-auth-codex-experimental';
+import type { ChromeStorageArea } from '@mgravey/loom-extension';
 
 import { chatGptAccountIdFromIdToken } from './account-routing.js';
 import {

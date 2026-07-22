@@ -1,5 +1,5 @@
 {
-  "name": "@loom/example-codex-experimental",
+  "name": "@mgravey/loom-example-codex-experimental",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -9,14 +9,14 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@loom/agent-codex": "workspace:*",
-    "@loom/auth-extension": "workspace:*",
-    "@loom/coding": "workspace:*",
-    "@loom/execution-browser": "workspace:*",
-    "@loom/model-codex-experimental": "workspace:*",
-    "@loom/tool-workspace": "workspace:*",
-    "@loom/types": "workspace:*",
-    "@loom/workspace-fsa": "workspace:*",
+    "@mgravey/loom-agent-codex": "workspace:^",
+    "@mgravey/loom-auth-extension": "workspace:^",
+    "@mgravey/loom-coding": "workspace:^",
+    "@mgravey/loom-execution-browser": "workspace:^",
+    "@mgravey/loom-model-codex-experimental": "workspace:^",
+    "@mgravey/loom-tool-workspace": "workspace:^",
+    "@mgravey/loom-types": "workspace:^",
+    "@mgravey/loom-workspace-fsa": "workspace:^",
     "lottie-web": "5.13.0"
   },
   "devDependencies": {

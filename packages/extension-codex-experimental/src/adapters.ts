@@ -7,8 +7,8 @@ import type {
   OAuthHttpTransport,
   SecureRandomSource,
   Sha256Digest,
-} from '@loom/auth-codex-experimental';
-import type { ChromeStorageArea } from '@loom/extension';
+} from '@mgravey/loom-auth-codex-experimental';
+import type { ChromeStorageArea } from '@mgravey/loom-extension';
 
 import type { BrowserCrypto, ChromeIdentityApi, OAuthFetch } from './chrome-contracts.js';
 

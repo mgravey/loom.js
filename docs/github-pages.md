@@ -34,8 +34,8 @@ uses `actions/configure-pages@v5`, `actions/upload-pages-artifact@v4`, and
 Pushing `master` or `main` runs `.github/workflows/pages.yml`. It:
 
 1. installs the pinned pnpm/Node toolchain;
-2. builds `@loom/example-codex-experimental` and all of its transitive workspace dependencies in
-   topological order;
+2. builds `@mgravey/loom-example-codex-experimental` and all of its transitive workspace
+   dependencies in topological order;
 3. creates a validated static artifact under ignored `site-preview/`;
 4. uploads that artifact to GitHub Pages; and
 5. deploys it through the protected `github-pages` environment.

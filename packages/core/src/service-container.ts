@@ -5,8 +5,8 @@ import type {
   ServiceResolver,
   ServiceScope,
   ServiceToken,
-} from '@loom/plugin-api';
-import { pluginId, type Awaitable, type PluginId } from '@loom/types';
+} from '@mgravey/loom-plugin-api';
+import { pluginId, type Awaitable, type PluginId } from '@mgravey/loom-types';
 
 import { AggregateDisposalError, CoreError } from './errors.js';
 import { assertNonEmpty } from './internal.js';

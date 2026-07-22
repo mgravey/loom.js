@@ -8,6 +8,6 @@ export default defineConfig({
   outDir: 'dist',
   clean: false,
   splitting: false,
-  noExternal: [/^@loom\//, /^lottie-web(?:\/|$)/u],
+  noExternal: [/^@mgravey\/loom-/, /^lottie-web(?:\/|$)/u],
   tsconfig: 'tsconfig.build.json',
 });

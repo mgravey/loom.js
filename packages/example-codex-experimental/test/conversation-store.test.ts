@@ -1,4 +1,4 @@
-import { createMemoryProjectWorkspace, workspacePath } from '@loom/tool-workspace';
+import { createMemoryProjectWorkspace, workspacePath } from '@mgravey/loom-tool-workspace';
 import { describe, expect, it } from 'vitest';
 
 import {

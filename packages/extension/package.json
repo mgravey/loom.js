@@ -1,7 +1,25 @@
 {
-  "name": "@loom/extension",
+  "name": "@mgravey/loom-extension",
   "version": "0.1.0",
-  "private": true,
+  "description": "Provider-neutral Manifest V3 credential broker and service worker for Loom.js applications.",
+  "license": "MPL-2.0",
+  "author": "Mathieu Gravey",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mgravey/loom.js.git",
+    "directory": "packages/extension"
+  },
+  "homepage": "https://mgravey.com/loom.js/",
+  "bugs": {
+    "url": "https://github.com/mgravey/loom.js/issues"
+  },
+  "keywords": [
+    "loom",
+    "chrome-extension",
+    "manifest-v3",
+    "credentials",
+    "browser"
+  ],
   "type": "module",
   "sideEffects": [
     "./dist/service-worker.js"
@@ -14,16 +32,26 @@
   },
   "files": [
     "dist",
-    "manifest.json"
+    "manifest.json",
+    "README.md",
+    "LICENSE"
   ],
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts --clean --tsconfig tsconfig.build.json && tsup --config tsup.service-worker.config.ts && cp manifest.json dist/manifest.json",
+    "prepack": "pnpm run build && node ../../scripts/prepare-package.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run --root ../.. packages/extension/test"
   },
   "dependencies": {
-    "@loom/credential-broker-api": "workspace:*",
-    "@loom/credential-provider-api": "workspace:*"
+    "@mgravey/loom-credential-broker-api": "workspace:^",
+    "@mgravey/loom-credential-provider-api": "workspace:^"
   },
   "devDependencies": {
     "tsup": "^8.5.0",

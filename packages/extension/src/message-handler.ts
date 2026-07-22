@@ -11,7 +11,7 @@ import {
   parseCredentialBrokerRequest,
   type CredentialBrokerErrorCode,
   type CredentialBrokerResponse,
-} from '@loom/credential-broker-api';
+} from '@mgravey/loom-credential-broker-api';
 
 import type { ChromeExternalMessageListener, ChromeMessageSender } from './chrome-contracts.js';
 import { ExtensionBrokerError, type BrokerErrorCode } from './contracts.js';

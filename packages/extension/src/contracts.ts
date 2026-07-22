@@ -1,13 +1,19 @@
-import type { CredentialProvider, StoredRefreshCredential } from '@loom/credential-provider-api';
+import type {
+  CredentialProvider,
+  StoredRefreshCredential,
+} from '@mgravey/loom-credential-provider-api';
 
-export { CredentialProviderError, isCredentialProviderError } from '@loom/credential-provider-api';
+export {
+  CredentialProviderError,
+  isCredentialProviderError,
+} from '@mgravey/loom-credential-provider-api';
 export type {
   AccessTokenResult,
   CredentialProvider,
   CredentialProviderErrorCode,
   InteractiveCredentialAuthorization,
   StoredRefreshCredential,
-} from '@loom/credential-provider-api';
+} from '@mgravey/loom-credential-provider-api';
 
 export interface RefreshCredentialStore {
   get(providerId: string): Promise<StoredRefreshCredential | undefined>;

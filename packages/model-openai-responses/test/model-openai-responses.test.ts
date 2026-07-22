@@ -1,5 +1,5 @@
-import type { CodexModelEvent, CodexModelRequest } from '@loom/agent-codex';
-import { createCancellationSource } from '@loom/types';
+import type { CodexModelEvent, CodexModelRequest } from '@mgravey/loom-agent-codex';
+import { createCancellationSource } from '@mgravey/loom-types';
 import { describe, expect, it, vi } from 'vitest';
 
 import {

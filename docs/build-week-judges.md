@@ -65,7 +65,7 @@ account. No shared submission credentials are provided or required.
 1. Build the experimental companion:
 
    ```sh
-   pnpm --filter @loom/extension-codex-experimental build
+   pnpm --filter @mgravey/loom-extension-codex-experimental build
    ```
 
 2. Open `chrome://extensions`, enable **Developer mode**, select **Load unpacked**, and choose

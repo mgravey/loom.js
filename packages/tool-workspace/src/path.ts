@@ -1,4 +1,4 @@
-import type { Brand } from '@loom/types';
+import type { Brand } from '@mgravey/loom-types';
 
 /** A normalized, slash-separated path relative to a workspace root. */
 export type WorkspacePath = Brand<string, 'WorkspacePath'>;

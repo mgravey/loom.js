@@ -3,10 +3,11 @@
 Phase 3 supplies browser-hosted implementations without adding browser knowledge to Loom Core. The
 browser layer consists of three independent packages:
 
-- `@loom/platform-browser` registers explicitly supplied browser host primitives as a typed platform
-  capability;
-- `@loom/storage-indexeddb` implements Loom's namespaced byte storage contract with IndexedDB;
-- `@loom/workspace-fsa` implements the Phase 2 text-workspace tools over a supplied
+- `@mgravey/loom-platform-browser` registers explicitly supplied browser host primitives as a typed
+  platform capability;
+- `@mgravey/loom-storage-indexeddb` implements Loom's namespaced byte storage contract with
+  IndexedDB;
+- `@mgravey/loom-workspace-fsa` implements the Phase 2 text-workspace tools over a supplied
   `FileSystemDirectoryHandle`.
 
 The packages compile against browser typings, but their dependencies still point only toward public
@@ -74,7 +75,7 @@ composition, not a production model or authentication flow.
 Build and serve it from the repository root:
 
 ```sh
-pnpm --filter @loom/example-browser build
+pnpm --filter @mgravey/loom-example-browser build
 python3 -m http.server 4173 --directory packages/example-browser
 ```
 

@@ -1,5 +1,5 @@
 {
-  "name": "@loom/example-extension",
+  "name": "@mgravey/loom-example-extension",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -9,8 +9,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@loom/auth-extension": "workspace:*",
-    "@loom/core": "workspace:*"
+    "@mgravey/loom-auth-extension": "workspace:^",
+    "@mgravey/loom-core": "workspace:^"
   },
   "devDependencies": {
     "tsup": "^8.5.0",

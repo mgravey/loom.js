@@ -1,4 +1,4 @@
-import type { CodexModel, CodexModelEvent, CodexModelRequest } from '@loom/agent-codex';
+import type { CodexModel, CodexModelEvent, CodexModelRequest } from '@mgravey/loom-agent-codex';
 import {
   PLUGIN_API_VERSION,
   definePlugin,
@@ -6,14 +6,14 @@ import {
   registerModel,
   type LoomPlugin,
   type OperationContext,
-} from '@loom/plugin-api';
+} from '@mgravey/loom-plugin-api';
 import {
   WORKSPACE_OPERATIONS,
   workspacePath,
   type TextWorkspace,
   type WorkspaceEntry,
   type WorkspacePath,
-} from '@loom/tool-workspace';
+} from '@mgravey/loom-tool-workspace';
 import {
   capabilityId,
   pluginId,
@@ -21,7 +21,7 @@ import {
   type JsonObject,
   type JsonValue,
   type SessionId,
-} from '@loom/types';
+} from '@mgravey/loom-types';
 
 export const EXAMPLE_CODEX_MODEL_PLUGIN_ID = pluginId('loom-example/codex-model');
 export const EXAMPLE_CODEX_MODEL_CAPABILITY_ID = capabilityId('loom-example/codex-model');

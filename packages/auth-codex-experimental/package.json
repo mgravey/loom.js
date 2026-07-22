@@ -1,5 +1,5 @@
 {
-  "name": "@loom/auth-codex-experimental",
+  "name": "@mgravey/loom-auth-codex-experimental",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -19,7 +19,7 @@
     "test": "vitest run --root ../.. packages/auth-codex-experimental/test"
   },
   "dependencies": {
-    "@loom/credential-provider-api": "workspace:*"
+    "@mgravey/loom-credential-provider-api": "workspace:^"
   },
   "devDependencies": {
     "tsup": "^8.5.0",

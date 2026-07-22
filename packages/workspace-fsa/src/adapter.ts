@@ -1,11 +1,11 @@
-import type { OperationContext } from '@loom/plugin-api';
+import type { OperationContext } from '@mgravey/loom-plugin-api';
 import {
   workspacePath,
   type ProjectWorkspace,
   type WorkspaceEntry,
   type WorkspacePath,
   type WorkspaceStat,
-} from '@loom/tool-workspace';
+} from '@mgravey/loom-tool-workspace';
 
 import { FileSystemAccessWorkspaceError } from './errors.js';
 

@@ -1,6 +1,6 @@
-import type { CodexModel } from '@loom/agent-codex';
-import type { ExecutionRuntime } from '@loom/plugin-api';
-import { WORKSPACE_OPERATIONS, type WorkspaceTool } from '@loom/tool-workspace';
+import type { CodexModel } from '@mgravey/loom-agent-codex';
+import type { ExecutionRuntime } from '@mgravey/loom-plugin-api';
+import { WORKSPACE_OPERATIONS, type WorkspaceTool } from '@mgravey/loom-tool-workspace';
 import { describe, expect, it } from 'vitest';
 
 import { createCodingSession } from '../src/index.js';

@@ -1,4 +1,4 @@
-import type { ChromeStorageArea } from '@loom/extension';
+import type { ChromeStorageArea } from '@mgravey/loom-extension';
 
 export const CODEX_ACCOUNT_ID_STORAGE_KEY = 'loom.codex-experimental.chatgpt-account-id' as const;
 

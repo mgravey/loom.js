@@ -21,8 +21,8 @@ import {
   type OperationContext,
   type PluginInitializeContext,
   type Tool,
-} from '@loom/plugin-api';
-import { createCancellationSource, systemClock } from '@loom/types';
+} from '@mgravey/loom-plugin-api';
+import { createCancellationSource, systemClock } from '@mgravey/loom-types';
 
 function fakeWorkspace(overrides: Partial<TextWorkspace> = {}): TextWorkspace {
   return {

@@ -14,6 +14,7 @@ output/
 site-preview/
 site-preview-*.zip
 store-artifacts/
+release-artifacts/
 packages/extension-codex-experimental/.chrome-store-staging/
 .loom-runs/
 .loom/

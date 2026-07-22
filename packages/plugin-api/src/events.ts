@@ -6,8 +6,8 @@ import type {
   RuntimeState,
   SessionId,
   SessionMetadata,
-} from '@loom/types';
-import { eventId } from '@loom/types';
+} from '@mgravey/loom-types';
+import { eventId } from '@mgravey/loom-types';
 
 export interface EventKey<Event> {
   readonly id: EventId;

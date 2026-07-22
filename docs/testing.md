@@ -93,15 +93,17 @@ Tests must cover:
   browser-login failure cleanup, and retained device-code fallback;
 - classic and Responses Lite body/header separation.
 
-Provider-neutral fakes should cover every capability category while importing only `@loom/types` and
-`@loom/plugin-api`. Compile-time fixtures verify public types and package-boundary failures.
+Provider-neutral fakes should cover every capability category while importing only
+`@mgravey/loom-types` and `@mgravey/loom-plugin-api`. Compile-time fixtures verify public types and
+package-boundary failures.
 
 ## Coverage policy
 
-Across `@loom/types`, `@loom/plugin-api`, `@loom/core`, `@loom/tool-workspace`, `@loom/agent-codex`,
-`@loom/coding`, and `@loom/execution-browser`, plus the Platform Responses adapter, Phase 3 browser
-plugins, Phase 4 credential packages, and Phase 5 experimental authentication and model packages, V8
-coverage must meet:
+Across `@mgravey/loom-types`, `@mgravey/loom-plugin-api`, `@mgravey/loom-core`,
+`@mgravey/loom-tool-workspace`, `@mgravey/loom-agent-codex`, `@mgravey/loom-coding`, and
+`@mgravey/loom-execution-browser`, plus the Platform Responses adapter, Phase 3 browser plugins,
+Phase 4 credential packages, and Phase 5 experimental authentication and model packages, V8 coverage
+must meet:
 
 | Metric     | Minimum |
 | ---------- | ------: |

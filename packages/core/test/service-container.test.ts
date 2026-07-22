@@ -1,4 +1,4 @@
-import { createServiceToken } from '@loom/plugin-api';
+import { createServiceToken } from '@mgravey/loom-plugin-api';
 import { describe, expect, it } from 'vitest';
 
 import { createServiceContainer } from '../src/service-container.js';

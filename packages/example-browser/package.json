@@ -1,5 +1,5 @@
 {
-  "name": "@loom/example-browser",
+  "name": "@mgravey/loom-example-browser",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -9,13 +9,13 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@loom/agent-codex": "workspace:*",
-    "@loom/core": "workspace:*",
-    "@loom/examples": "workspace:*",
-    "@loom/platform-browser": "workspace:*",
-    "@loom/storage-indexeddb": "workspace:*",
-    "@loom/types": "workspace:*",
-    "@loom/workspace-fsa": "workspace:*"
+    "@mgravey/loom-agent-codex": "workspace:^",
+    "@mgravey/loom-core": "workspace:^",
+    "@mgravey/loom-examples": "workspace:^",
+    "@mgravey/loom-platform-browser": "workspace:^",
+    "@mgravey/loom-storage-indexeddb": "workspace:^",
+    "@mgravey/loom-types": "workspace:^",
+    "@mgravey/loom-workspace-fsa": "workspace:^"
   },
   "devDependencies": {
     "tsup": "^8.5.0",

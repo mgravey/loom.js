@@ -3,7 +3,7 @@
 - Status: **technical draft package ready; external release blockers remain**
 - Prepared: 20 July 2026
 
-Target package: `@loom/extension-codex-experimental` / **Loom.js Companion**
+Target package: `@mgravey/loom-extension-codex-experimental` / **Loom.js Companion**
 
 This dossier is the engineering, privacy, listing, testing, and reviewer handoff for a future Chrome
 Web Store submission. It follows the official requirements reviewed on 20 July 2026. Chrome policy

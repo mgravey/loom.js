@@ -1,4 +1,4 @@
-import type { ChromeStorageArea } from '@loom/extension';
+import type { ChromeStorageArea } from '@mgravey/loom-extension';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { CodexChromeExtensionApi, OAuthFetch } from '../src/chrome-contracts.js';

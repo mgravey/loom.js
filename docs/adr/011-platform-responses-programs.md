@@ -11,20 +11,21 @@ Programmatic Tool Calling contract adds hosted `program` and `program_output` it
 calls with caller metadata, and stateless continuation rules that require replaying every response
 item until a final assistant message exists.
 
-The existing `@loom/model-codex-experimental` package targets an audited, undocumented
+The existing `@mgravey/loom-model-codex-experimental` package targets an audited, undocumented
 ChatGPT-authenticated backend and a classic Responses-style protocol. Treating that experiment as
 the documented Platform API would erase an important support and credential boundary.
 
 ## Decision
 
-Add `@loom/model-openai-responses` as a separate provider leaf for the documented OpenAI Platform
-Responses API. Its preferred composition accepts a credential-free transport owned by a trusted
-application backend. A direct authenticated mode is available only through explicitly injected host
-services; the package does not read environment variables or global network APIs.
+Add `@mgravey/loom-model-openai-responses` as a separate provider leaf for the documented OpenAI
+Platform Responses API. Its preferred composition accepts a credential-free transport owned by a
+trusted application backend. A direct authenticated mode is available only through explicitly
+injected host services; the package does not read environment variables or global network APIs.
 
 Extend the agent-owned model protocol with opaque continuation items, optional caller metadata,
 structured output schemas, caller policies, and a completion marker that distinguishes an API
-response from a final assistant message. Keep these additions out of Core and `@loom/plugin-api`.
+response from a final assistant message. Keep these additions out of Core and
+`@mgravey/loom-plugin-api`.
 
 Configure list and read tools for direct or programmatic use. Configure writes as direct-only and
 reject any write attributed to a hosted program inside the agent. Execute consecutive nested

@@ -1,18 +1,18 @@
-import type { CodexTool } from '@loom/agent-codex';
+import type { CodexTool } from '@mgravey/loom-agent-codex';
 import {
   executeBrowserWorkspace,
   type BrowserExecutionProject,
   type BrowserExecutionRuntime,
   type BrowserExecutionWorkspace,
-} from '@loom/execution-browser';
+} from '@mgravey/loom-execution-browser';
 import {
   importWorkspaceEntries,
   snapshotWorkspace,
   workspacePath,
   type ProjectWorkspace,
   type WorkspaceImportEntry,
-} from '@loom/tool-workspace';
-import type { JsonObject } from '@loom/types';
+} from '@mgravey/loom-tool-workspace';
+import type { JsonObject } from '@mgravey/loom-types';
 
 type CodexToolExecutionContext = Parameters<CodexTool['execute']>[1];
 

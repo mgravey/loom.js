@@ -76,7 +76,7 @@ test('built extension assets are installable and self-contained', async () => {
   expect(manifest.manifest_version).toBe(3);
   expect(manifest.background?.service_worker).toBe('service-worker.js');
   expect(serviceWorker).not.toMatch(/\b(?:import|export)\b/u);
-  expect(serviceWorker).not.toContain('@loom/');
+  expect(serviceWorker).not.toContain('@mgravey/loom-');
 });
 
 test('built experimental extension is isolated, installable, and self-contained', async () => {
@@ -137,7 +137,7 @@ test('built experimental extension is isolated, installable, and self-contained'
   });
   for (const bundle of [serviceWorker, brandAnimationScript, optionsScript]) {
     expect(bundle).not.toMatch(/\b(?:import|export)\b/u);
-    expect(bundle).not.toContain('@loom/');
+    expect(bundle).not.toContain('@mgravey/loom-');
   }
   expect(privacyPage).toMatch(/Chrome\s+Web Store User Data Policy/u);
   expect(privacyPage).toContain('id="brand-animation"');

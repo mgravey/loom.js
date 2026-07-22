@@ -9,8 +9,10 @@ For a rendered version, serve the `packages` directory and open
 
 ## 1. Set up the repository
 
-Loom packages are private workspace packages at version `0.1.0`; they are not published to npm. Work
-from this repository until package publication, licensing, and namespace ownership are ready.
+Stable Loom packages are MPL-2.0 licensed and configured as public `@mgravey/loom-*` packages at
+version `0.1.0`. Until the first authenticated registry release is complete, work from this
+repository. After publication, applications can install individual packages such as
+`@mgravey/loom-core`; contributors should continue using the workspace setup below.
 
 Requirements:
 
@@ -37,17 +39,17 @@ access; automated OAuth and model tests use deterministic fixtures.
 Loom Core validates a fixed plugin graph, owns lifecycle, and exposes capability and service
 registries. Behavior enters through replaceable packages:
 
-| Boundary      | Responsibility                                                    | Starting package               |
-| ------------- | ----------------------------------------------------------------- | ------------------------------ |
-| Orchestration | Prompts, transcript, follow-ups, events, cancellation             | `@loom/coding`                 |
-| Model         | Agent-protocol translation and credential-free provider transport | `@loom/model-openai-responses` |
-| Tools         | Validated operations with narrow authority                        | `@loom/tool-workspace`         |
-| Workspace     | Memory, OPFS, File System Access, or a custom host                | `@loom/workspace-fsa`          |
-| Execution     | Credential-free project snapshots executed by an injected runtime | `@loom/execution-browser`      |
+| Boundary      | Responsibility                                                    | Starting package                       |
+| ------------- | ----------------------------------------------------------------- | -------------------------------------- |
+| Orchestration | Prompts, transcript, follow-ups, events, cancellation             | `@mgravey/loom-coding`                 |
+| Model         | Agent-protocol translation and credential-free provider transport | `@mgravey/loom-model-openai-responses` |
+| Tools         | Validated operations with narrow authority                        | `@mgravey/loom-tool-workspace`         |
+| Workspace     | Memory, OPFS, File System Access, or a custom host                | `@mgravey/loom-workspace-fsa`          |
+| Execution     | Credential-free project snapshots executed by an injected runtime | `@mgravey/loom-execution-browser`      |
 
-Use `createCodingSession()` directly for a small embedding. Use `@loom/core` when the application
-needs typed capability discovery, dependency ordering, configuration, events, and full plugin
-lifecycle.
+Use `createCodingSession()` directly for a small embedding. Use `@mgravey/loom-core` when the
+application needs typed capability discovery, dependency ordering, configuration, events, and full
+plugin lifecycle.
 
 ## 3. Create an in-memory project
 
@@ -60,8 +62,8 @@ import {
   createProjectWorkspaceTools,
   createWorkspaceTools,
   workspacePath,
-} from '@loom/tool-workspace';
-import type { CodexAgentTool } from '@loom/agent-codex';
+} from '@mgravey/loom-tool-workspace';
+import type { CodexAgentTool } from '@mgravey/loom-agent-codex';
 
 const workspace = createMemoryProjectWorkspace({
   entries: [
@@ -105,8 +107,8 @@ After the memory composition works, replace only the workspace adapter:
 Prove orchestration without networking before connecting a real model.
 
 ```ts
-import type { CodexModel } from '@loom/agent-codex';
-import { createCodingSession } from '@loom/coding';
+import type { CodexModel } from '@mgravey/loom-agent-codex';
+import { createCodingSession } from '@mgravey/loom-coding';
 
 const model: CodexModel = {
   async *generate() {
@@ -150,9 +152,9 @@ Session behavior:
 Use Core once the application has multiple independently owned capabilities:
 
 ```ts
-import { createCodexAgentPlugin } from '@loom/agent-codex';
-import { createLoomRuntime } from '@loom/core';
-import { createProjectWorkspaceToolsPlugin } from '@loom/tool-workspace';
+import { createCodexAgentPlugin } from '@mgravey/loom-agent-codex';
+import { createLoomRuntime } from '@mgravey/loom-core';
+import { createProjectWorkspaceToolsPlugin } from '@mgravey/loom-tool-workspace';
 
 const runtime = createLoomRuntime({
   plugins: [createProjectWorkspaceToolsPlugin(workspace), createCodexAgentPlugin()],
@@ -191,8 +193,8 @@ import {
   registerTool,
   toolKey,
   type Tool,
-} from '@loom/plugin-api';
-import { pluginId, semanticVersion } from '@loom/types';
+} from '@mgravey/loom-plugin-api';
+import { pluginId, semanticVersion } from '@mgravey/loom-types';
 
 interface EchoInput {
   readonly text: string;
@@ -254,7 +256,7 @@ Core capability registration and model exposure are separate decisions. Pass a `
 coding session when the agent should be able to call application behavior:
 
 ```ts
-import type { CodexTool } from '@loom/agent-codex';
+import type { CodexTool } from '@mgravey/loom-agent-codex';
 
 const selectedProductTool: CodexTool = Object.freeze({
   name: 'selected_product',
@@ -300,7 +302,7 @@ Replace the deterministic model with a provider adapter. Browser pages should in
 credential-free transport to a trusted backend:
 
 ```ts
-import { createOpenAIResponsesModel } from '@loom/model-openai-responses';
+import { createOpenAIResponsesModel } from '@mgravey/loom-model-openai-responses';
 
 const model = createOpenAIResponsesModel({
   model: 'your-supported-model',
@@ -327,7 +329,7 @@ Browser execution requests contain only a command, arguments, timeout, cancellat
 and copied project files:
 
 ```ts
-import { createQuickJsExecutionRuntime } from '@loom/execution-browser';
+import { createQuickJsExecutionRuntime } from '@mgravey/loom-execution-browser';
 
 const quickjs = createQuickJsExecutionRuntime({
   loadModule: () => import('quickjs-emscripten'),
@@ -421,11 +423,12 @@ development or production server before selecting the Node.js runtime.
 
 ## Current limitations
 
-- Packages are private and unpublished.
+- Stable packages are publish-ready; the first authenticated npm registry release is still pending.
+- Examples and unsupported experimental packages remain private.
 - Generic schema-bearing tools are agent-callable, but each application still owns tool discovery,
   user authorization, input validation, and UI presentation.
 - The browser run-file tool and ProjectWorkspace synchronization are example-owned rather than a
-  general execution policy in `@loom/agent-codex`.
+  general execution policy in `@mgravey/loom-agent-codex`.
 - The ChatGPT/Codex extension path is unsupported compatibility work.
 - Production extension packaging, licensing, release versioning, and multi-browser CI are pending.
 

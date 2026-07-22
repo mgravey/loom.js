@@ -1,4 +1,4 @@
-# `@loom/execution-browser`
+# `@mgravey/loom-execution-browser`
 
 Credential-free browser execution adapters for QuickJS/WASM, WebContainers, and Pyodide.
 
@@ -15,3 +15,5 @@ Applications whose bundler does not resolve variable dynamic imports should supp
 a literal dynamic import or an import-map entry. Pyodide hard cancellation should terminate its
 dedicated worker; its interrupt buffer and adapter timeout are best-effort fallbacks for cooperative
 execution.
+
+Licensed under MPL-2.0.

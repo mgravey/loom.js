@@ -7,8 +7,8 @@ import type {
   NamespacedId,
   PluginId,
   SessionId,
-} from '@loom/types';
-import { capabilityId } from '@loom/types';
+} from '@mgravey/loom-types';
+import { capabilityId } from '@mgravey/loom-types';
 
 export const CAPABILITY_KINDS = Object.freeze({
   agent: 'agent',

@@ -11,10 +11,11 @@ also need stable semantics without coupling them to a browser filesystem.
 
 ## Decision
 
-Keep the normalized Codex-style model and event protocol in `@loom/agent-codex`. Keep normalized
-workspace paths and list/read/write contracts in `@loom/tool-workspace`, backed by an injected text
-workspace adapter. Compose the agent externally from explicitly selected capabilities after runtime
-startup. Do not add agent selection, conversations, run tracking, or workspace behavior to core.
+Keep the normalized Codex-style model and event protocol in `@mgravey/loom-agent-codex`. Keep
+normalized workspace paths and list/read/write contracts in `@mgravey/loom-tool-workspace`, backed
+by an injected text workspace adapter. Compose the agent externally from explicitly selected
+capabilities after runtime startup. Do not add agent selection, conversations, run tracking, or
+workspace behavior to core.
 
 Model-provider plugins may adapt their native wire formats to the agent-owned protocol. Other agent
 plugins may publish different protocols. Workspace implementations may target different hosts while

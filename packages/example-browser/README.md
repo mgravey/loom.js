@@ -19,7 +19,7 @@ From the repository root:
 
 ```sh
 pnpm install --frozen-lockfile
-pnpm --filter @loom/example-browser build
+pnpm --filter @mgravey/loom-example-browser build
 python3 -m http.server 4173 --directory packages/example-browser
 ```
 

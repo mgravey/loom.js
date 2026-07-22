@@ -55,8 +55,9 @@
         <section class="doc-section" id="start">
           <h2>1. Prepare the repository</h2>
           <p>
-            Loom packages are private workspace packages today; they are not published to npm. Work
-            from this repository until package names, versions, and licensing are released.
+            Stable Loom packages are MPL-2.0 licensed and configured for public npm publication as
+            <code>@mgravey/loom-*</code>. Work from this repository until the first authenticated
+            registry release is complete.
           </p>
           <h3>Requirements</h3>
           <ul>
@@ -104,33 +105,33 @@ pnpm check</code></pre>
               <tr>
                 <td>Orchestration</td>
                 <td>Prompts, transcript, follow-ups, events, cancellation</td>
-                <td>@loom/coding</td>
+                <td>@mgravey/loom-coding</td>
               </tr>
               <tr>
                 <td>Model</td>
                 <td>Translate the agent protocol to a provider or secure transport</td>
-                <td>@loom/model-openai-responses</td>
+                <td>@mgravey/loom-model-openai-responses</td>
               </tr>
               <tr>
                 <td>Tools</td>
                 <td>Validate operations and expose the smallest useful authority</td>
-                <td>@loom/tool-workspace</td>
+                <td>@mgravey/loom-tool-workspace</td>
               </tr>
               <tr>
                 <td>Workspace</td>
                 <td>Own files in memory, OPFS, a selected directory, or another host</td>
-                <td>@loom/workspace-fsa</td>
+                <td>@mgravey/loom-workspace-fsa</td>
               </tr>
               <tr>
                 <td>Execution</td>
                 <td>Run a credential-free project snapshot in an injected runtime</td>
-                <td>@loom/execution-browser</td>
+                <td>@mgravey/loom-execution-browser</td>
               </tr>
             </tbody>
           </table>
           <p>
             You can use the lightweight <code>createCodingSession()</code> API directly, or compose
-            packages through <code>@loom/core</code> when your application needs capability
+            packages through <code>@mgravey/loom-core</code> when your application needs capability
             discovery, dependency ordering, configuration, and full lifecycle control.
           </p>
         </section>
@@ -150,7 +151,7 @@ pnpm check</code></pre>
   createWorkspaceTools,
   workspacePath,
   type WorkspaceTool,
-} from '@loom/tool-workspace';
+} from '@mgravey/loom-tool-workspace';
 
 const workspace = createMemoryProjectWorkspace({
   entries: [
@@ -207,8 +208,8 @@ await workspace.writeBytes(workspacePath('assets/icon-copy.png'), image);</code>
           </p>
           <div class="code-block">
             <div class="code-title">Continue src/getting-started.ts</div>
-            <pre><code>import type { CodexModel } from '@loom/agent-codex';
-import { createCodingSession } from '@loom/coding';
+            <pre><code>import type { CodexModel } from '@mgravey/loom-agent-codex';
+import { createCodingSession } from '@mgravey/loom-coding';
 
 const model: CodexModel = {
   async *generate() {
@@ -258,9 +259,9 @@ try {
             services.
           </p>
           <div class="code-block">
-            <pre><code>import { createCodexAgentPlugin } from '@loom/agent-codex';
-import { createLoomRuntime } from '@loom/core';
-import { createProjectWorkspaceToolsPlugin } from '@loom/tool-workspace';
+            <pre><code>import { createCodexAgentPlugin } from '@mgravey/loom-agent-codex';
+import { createLoomRuntime } from '@mgravey/loom-core';
+import { createProjectWorkspaceToolsPlugin } from '@mgravey/loom-tool-workspace';
 
 const runtime = createLoomRuntime({
   plugins: [
@@ -331,8 +332,8 @@ try {
   registerTool,
   toolKey,
   type Tool,
-} from '@loom/plugin-api';
-import { pluginId, semanticVersion } from '@loom/types';
+} from '@mgravey/loom-plugin-api';
+import { pluginId, semanticVersion } from '@mgravey/loom-types';
 
 interface EchoInput { readonly text: string }
 interface EchoOutput { readonly text: string }
@@ -392,7 +393,7 @@ try {
           </div>
           <div class="code-block">
             <div class="code-title">Expose page behavior to the agent</div>
-            <pre><code>import type { CodexTool } from '@loom/agent-codex';
+            <pre><code>import type { CodexTool } from '@mgravey/loom-agent-codex';
 
 const selectedProductTool: CodexTool = Object.freeze({
   name: 'selected_product',
@@ -443,7 +444,7 @@ const session = createCodingSession({
             an API key or refresh credential.
           </p>
           <div class="code-block">
-            <pre><code>import { createOpenAIResponsesModel } from '@loom/model-openai-responses';
+            <pre><code>import { createOpenAIResponsesModel } from '@mgravey/loom-model-openai-responses';
 
 const model = createOpenAIResponsesModel({
   model: 'your-supported-model',
@@ -480,7 +481,7 @@ const model = createOpenAIResponsesModel({
             variables.
           </p>
           <div class="code-block">
-            <pre><code>import { createQuickJsExecutionRuntime } from '@loom/execution-browser';
+            <pre><code>import { createQuickJsExecutionRuntime } from '@mgravey/loom-execution-browser';
 
 const quickjs = createQuickJsExecutionRuntime({
   loadModule: () =&gt; import('quickjs-emscripten'),

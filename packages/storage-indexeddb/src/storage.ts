@@ -1,5 +1,5 @@
-import type { Storage } from '@loom/plugin-api';
-import type { NamespacedId } from '@loom/types';
+import type { Storage } from '@mgravey/loom-plugin-api';
+import type { NamespacedId } from '@mgravey/loom-types';
 
 import { IndexedDbStorageError } from './errors.js';
 

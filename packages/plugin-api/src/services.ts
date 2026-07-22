@@ -1,5 +1,5 @@
-import type { Awaitable, ServiceId } from '@loom/types';
-import { serviceId } from '@loom/types';
+import type { Awaitable, ServiceId } from '@mgravey/loom-types';
+import { serviceId } from '@mgravey/loom-types';
 
 export type ServiceLifetime = 'runtime' | 'session' | 'transient';
 

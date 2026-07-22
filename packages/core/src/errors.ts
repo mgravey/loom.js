@@ -1,4 +1,4 @@
-import { LoomAggregateError, LoomError, type LoomErrorCode } from '@loom/types';
+import { LoomAggregateError, LoomError, type LoomErrorCode } from '@mgravey/loom-types';
 
 export type CoreErrorCode =
   | 'CAPABILITY_DUPLICATE'

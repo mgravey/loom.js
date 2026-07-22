@@ -22,14 +22,14 @@ import {
   type Storage,
   type Tool,
   type UserInterface,
-} from '@loom/plugin-api';
+} from '@mgravey/loom-plugin-api';
 import {
   capabilityId,
   pluginId,
   semanticVersion,
   type JsonValue,
   type NamespacedId,
-} from '@loom/types';
+} from '@mgravey/loom-types';
 
 export * from './phase-two.js';
 

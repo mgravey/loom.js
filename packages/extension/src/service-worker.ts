@@ -1,4 +1,4 @@
-import { credentialProviderId } from '@loom/credential-broker-api';
+import { credentialProviderId } from '@mgravey/loom-credential-broker-api';
 
 import type { ChromeExtensionApi } from './chrome-contracts.js';
 import {

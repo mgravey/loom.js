@@ -2,6 +2,17 @@
   "name": "loom-js",
   "version": "0.1.0",
   "private": true,
+  "description": "Provider-neutral runtime for composing AI agents in browser-capable JavaScript environments.",
+  "license": "MPL-2.0",
+  "author": "Mathieu Gravey",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mgravey/loom.js.git"
+  },
+  "homepage": "https://mgravey.com/loom.js/",
+  "bugs": {
+    "url": "https://github.com/mgravey/loom.js/issues"
+  },
   "type": "module",
   "packageManager": "pnpm@11.7.0",
   "engines": {
@@ -19,15 +30,21 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test:coverage && pnpm build && pnpm chrome:store:verify && pnpm test:browser",
-    "chrome:store:package": "pnpm --filter @loom/extension-codex-experimental build && node scripts/prepare-chrome-store.mjs",
-    "chrome:store:media": "pnpm --filter @loom/extension-codex-experimental build && node scripts/prepare-chrome-store-media.mjs",
+    "chrome:store:package": "pnpm --filter @mgravey/loom-extension-codex-experimental build && node scripts/prepare-chrome-store.mjs",
+    "chrome:store:media": "pnpm --filter @mgravey/loom-extension-codex-experimental build && node scripts/prepare-chrome-store-media.mjs",
     "chrome:store:release": "pnpm chrome:store:package && node scripts/prepare-chrome-store-media.mjs",
     "chrome:store:verify": "node scripts/verify-chrome-store.mjs",
-    "site:pages:build": "pnpm --filter @loom/example-codex-experimental... build && node scripts/prepare-github-pages.mjs"
+    "site:pages:build": "pnpm --filter @mgravey/loom-example-codex-experimental... build && node scripts/prepare-github-pages.mjs",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release:check": "pnpm check && node scripts/verify-public-packages.mjs",
+    "release:pack": "pnpm build && node scripts/pack-public-packages.mjs",
+    "release:publish": "pnpm release:check && changeset publish"
   },
   "devDependencies": {
     "@eslint/js": "^9.31.0",
     "@playwright/test": "^1.54.1",
+    "@changesets/cli": "^2.31.0",
     "@types/node": "^22.17.0",
     "@vitest/coverage-v8": "^3.2.4",
     "eslint": "^9.31.0",

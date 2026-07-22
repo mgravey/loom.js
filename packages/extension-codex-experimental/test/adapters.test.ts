@@ -1,5 +1,5 @@
-import type { AuthorizationTransaction } from '@loom/auth-codex-experimental';
-import type { ChromeStorageArea } from '@loom/extension';
+import type { AuthorizationTransaction } from '@mgravey/loom-auth-codex-experimental';
+import type { ChromeStorageArea } from '@mgravey/loom-extension';
 import { describe, expect, it, vi } from 'vitest';
 
 import {

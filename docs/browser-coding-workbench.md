@@ -1,8 +1,8 @@
 # Browser coding workbench
 
-The experimental workbench demonstrates `@loom/coding` on top of replaceable workspace, model,
-authentication, and execution packages. It is an example application, not a new Core responsibility
-and not a supported OpenAI integration.
+The experimental workbench demonstrates `@mgravey/loom-coding` on top of replaceable workspace,
+model, authentication, and execution packages. It is an example application, not a new Core
+responsibility and not a supported OpenAI integration.
 
 ## Trust boundary
 
@@ -109,7 +109,7 @@ direct folder requires reopening it so Chrome can request the matching folder pe
 
 ## Browser runtimes
 
-`@loom/execution-browser` provides lazy adapters for:
+`@mgravey/loom-execution-browser` provides lazy adapters for:
 
 - `quickjs-emscripten` for JavaScript/WASM evaluation;
 - `@webcontainer/api` for Node.js commands; and

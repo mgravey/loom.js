@@ -1,7 +1,25 @@
 {
-  "name": "@loom/core",
+  "name": "@mgravey/loom-core",
   "version": "0.1.0",
-  "private": true,
+  "description": "Provider-neutral plugin composition, lifecycle, dependency injection, events, configuration, and sessions for Loom.js.",
+  "license": "MPL-2.0",
+  "author": "Mathieu Gravey",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mgravey/loom.js.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://mgravey.com/loom.js/",
+  "bugs": {
+    "url": "https://github.com/mgravey/loom.js/issues"
+  },
+  "keywords": [
+    "loom",
+    "agents",
+    "plugins",
+    "dependency-injection",
+    "runtime"
+  ],
   "type": "module",
   "sideEffects": false,
   "exports": {
@@ -11,17 +29,28 @@
     }
   },
   "files": [
-    "dist"
+    "dist/index.js",
+    "dist/index.d.ts",
+    "README.md",
+    "LICENSE"
   ],
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts --clean --tsconfig tsconfig.build.json",
+    "prepack": "pnpm run build && node ../../scripts/prepare-package.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@loom/plugin-api": "workspace:*",
-    "@loom/types": "workspace:*"
+    "@mgravey/loom-plugin-api": "workspace:^",
+    "@mgravey/loom-types": "workspace:^"
   },
   "devDependencies": {
     "tsup": "^8.5.0",

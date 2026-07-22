@@ -3,9 +3,9 @@
 Phase 2 adds one deliberately small coding-agent loop without expanding Loom Core. The feature is
 split between two plugins:
 
-- `@loom/agent-codex` owns orchestration and its normalized model protocol;
-- `@loom/tool-workspace` owns the list, read, and write tool contracts and adapts an injected text
-  workspace.
+- `@mgravey/loom-agent-codex` owns orchestration and its normalized model protocol;
+- `@mgravey/loom-tool-workspace` owns the list, read, and write tool contracts and adapts an
+  injected text workspace.
 
 Neither package performs model inference or accesses a host filesystem. Applications still choose
 every implementation by explicit capability ID.
@@ -32,10 +32,10 @@ Workspace paths are slash-separated, normalized, relative paths. Absolute paths,
 segments, `.` segments, and `..` segments are rejected. Omitting the path from a list request means
 the workspace root.
 
-`@loom/tool-workspace` operates on UTF-8 text through an injected `TextWorkspace`. It defines no
-filesystem permissions, symlink behavior, persistence, or browser API. A later platform plugin can
-implement the same adapter over File System Access API, OPFS, remote storage, or another backing
-store without changing the agent.
+`@mgravey/loom-tool-workspace` operates on UTF-8 text through an injected `TextWorkspace`. It
+defines no filesystem permissions, symlink behavior, persistence, or browser API. A later platform
+plugin can implement the same adapter over File System Access API, OPFS, remote storage, or another
+backing store without changing the agent.
 
 The built-in text operations are:
 
@@ -66,13 +66,13 @@ Unknown tools, malformed events, duplicate call IDs, missing completion markers,
 programmatic calls, invalid custom definitions, and duplicate operations fail with typed agent
 errors. A configurable turn limit prevents an unbounded continuation or tool loop.
 
-The protocol intentionally remains in `@loom/agent-codex`. It is not part of `@loom/plugin-api`, so
-future planner, Claude-style, OpenHands-like, or custom agents can define different orchestration
-protocols without changing core.
+The protocol intentionally remains in `@mgravey/loom-agent-codex`. It is not part of
+`@mgravey/loom-plugin-api`, so future planner, Claude-style, OpenHands-like, or custom agents can
+define different orchestration protocols without changing core.
 
 ## Deliberate omissions
 
 The base agent does not add authentication, a model provider, a browser filesystem adapter, command
 execution, Git, search, persisted history, automatic agent selection, or automatic per-session agent
-construction. The in-memory workspace and scripted model in `@loom/examples` are deterministic
-fixtures, not production providers.
+construction. The in-memory workspace and scripted model in `@mgravey/loom-examples` are
+deterministic fixtures, not production providers.

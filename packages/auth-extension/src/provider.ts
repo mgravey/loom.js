@@ -6,8 +6,8 @@ import {
   type CredentialStatus,
   type CredentialProviderId,
   type GetAccessTokenInput,
-} from '@loom/credential-broker-api';
-import type { AuthProvider } from '@loom/plugin-api';
+} from '@mgravey/loom-credential-broker-api';
+import type { AuthProvider } from '@mgravey/loom-plugin-api';
 
 import { ExtensionAuthError } from './errors.js';
 

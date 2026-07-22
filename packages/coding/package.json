@@ -1,7 +1,25 @@
 {
-  "name": "@loom/coding",
+  "name": "@mgravey/loom-coding",
   "version": "0.1.0",
-  "private": true,
+  "description": "Reusable coding sessions with prompts, follow-ups, cancellation, transcripts, tools, and runtime dispatch for Loom.js.",
+  "license": "MPL-2.0",
+  "author": "Mathieu Gravey",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mgravey/loom.js.git",
+    "directory": "packages/coding"
+  },
+  "homepage": "https://mgravey.com/loom.js/",
+  "bugs": {
+    "url": "https://github.com/mgravey/loom.js/issues"
+  },
+  "keywords": [
+    "loom",
+    "agents",
+    "coding-agent",
+    "sessions",
+    "typescript"
+  ],
   "type": "module",
   "sideEffects": false,
   "exports": {
@@ -11,18 +29,29 @@
     }
   },
   "files": [
-    "dist"
+    "dist/index.js",
+    "dist/index.d.ts",
+    "README.md",
+    "LICENSE"
   ],
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts --clean --tsconfig tsconfig.build.json",
+    "prepack": "pnpm run build && node ../../scripts/prepare-package.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
-    "@loom/agent-codex": "workspace:*",
-    "@loom/plugin-api": "workspace:*",
-    "@loom/tool-workspace": "workspace:*",
-    "@loom/types": "workspace:*"
+    "@mgravey/loom-agent-codex": "workspace:^",
+    "@mgravey/loom-plugin-api": "workspace:^",
+    "@mgravey/loom-tool-workspace": "workspace:^",
+    "@mgravey/loom-types": "workspace:^"
   },
   "devDependencies": {
     "tsup": "^8.5.0",

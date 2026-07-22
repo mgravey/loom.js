@@ -1,5 +1,5 @@
 {
-  "name": "@loom/extension-codex-experimental",
+  "name": "@mgravey/loom-extension-codex-experimental",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -29,9 +29,9 @@
     "test": "vitest run --root ../.. packages/extension-codex-experimental/test"
   },
   "dependencies": {
-    "@loom/auth-codex-experimental": "workspace:*",
-    "@loom/credential-provider-api": "workspace:*",
-    "@loom/extension": "workspace:*",
+    "@mgravey/loom-auth-codex-experimental": "workspace:^",
+    "@mgravey/loom-credential-provider-api": "workspace:^",
+    "@mgravey/loom-extension": "workspace:^",
     "lottie-web": "5.13.0"
   },
   "devDependencies": {

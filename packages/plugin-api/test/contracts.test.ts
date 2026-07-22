@@ -29,7 +29,7 @@ import {
   type Model,
   type Tool,
 } from '../src/index.js';
-import { pluginId, semanticVersion } from '@loom/types';
+import { pluginId, semanticVersion } from '@mgravey/loom-types';
 
 describe('structural keys', () => {
   it('creates independently equivalent capability, service, and event keys', () => {

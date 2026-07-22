@@ -3,8 +3,8 @@ import {
   createExtensionAuthPlugin,
   createExternalCredentialBroker,
   type ExternalMessageRuntime,
-} from '@loom/auth-extension';
-import { createLoomRuntime } from '@loom/core';
+} from '@mgravey/loom-auth-extension';
+import { createLoomRuntime } from '@mgravey/loom-core';
 
 interface ChromeHost {
   readonly chrome?: {

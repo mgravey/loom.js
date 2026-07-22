@@ -5,7 +5,7 @@ import type {
   JsonObject,
   PluginId,
   SemanticVersion,
-} from '@loom/types';
+} from '@mgravey/loom-types';
 
 import type { CapabilityRegistrar, CapabilityRegistryReader } from './capabilities.js';
 import type { EventBus } from './events.js';

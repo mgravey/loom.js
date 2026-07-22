@@ -1,4 +1,4 @@
-import type { OperationContext } from '@loom/plugin-api';
+import type { OperationContext } from '@mgravey/loom-plugin-api';
 
 import type {
   ProjectWorkspace,

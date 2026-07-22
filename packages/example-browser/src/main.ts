@@ -3,22 +3,22 @@ import {
   CODEX_AGENT_PLUGIN_ID,
   createCodexAgentPlugin,
   type CodexAgentEvent,
-} from '@loom/agent-codex';
-import { createLoomRuntime } from '@loom/core';
+} from '@mgravey/loom-agent-codex';
+import { createLoomRuntime } from '@mgravey/loom-core';
 import {
   EXAMPLE_CODEX_MODEL_KEY,
   EXAMPLE_CODEX_SESSION_CONFIGURATION,
   createScriptedCodexModelPlugin,
-} from '@loom/examples';
-import { createBrowserPlatformPlugin } from '@loom/platform-browser';
-import { createIndexedDbStoragePlugin } from '@loom/storage-indexeddb';
-import { sessionId } from '@loom/types';
+} from '@mgravey/loom-examples';
+import { createBrowserPlatformPlugin } from '@mgravey/loom-platform-browser';
+import { createIndexedDbStoragePlugin } from '@mgravey/loom-storage-indexeddb';
+import { sessionId } from '@mgravey/loom-types';
 import {
   FSA_LIST_FILES_TOOL_KEY,
   FSA_READ_FILE_TOOL_KEY,
   FSA_WRITE_FILE_TOOL_KEY,
   createFileSystemAccessWorkspacePlugin,
-} from '@loom/workspace-fsa';
+} from '@mgravey/loom-workspace-fsa';
 
 const DATABASE_NAME = 'loom-example-browser';
 const EXAMPLE_SESSION_ID = sessionId('browser-example-run');

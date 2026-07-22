@@ -14,13 +14,13 @@ credentials.
 
 Create three independently replaceable boundaries:
 
-1. `@loom/coding` owns coding-session transcript, follow-up, cancellation, event, and disposal
-   behavior while consuming existing model, agent, tool, and execution contracts.
+1. `@mgravey/loom-coding` owns coding-session transcript, follow-up, cancellation, event, and
+   disposal behavior while consuming existing model, agent, tool, and execution contracts.
 2. `ProjectWorkspace` extends the portable text adapter with binary/stat/mutation operations. Memory
    and FSA/OPFS adapters implement it; safe archives and strict patches stay in
-   `@loom/tool-workspace`.
-3. `@loom/execution-browser` accepts only command data and project snapshots. QuickJS, WebContainer,
-   and Pyodide modules load lazily and receive no credentials or host transport.
+   `@mgravey/loom-tool-workspace`.
+3. `@mgravey/loom-execution-browser` accepts only command data and project snapshots. QuickJS,
+   WebContainer, and Pyodide modules load lazily and receive no credentials or host transport.
 
 The experimental extension remains the complete ChatGPT trust boundary. Browser runtimes and project
 files never receive OAuth credentials.

@@ -3,8 +3,11 @@ import {
   CODEX_EXPERIMENTAL_PROVIDER_ID,
   createCodexExperimentalCredentialProvider,
   type CodexOAuthConfiguration,
-} from '@loom/auth-codex-experimental';
-import type { AccessTokenResult, StoredRefreshCredential } from '@loom/credential-provider-api';
+} from '@mgravey/loom-auth-codex-experimental';
+import type {
+  AccessTokenResult,
+  StoredRefreshCredential,
+} from '@mgravey/loom-credential-provider-api';
 import {
   createChromeExternalMessageListener,
   createCredentialBrokerMessageHandler,
@@ -15,7 +18,7 @@ import {
   type ExtensionTokenService,
   type OriginAuthorizer,
   type RefreshCredentialStore,
-} from '@loom/extension';
+} from '@mgravey/loom-extension';
 
 import { createFetchOAuthTransport } from './adapters.js';
 import type { CodexAccountRoutingStore } from './account-routing.js';

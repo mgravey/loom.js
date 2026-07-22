@@ -15,8 +15,8 @@ import {
   type ListFilesTool,
   type ReadFileTool,
   type WriteFileTool,
-} from '@loom/tool-workspace';
-import { CancellationError, createCancellationSource, sessionId } from '@loom/types';
+} from '@mgravey/loom-tool-workspace';
+import { CancellationError, createCancellationSource, sessionId } from '@mgravey/loom-types';
 import { describe, expect, it } from 'vitest';
 
 function hostError(name: string): Error {

@@ -1,4 +1,4 @@
-import type { OperationContext, Tool } from '@loom/plugin-api';
+import type { OperationContext, Tool } from '@mgravey/loom-plugin-api';
 
 import type { WorkspacePath } from './path.js';
 

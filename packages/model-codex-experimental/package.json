@@ -1,5 +1,5 @@
 {
-  "name": "@loom/model-codex-experimental",
+  "name": "@mgravey/loom-model-codex-experimental",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -19,9 +19,9 @@
     "test": "vitest run --root ../.. packages/model-codex-experimental/test"
   },
   "dependencies": {
-    "@loom/agent-codex": "workspace:*",
-    "@loom/plugin-api": "workspace:*",
-    "@loom/types": "workspace:*"
+    "@mgravey/loom-agent-codex": "workspace:^",
+    "@mgravey/loom-plugin-api": "workspace:^",
+    "@mgravey/loom-types": "workspace:^"
   },
   "devDependencies": {
     "tsup": "^8.5.0",

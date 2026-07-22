@@ -1,7 +1,7 @@
 import {
   createCodexExperimentalDeviceAuthorization,
   type DeviceAuthorizationPrompt,
-} from '@loom/auth-codex-experimental';
+} from '@mgravey/loom-auth-codex-experimental';
 import {
   createBrowserDelay,
   createFetchOAuthTransport,

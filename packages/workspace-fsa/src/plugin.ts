@@ -5,7 +5,7 @@ import {
   definePlugin,
   type LoomPlugin,
   type OperationContext,
-} from '@loom/plugin-api';
+} from '@mgravey/loom-plugin-api';
 import {
   WORKSPACE_OPERATIONS,
   workspacePath,
@@ -15,8 +15,8 @@ import {
   type ReadFileTool,
   type WriteFileInput,
   type WriteFileTool,
-} from '@loom/tool-workspace';
-import { capabilityId, pluginId, semanticVersion } from '@loom/types';
+} from '@mgravey/loom-tool-workspace';
+import { capabilityId, pluginId, semanticVersion } from '@mgravey/loom-types';
 
 import { createFileSystemAccessTextWorkspace } from './adapter.js';
 

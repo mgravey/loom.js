@@ -1,5 +1,5 @@
-import type { AuthProvider } from '@loom/plugin-api';
-import type { CancellationSignal } from '@loom/types';
+import type { AuthProvider } from '@mgravey/loom-plugin-api';
+import type { CancellationSignal } from '@mgravey/loom-types';
 
 export type CodexResponsesWireProtocol = 'classic' | 'responses-lite';
 

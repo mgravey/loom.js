@@ -1,4 +1,4 @@
-# `@loom/extension`
+# `@mgravey/loom-extension`
 
 Provider-neutral Manifest V3 credential broker for Loom applications. This Phase 4 package ships
 only a deterministic mock credential provider; it contains no OpenAI, Codex, or other provider
@@ -18,7 +18,7 @@ credential or provider error detail.
 Build the unpacked extension from the repository root:
 
 ```sh
-pnpm --filter @loom/extension build
+pnpm --filter @mgravey/loom-extension build
 ```
 
 In `chrome://extensions`, enable Developer mode, choose **Load unpacked**, and select
@@ -31,3 +31,5 @@ and local example workflow. The implementation follows Chrome's documentation fo
 [`externally_connectable`](https://developer.chrome.com/docs/extensions/develop/concepts/messaging#external-webpage),
 [Manifest V3 service workers](https://developer.chrome.com/docs/extensions/develop/migrate/what-is-mv3),
 and [`chrome.storage`](https://developer.chrome.com/docs/extensions/reference/api/storage).
+
+Licensed under MPL-2.0.

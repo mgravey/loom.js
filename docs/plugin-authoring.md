@@ -22,8 +22,13 @@ The public helper preserves hook inference while the ID constructors validate va
 boundary:
 
 ```ts
-import { pluginId, semanticVersion } from '@loom/types';
-import { PLUGIN_API_VERSION, definePlugin, registerTool, type Tool } from '@loom/plugin-api';
+import { pluginId, semanticVersion } from '@mgravey/loom-types';
+import {
+  PLUGIN_API_VERSION,
+  definePlugin,
+  registerTool,
+  type Tool,
+} from '@mgravey/loom-plugin-api';
 
 const echo: Tool = {
   name: 'echo',
@@ -49,7 +54,7 @@ export const echoPlugin = definePlugin({
 Applications compose through the core factory and explicitly advance the one-shot lifecycle:
 
 ```ts
-import { createLoomRuntime } from '@loom/core';
+import { createLoomRuntime } from '@mgravey/loom-core';
 
 const runtime = createLoomRuntime({ plugins: [echoPlugin] });
 await runtime.initialize();

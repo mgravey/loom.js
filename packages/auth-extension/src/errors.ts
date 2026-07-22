@@ -1,4 +1,7 @@
-import type { CredentialBrokerErrorCode, CredentialProviderId } from '@loom/credential-broker-api';
+import type {
+  CredentialBrokerErrorCode,
+  CredentialProviderId,
+} from '@mgravey/loom-credential-broker-api';
 
 export type ExtensionAuthErrorCode =
   'INVALID_CONFIGURATION' | 'BROKER_REQUEST_FAILED' | 'INVALID_BROKER_RESPONSE';

@@ -1,4 +1,4 @@
-import type { OperationContext } from '@loom/plugin-api';
+import type { OperationContext } from '@mgravey/loom-plugin-api';
 import {
   WORKSPACE_OPERATIONS,
   workspacePath,
@@ -6,8 +6,8 @@ import {
   type ReadFileTool,
   type WorkspaceTool,
   type WriteFileTool,
-} from '@loom/tool-workspace';
-import { createCancellationSource, type JsonObject } from '@loom/types';
+} from '@mgravey/loom-tool-workspace';
+import { createCancellationSource, type JsonObject } from '@mgravey/loom-types';
 import { describe, expect, it, vi } from 'vitest';
 
 import {

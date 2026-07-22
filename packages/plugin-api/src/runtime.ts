@@ -9,7 +9,7 @@ import type {
   SessionConfigurationOverlay,
   SessionId,
   SessionMetadata,
-} from '@loom/types';
+} from '@mgravey/loom-types';
 
 import type { CapabilityRegistryReader } from './capabilities.js';
 import type { ErrorSink, EventBus } from './events.js';
@@ -59,7 +59,7 @@ export interface CreateLoomRuntimeOptions {
   readonly errorSink?: ErrorSink;
 }
 
-/** Runtime factory shape implemented by `@loom/core`. */
+/** Runtime factory shape implemented by `@mgravey/loom-core`. */
 export type LoomRuntimeFactory = (options: CreateLoomRuntimeOptions) => LoomRuntime;
 
 /** The owning plugin sees only its immutable configuration object. */

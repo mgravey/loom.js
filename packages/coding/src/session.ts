@@ -5,8 +5,8 @@ import {
   type CodexAgentTool,
   type CodexAgent,
   type CodexModel,
-} from '@loom/agent-codex';
-import type { ExecutionRuntime, OperationContext } from '@loom/plugin-api';
+} from '@mgravey/loom-agent-codex';
+import type { ExecutionRuntime, OperationContext } from '@mgravey/loom-plugin-api';
 import {
   createCancellationSource,
   immutableJson,
@@ -16,7 +16,7 @@ import {
   type JsonObject,
   type JsonValue,
   type SessionId,
-} from '@loom/types';
+} from '@mgravey/loom-types';
 
 export type CodingSessionState = 'idle' | 'running' | 'disposed';
 

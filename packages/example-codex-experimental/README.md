@@ -12,11 +12,11 @@ The GitHub Pages workflow publishes these static surfaces at <https://mgravey.co
 workbench is available at <https://mgravey.com/loom.js/workbench.html> after the Pages deployment
 succeeds.
 
-The private example is a multi-mode browser coding workbench built on `@loom/coding`. The extension
-owns ChatGPT/Codex login, refresh credentials, ID-token parsing, and account-routing persistence.
-For a model run it returns a short-lived access token plus the routing ID to the exact authorized
-workbench origin, which starts with direct non-auth provider requests. The page renews that
-credential through the extension shortly before expiry. If direct `fetch` fails before an HTTP
+The private example is a multi-mode browser coding workbench built on `@mgravey/loom-coding`. The
+extension owns ChatGPT/Codex login, refresh credentials, ID-token parsing, and account-routing
+persistence. For a model run it returns a short-lived access token plus the routing ID to the exact
+authorized workbench origin, which starts with direct non-auth provider requests. The page renews
+that credential through the extension shortly before expiry. If direct `fetch` fails before an HTTP
 response, the credential-free body is retried through the extension relay and later turns or reloads
 in the same tab stay on that relay. HTTP errors and cancellation are not retried. Refresh and ID
 tokens remain extension-only.

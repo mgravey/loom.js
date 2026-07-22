@@ -1,12 +1,12 @@
-import type { CodexModelEvent, CodexModelRequest } from '@loom/agent-codex';
+import type { CodexModelEvent, CodexModelRequest } from '@mgravey/loom-agent-codex';
 import {
   PLUGIN_API_VERSION,
   definePlugin,
   modelKey,
   registerModel,
   type LoomPlugin,
-} from '@loom/plugin-api';
-import { capabilityId, pluginId, semanticVersion } from '@loom/types';
+} from '@mgravey/loom-plugin-api';
+import { capabilityId, pluginId, semanticVersion } from '@mgravey/loom-types';
 
 import type { CreateOpenAIResponsesModelOptions } from './contracts.js';
 import { createOpenAIResponsesModel } from './model.js';

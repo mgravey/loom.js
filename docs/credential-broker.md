@@ -3,14 +3,15 @@
 Phase 4 adds a provider-neutral credential boundary without adding Chrome or OAuth knowledge to Loom
 Core. Four packages divide the responsibilities:
 
-- `@loom/credential-broker-api` defines the transport-independent `CredentialBroker` interface,
-  namespaced provider IDs, versioned request/response envelopes, validation, and typed errors;
-- `@loom/auth-extension` sends validated requests through an explicitly supplied external-message
-  runtime and registers the result as Loom's minimal `AuthProvider` capability;
-- `@loom/extension` is a Manifest V3 service worker that authorizes page origins, owns refresh
-  credentials, coordinates refreshes, and returns short-lived access tokens;
-- `@loom/example-extension` is an application page proving public-API composition with the bundled
-  mock provider.
+- `@mgravey/loom-credential-broker-api` defines the transport-independent `CredentialBroker`
+  interface, namespaced provider IDs, versioned request/response envelopes, validation, and typed
+  errors;
+- `@mgravey/loom-auth-extension` sends validated requests through an explicitly supplied
+  external-message runtime and registers the result as Loom's minimal `AuthProvider` capability;
+- `@mgravey/loom-extension` is a Manifest V3 service worker that authorizes page origins, owns
+  refresh credentials, coordinates refreshes, and returns short-lived access tokens;
+- `@mgravey/loom-example-extension` is an application page proving public-API composition with the
+  bundled mock provider.
 
 The broker protocol is generic. It supports temporary token retrieval, credential-safe
 authentication status, and logout. It is not shaped around OpenAI, Codex, or another provider and

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { BrowserExecutionRuntime } from '@loom/execution-browser';
-import { createMemoryProjectWorkspace, workspacePath } from '@loom/tool-workspace';
+import type { BrowserExecutionRuntime } from '@mgravey/loom-execution-browser';
+import { createMemoryProjectWorkspace, workspacePath } from '@mgravey/loom-tool-workspace';
 
 import {
   createBrowserInstallPackagesTool,

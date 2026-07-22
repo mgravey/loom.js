@@ -1,4 +1,4 @@
-import { namespacedId } from '@loom/types';
+import { namespacedId } from '@mgravey/loom-types';
 import { describe, expect, it, vi } from 'vitest';
 
 import {

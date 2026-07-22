@@ -1,4 +1,7 @@
-import type { CredentialProvider, StoredRefreshCredential } from '@loom/credential-provider-api';
+import type {
+  CredentialProvider,
+  StoredRefreshCredential,
+} from '@mgravey/loom-credential-provider-api';
 
 import type { CodexOAuthConfiguration, CodexOAuthDependencies } from './contracts.js';
 import { normalizeConfiguration } from './configuration.js';

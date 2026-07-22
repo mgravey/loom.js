@@ -1,4 +1,4 @@
-import { isCredentialProviderError } from '@loom/credential-provider-api';
+import { isCredentialProviderError } from '@mgravey/loom-credential-provider-api';
 
 import type {
   AccessTokenResult,

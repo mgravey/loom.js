@@ -1,4 +1,4 @@
-import { createCapabilityKey } from '@loom/plugin-api';
+import { createCapabilityKey } from '@mgravey/loom-plugin-api';
 import { describe, expect, it } from 'vitest';
 
 import { createCapabilityRegistry } from '../src/capability-registry.js';

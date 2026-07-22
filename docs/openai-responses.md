@@ -1,7 +1,7 @@
 # OpenAI Platform Responses adapter
 
-`@loom/model-openai-responses` connects the provider-neutral `@loom/agent-codex` protocol to the
-documented OpenAI Platform Responses API. It is independent of the experimental
+`@mgravey/loom-model-openai-responses` connects the provider-neutral `@mgravey/loom-agent-codex`
+protocol to the documented OpenAI Platform Responses API. It is independent of the experimental
 ChatGPT-authenticated Codex transport and does not use the undocumented ChatGPT backend.
 
 The adapter follows OpenAI's
@@ -14,7 +14,7 @@ it sends stateless requests with `store: false`, preserves every returned output
 Prefer the credential-free transport mode:
 
 ```text
-Loom agent -> @loom/model-openai-responses -> application transport -> trusted backend
+Loom agent -> @mgravey/loom-model-openai-responses -> application transport -> trusted backend
                                                                `-----> POST /v1/responses
 ```
 
@@ -29,7 +29,7 @@ Tests use deterministic local transports and do not contact OpenAI.
 ## Composition
 
 ```ts
-import { createOpenAIResponsesModelPlugin } from '@loom/model-openai-responses';
+import { createOpenAIResponsesModelPlugin } from '@mgravey/loom-model-openai-responses';
 
 const modelPlugin = createOpenAIResponsesModelPlugin({
   model: 'gpt-5.6',
@@ -43,11 +43,11 @@ const modelPlugin = createOpenAIResponsesModelPlugin({
 });
 ```
 
-The application composes this plugin alongside `@loom/agent-codex` and its selected built-in or
-application-defined tools, then resolves the model capability through `OPENAI_RESPONSES_MODEL_KEY`.
-Model availability is project-dependent; confirm support before enabling Programmatic Tool Calling.
-Set `programmaticToolCalling: false` to use ordinary direct function calls with a model that does
-not support the hosted tool.
+The application composes this plugin alongside `@mgravey/loom-agent-codex` and its selected built-in
+or application-defined tools, then resolves the model capability through
+`OPENAI_RESPONSES_MODEL_KEY`. Model availability is project-dependent; confirm support before
+enabling Programmatic Tool Calling. Set `programmaticToolCalling: false` to use ordinary direct
+function calls with a model that does not support the hosted tool.
 
 ## Tool policy
 

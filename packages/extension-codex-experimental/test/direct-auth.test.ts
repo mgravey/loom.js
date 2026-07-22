@@ -1,4 +1,4 @@
-import type { ExtensionTokenService, OriginAuthorizer } from '@loom/extension';
+import type { ExtensionTokenService, OriginAuthorizer } from '@mgravey/loom-extension';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { CodexAccountRoutingStore } from '../src/account-routing.js';

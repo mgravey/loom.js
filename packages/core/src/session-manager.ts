@@ -5,7 +5,7 @@ import {
   type ErrorSink,
   type LoomSession,
   type SessionManager,
-} from '@loom/plugin-api';
+} from '@mgravey/loom-plugin-api';
 import {
   LoomAggregateError,
   LoomError,
@@ -14,7 +14,7 @@ import {
   type Clock,
   type JsonObject,
   type SessionId,
-} from '@loom/types';
+} from '@mgravey/loom-types';
 
 import type { ConfigurationStore } from './configuration.js';
 import { createEventBus } from './event-bus.js';

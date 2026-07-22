@@ -1,4 +1,4 @@
-import type { EventBus, EventHandler, EventKey } from '@loom/plugin-api';
+import type { EventBus, EventHandler, EventKey } from '@mgravey/loom-plugin-api';
 
 import { assertNonEmpty, type Awaitable } from './internal.js';
 

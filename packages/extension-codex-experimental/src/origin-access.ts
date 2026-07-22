@@ -5,7 +5,7 @@ import {
   type ChromeMessageSender,
   type ChromeStorageArea,
   type OriginAuthorizer,
-} from '@loom/extension';
+} from '@mgravey/loom-extension';
 
 export const CODEX_ORIGIN_ACCESS_PROTOCOL = 'loom/codex-origin-access-experimental' as const;
 export const CODEX_ORIGIN_ACCESS_VERSION = 1 as const;

@@ -8,12 +8,12 @@ import {
   type CredentialBroker,
   type GetAccessTokenRequest,
   type CredentialBrokerRequest,
-} from '@loom/credential-broker-api';
+} from '@mgravey/loom-credential-broker-api';
 import {
   PLUGIN_API_VERSION,
   type AuthProvider,
   type PluginInitializeContext,
-} from '@loom/plugin-api';
+} from '@mgravey/loom-plugin-api';
 import { describe, expect, it, vi } from 'vitest';
 
 import {

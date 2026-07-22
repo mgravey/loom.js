@@ -1,22 +1,22 @@
-import type { CodexAgentEvent, CodexAgentTool } from '@loom/agent-codex';
+import type { CodexAgentEvent, CodexAgentTool } from '@mgravey/loom-agent-codex';
 import {
   createExternalCredentialBroker,
   createExtensionAuthProvider,
   type ExternalMessageRuntime,
-} from '@loom/auth-extension';
-import { createCodingSession, type CodingSession } from '@loom/coding';
+} from '@mgravey/loom-auth-extension';
+import { createCodingSession, type CodingSession } from '@mgravey/loom-coding';
 import {
   createPyodideExecutionRuntime,
   createQuickJsExecutionRuntime,
   createWebContainerExecutionRuntime,
   executeBrowserWorkspace,
   type BrowserExecutionRuntime,
-} from '@loom/execution-browser';
+} from '@mgravey/loom-execution-browser';
 import {
   createCodexExperimentalModel,
   type CodexResponsesFetch,
   type CodexResponsesHttpResponse,
-} from '@loom/model-codex-experimental';
+} from '@mgravey/loom-model-codex-experimental';
 import {
   createMemoryProjectWorkspace,
   createProjectWorkspaceTools,
@@ -28,9 +28,9 @@ import {
   workspacePath,
   type ProjectWorkspace,
   type WorkspacePath,
-} from '@loom/tool-workspace';
-import { createCancellationSource, sessionId, type CancellationSource } from '@loom/types';
-import { createFileSystemAccessProjectWorkspace } from '@loom/workspace-fsa';
+} from '@mgravey/loom-tool-workspace';
+import { createCancellationSource, sessionId, type CancellationSource } from '@mgravey/loom-types';
+import { createFileSystemAccessProjectWorkspace } from '@mgravey/loom-workspace-fsa';
 
 import {
   BROWSER_INSTALL_PACKAGES_OPERATION,

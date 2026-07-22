@@ -1,5 +1,5 @@
-import { PLUGIN_API_VERSION, definePlugin, type LoomPlugin } from '@loom/plugin-api';
-import { semanticVersion } from '@loom/types';
+import { PLUGIN_API_VERSION, definePlugin, type LoomPlugin } from '@mgravey/loom-plugin-api';
+import { semanticVersion } from '@mgravey/loom-types';
 
 import {
   BROWSER_PLATFORM_KEY,

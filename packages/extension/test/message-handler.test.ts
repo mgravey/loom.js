@@ -4,7 +4,7 @@ import {
   createLogoutRequest,
   credentialProviderId,
   parseCredentialBrokerResponse,
-} from '@loom/credential-broker-api';
+} from '@mgravey/loom-credential-broker-api';
 import { describe, expect, it, vi } from 'vitest';
 
 import {

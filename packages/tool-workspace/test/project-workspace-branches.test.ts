@@ -1,5 +1,5 @@
-import type { PluginInitializeContext } from '@loom/plugin-api';
-import { createCancellationSource, systemClock } from '@loom/types';
+import type { PluginInitializeContext } from '@mgravey/loom-plugin-api';
+import { createCancellationSource, systemClock } from '@mgravey/loom-types';
 import { describe, expect, it } from 'vitest';
 
 import {

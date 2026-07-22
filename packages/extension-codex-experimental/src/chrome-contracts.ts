@@ -1,4 +1,8 @@
-import type { ChromeExtensionApi, ChromeMessageSender, ChromeStorageArea } from '@loom/extension';
+import type {
+  ChromeExtensionApi,
+  ChromeMessageSender,
+  ChromeStorageArea,
+} from '@mgravey/loom-extension';
 
 export interface ChromeIdentityApi {
   getRedirectURL(path?: string): string;

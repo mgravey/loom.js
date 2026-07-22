@@ -33,6 +33,8 @@ phases.
 - [Extension installation README](./packages/extension-codex-experimental/README.md) — unpacked
   installation, current development ID, Store-ID migration, permissions, and production ZIP
 - [Testing](./docs/testing.md) — local checks, browser smoke tests, and acceptance criteria
+- [Publishing](./docs/publishing.md) — public package boundary, MPL-2.0 packaging, Changesets,
+  tarball smoke tests, initial npm release status, and trusted publishing
 - [Architecture decision records](./docs/adr/README.md) — rationale behind the stable contracts
 - [Changes](./CHANGES.md) — milestone-level release notes
 

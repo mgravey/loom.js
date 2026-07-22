@@ -1,6 +1,20 @@
 # Changes
 
-This project follows a lightweight milestone changelog while packages remain private.
+This project follows a milestone changelog alongside Changesets for public package versioning.
+
+## Public package preparation
+
+- Renamed workspace packages to the search-friendly `@mgravey/loom-*` scope and marked the stable
+  runtime, browser, model, workspace, credential protocol, website extension client, and generic
+  extension broker packages for public npm access.
+- Added the Mozilla Public License 2.0, package-specific READMEs, descriptions, repository metadata,
+  explicit ESM/declaration payloads, clean prepack builds, and npm provenance configuration.
+- Added Changesets, release verification, reproducible package tarballs, clean-project installation
+  and import smoke tests, plus a manual GitHub Actions trusted-publishing workflow.
+- Published the initial `0.1.0` minimal runtime and website-to-extension set: `loom-types`,
+  `loom-plugin-api`, `loom-core`, `loom-credential-broker-api`, and `loom-auth-extension`; verified
+  a clean registry installation and import of all five packages.
+- Kept examples and all unsupported Codex compatibility packages private.
 
 ## Unreleased — Browser coding workbench
 
@@ -33,15 +47,16 @@ This project follows a lightweight milestone changelog while packages remain pri
   non-secret repository variables, while the Store packager now defaults to the same homepage,
   privacy, support, and exact-origin values.
 - The deployed static artifact now includes the bundled `lottie-web` MIT notice.
-- `@loom/coding`, a reusable session-level orchestration API for streamed prompts, follow-ups,
-  transcript events, cancellation, injected execution runtimes, and deterministic disposal.
+- `@mgravey/loom-coding`, a reusable session-level orchestration API for streamed prompts,
+  follow-ups, transcript events, cancellation, injected execution runtimes, and deterministic
+  disposal.
 - Binary-capable `ProjectWorkspace` contracts, a memory implementation, expanded FSA/OPFS adapter,
   strict unified patches, and stat/mkdir/move/remove project tools while preserving the original
   text-workspace API.
 - Safe recursive folder and ZIP import/export with traversal, symlink, conflict, entry-count, size,
   and compression-ratio validation.
-- `@loom/execution-browser` with lazy, credential-free QuickJS, WebContainer Node.js, and Pyodide
-  adapters, streamed output, cancellation/timeouts, and explicit workspace snapshot/commit.
+- `@mgravey/loom-execution-browser` with lazy, credential-free QuickJS, WebContainer Node.js, and
+  Pyodide adapters, streamed output, cancellation/timeouts, and explicit workspace snapshot/commit.
 - A multi-mode browser workbench for direct directories, disposable memory projects, and persistent
   OPFS projects, including file editing, folder/ZIP transfer, model chat, and runtime execution.
 - A tab-scoped Manifest V3 callback bridge that transforms the audited localhost OAuth callback into
@@ -72,9 +87,9 @@ This project follows a lightweight milestone changelog while packages remain pri
 - Workspaces can persist multiple resumable chats under `.loom/conversations/`. The workbench adds
   conversation switching, creation, individual deletion, and a confirmed full `.loom` cleanup;
   runtime sandboxes neither receive nor overwrite saved conversation records.
-- `@loom/agent-codex` and `@loom/coding` now accept application-defined, namespaced `CodexTool`
-  operations with model-facing JSON schemas, descriptions, output schemas, caller policies, and
-  website-owned executors.
+- `@mgravey/loom-agent-codex` and `@mgravey/loom-coding` now accept application-defined, namespaced
+  `CodexTool` operations with model-facing JSON schemas, descriptions, output schemas, caller
+  policies, and website-owned executors.
 - The workbench exposes QuickJS, WebContainer Node.js, and Pyodide Python as an agent-callable
   run-file tool with bounded captured output and workspace write-back. Pyodide resolves bundled
   packages from entrypoint imports before execution.
@@ -129,20 +144,20 @@ This project follows a lightweight milestone changelog while packages remain pri
 
 ### Added
 
-- `@loom/model-openai-responses`, a separate adapter for the documented OpenAI Platform Responses
-  API with injected secure transport and trusted-host direct modes.
+- `@mgravey/loom-model-openai-responses`, a separate adapter for the documented OpenAI Platform
+  Responses API with injected secure transport and trusted-host direct modes.
 - Programmatic Tool Calling request support, including `output_schema`, `allowed_callers`, hosted
   `program`/`program_output` continuation items, caller-preserving function results, and
   final-message continuation semantics.
 - Caller-aware parallel execution for hosted-program read-only calls. Workspace writes remain
   direct-only and are rejected when attributed to a hosted program.
-- `@loom/model-codex-experimental`, an isolated adapter from the Phase 2 agent protocol to an
-  audited Responses-style request and streamed SSE response, with an injected credential-free
+- `@mgravey/loom-model-codex-experimental`, an isolated adapter from the Phase 2 agent protocol to
+  an audited Responses-style request and streamed SSE response, with an injected credential-free
   transport as its preferred mode.
 - A separate versioned `chrome.runtime.Port` transport. The experimental extension owns the ChatGPT
   backend request, credential and account-routing headers, cancellation, and sanitized failure
   boundary.
-- `@loom/example-codex-experimental`, a localhost browser application composing the browser
+- `@mgravey/loom-example-codex-experimental`, a localhost browser application composing the browser
   platform, File System Access tools, extension auth, experimental model, and Codex-style agent.
 - Credential status and logout operations in the provider-neutral broker protocol and extension
   options/application UI.
@@ -181,11 +196,12 @@ This project follows a lightweight milestone changelog while packages remain pri
 
 ### Added
 
-- `@loom/credential-provider-api`, extracting host-neutral refresh, interactive authorization,
-  token-result, and sanitized provider-error contracts from the extension implementation.
-- `@loom/auth-codex-experimental`, reproducing the audited Codex CLI refresh, device-code, and
-  direct authorization-code/PKCE request shapes behind injected clock, network, digest, randomness,
-  redirect, polling, and transaction interfaces.
+- `@mgravey/loom-credential-provider-api`, extracting host-neutral refresh, interactive
+  authorization, token-result, and sanitized provider-error contracts from the extension
+  implementation.
+- `@mgravey/loom-auth-codex-experimental`, reproducing the audited Codex CLI refresh, device-code,
+  and direct authorization-code/PKCE request shapes behind injected clock, network, digest,
+  randomness, redirect, polling, and transaction interfaces.
 - A separate experimental Manifest V3 composition with an extension-owned, disabled-by-default
   authorization surface; the shared credential broker remains provider-neutral.
 - Deterministic tests for PKCE, state consumption, device polling, response validation, refresh
@@ -210,15 +226,15 @@ This project follows a lightweight milestone changelog while packages remain pri
 
 ### Added
 
-- `@loom/credential-broker-api`, defining a transport-neutral, versioned, strictly validated
+- `@mgravey/loom-credential-broker-api`, defining a transport-neutral, versioned, strictly validated
   access-token protocol.
-- `@loom/auth-extension`, adapting an explicitly supplied external-message runtime to Loom's
+- `@mgravey/loom-auth-extension`, adapting an explicitly supplied external-message runtime to Loom's
   provider-neutral `AuthProvider` capability.
-- `@loom/extension`, a Manifest V3 credential broker with exact-origin authorization, trusted-only
-  refresh-credential storage, access-token caching, rotation support, and concurrent refresh
-  deduplication.
-- `@loom/example-extension`, demonstrating end-to-end composition through public APIs with the
-  development mock provider.
+- `@mgravey/loom-extension`, a Manifest V3 credential broker with exact-origin authorization,
+  trusted-only refresh-credential storage, access-token caching, rotation support, and concurrent
+  refresh deduplication.
+- `@mgravey/loom-example-extension`, demonstrating end-to-end composition through public APIs with
+  the development mock provider.
 - Real Chromium tests loading the unpacked extension and exercising allowed and unauthorized
   origins, concurrent requests, unknown providers, and missing credentials.
 - Credential-broker security guide and ADR-008 for the extension-owned trust boundary.
@@ -256,10 +272,10 @@ This project follows a lightweight milestone changelog while packages remain pri
 
 ### Added
 
-- `@loom/agent-codex`, a small stateless coding-agent loop with a provider-neutral streamed model
-  protocol, serial tool calls, cancellation propagation, and bounded turns.
-- `@loom/tool-workspace`, defining normalized relative paths and adapter-backed list/read/write text
-  tools without host filesystem access.
+- `@mgravey/loom-agent-codex`, a small stateless coding-agent loop with a provider-neutral streamed
+  model protocol, serial tool calls, cancellation propagation, and bounded turns.
+- `@mgravey/loom-tool-workspace`, defining normalized relative paths and adapter-backed
+  list/read/write text tools without host filesystem access.
 - Deterministic scripted-model and in-memory-workspace examples plus runtime, browser-window, and
   dedicated-worker integration coverage.
 - Phase 2 composition documentation and ADR-006 for agent-owned protocols.

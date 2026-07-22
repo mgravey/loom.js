@@ -27,32 +27,80 @@ const runtimePackages = [
   'examples',
 ] as const;
 
+const publicRuntimePackages = new Set<(typeof runtimePackages)[number]>([
+  'types',
+  'plugin-api',
+  'core',
+  'tool-workspace',
+  'agent-codex',
+  'coding',
+  'execution-browser',
+  'model-openai-responses',
+  'platform-browser',
+  'storage-indexeddb',
+  'workspace-fsa',
+  'credential-broker-api',
+  'credential-provider-api',
+  'auth-extension',
+  'extension',
+]);
+
 const allowedInternalDependencies: Readonly<
   Record<(typeof runtimePackages)[number], readonly string[]>
 > = Object.freeze({
   types: [],
-  'plugin-api': ['@loom/types'],
-  core: ['@loom/plugin-api', '@loom/types'],
-  'tool-workspace': ['@loom/plugin-api', '@loom/types'],
-  'agent-codex': ['@loom/plugin-api', '@loom/tool-workspace', '@loom/types'],
-  coding: ['@loom/agent-codex', '@loom/plugin-api', '@loom/tool-workspace', '@loom/types'],
+  'plugin-api': ['@mgravey/loom-types'],
+  core: ['@mgravey/loom-plugin-api', '@mgravey/loom-types'],
+  'tool-workspace': ['@mgravey/loom-plugin-api', '@mgravey/loom-types'],
+  'agent-codex': [
+    '@mgravey/loom-plugin-api',
+    '@mgravey/loom-tool-workspace',
+    '@mgravey/loom-types',
+  ],
+  coding: [
+    '@mgravey/loom-agent-codex',
+    '@mgravey/loom-plugin-api',
+    '@mgravey/loom-tool-workspace',
+    '@mgravey/loom-types',
+  ],
   'execution-browser': [],
-  'model-openai-responses': ['@loom/agent-codex', '@loom/plugin-api', '@loom/types'],
-  'platform-browser': ['@loom/plugin-api', '@loom/types'],
-  'storage-indexeddb': ['@loom/plugin-api', '@loom/types'],
-  'workspace-fsa': ['@loom/plugin-api', '@loom/tool-workspace', '@loom/types'],
+  'model-openai-responses': [
+    '@mgravey/loom-agent-codex',
+    '@mgravey/loom-plugin-api',
+    '@mgravey/loom-types',
+  ],
+  'platform-browser': ['@mgravey/loom-plugin-api', '@mgravey/loom-types'],
+  'storage-indexeddb': ['@mgravey/loom-plugin-api', '@mgravey/loom-types'],
+  'workspace-fsa': [
+    '@mgravey/loom-plugin-api',
+    '@mgravey/loom-tool-workspace',
+    '@mgravey/loom-types',
+  ],
   'credential-broker-api': [],
   'credential-provider-api': [],
-  'auth-extension': ['@loom/credential-broker-api', '@loom/plugin-api', '@loom/types'],
-  extension: ['@loom/credential-broker-api', '@loom/credential-provider-api'],
-  'auth-codex-experimental': ['@loom/credential-provider-api'],
-  'extension-codex-experimental': [
-    '@loom/auth-codex-experimental',
-    '@loom/credential-provider-api',
-    '@loom/extension',
+  'auth-extension': [
+    '@mgravey/loom-credential-broker-api',
+    '@mgravey/loom-plugin-api',
+    '@mgravey/loom-types',
   ],
-  'model-codex-experimental': ['@loom/agent-codex', '@loom/plugin-api', '@loom/types'],
-  examples: ['@loom/agent-codex', '@loom/plugin-api', '@loom/tool-workspace', '@loom/types'],
+  extension: ['@mgravey/loom-credential-broker-api', '@mgravey/loom-credential-provider-api'],
+  'auth-codex-experimental': ['@mgravey/loom-credential-provider-api'],
+  'extension-codex-experimental': [
+    '@mgravey/loom-auth-codex-experimental',
+    '@mgravey/loom-credential-provider-api',
+    '@mgravey/loom-extension',
+  ],
+  'model-codex-experimental': [
+    '@mgravey/loom-agent-codex',
+    '@mgravey/loom-plugin-api',
+    '@mgravey/loom-types',
+  ],
+  examples: [
+    '@mgravey/loom-agent-codex',
+    '@mgravey/loom-plugin-api',
+    '@mgravey/loom-tool-workspace',
+    '@mgravey/loom-types',
+  ],
 });
 
 async function sourceFiles(packageName: string): Promise<readonly string[]> {
@@ -91,17 +139,30 @@ async function packageImports(packageName: string): Promise<readonly string[]> {
 }
 
 describe('package architecture', () => {
-  it('keeps every package private, ESM-only, and explicitly exported', async () => {
+  it('keeps stable packages public, experiments private, ESM-only, and explicitly exported', async () => {
     for (const packageName of runtimePackages) {
       const manifest = JSON.parse(
         await readFile(join(workspaceRoot, 'packages', packageName, 'package.json'), 'utf8'),
       ) as {
+        name?: string;
         private?: boolean;
+        license?: string;
         type?: string;
         exports?: { readonly '.': { readonly import?: string; readonly types?: string } };
+        publishConfig?: { readonly access?: string; readonly provenance?: boolean };
       };
 
-      expect(manifest.private, packageName).toBe(true);
+      if (publicRuntimePackages.has(packageName)) {
+        expect(manifest.name, packageName).toBe(`@mgravey/loom-${packageName}`);
+        expect(manifest.private, packageName).toBeUndefined();
+        expect(manifest.license, packageName).toBe('MPL-2.0');
+        expect(manifest.publishConfig, packageName).toEqual({
+          access: 'public',
+          provenance: true,
+        });
+      } else {
+        expect(manifest.private, packageName).toBe(true);
+      }
       expect(manifest.type, packageName).toBe('module');
       expect(manifest.exports?.['.']?.import, packageName).toBe('./dist/index.js');
       expect(manifest.exports?.['.']?.types, packageName).toBe('./dist/index.d.ts');
@@ -112,7 +173,7 @@ describe('package architecture', () => {
     for (const packageName of runtimePackages) {
       const allowed = allowedInternalDependencies[packageName];
       const imports = (await packageImports(packageName)).filter((value) =>
-        value.startsWith('@loom/'),
+        value.startsWith('@mgravey/loom-'),
       );
       expect(
         imports.filter((value) => !allowed.includes(value)),
@@ -123,7 +184,7 @@ describe('package architecture', () => {
         await readFile(join(workspaceRoot, 'packages', packageName, 'package.json'), 'utf8'),
       ) as { readonly dependencies?: Readonly<Record<string, string>> };
       const dependencies = Object.keys(manifest.dependencies ?? {}).filter((value) =>
-        value.startsWith('@loom/'),
+        value.startsWith('@mgravey/loom-'),
       );
       expect(dependencies.sort(), `${packageName} manifest`).toEqual([...allowed].sort());
     }
@@ -132,44 +193,44 @@ describe('package architecture', () => {
   it('keeps examples on public package entry points', async () => {
     const imports = await packageImports('examples');
     expect(
-      imports.filter((value) => value.startsWith('@loom/') && value.split('/').length > 2),
+      imports.filter((value) => value.startsWith('@mgravey/loom-') && value.split('/').length > 2),
     ).toEqual([]);
-    expect(imports).not.toContain('@loom/core');
+    expect(imports).not.toContain('@mgravey/loom-core');
   });
 
   it('keeps the experimental Codex browser example on public package entry points', async () => {
     const imports = await packageImports('example-codex-experimental');
     expect(
-      imports.filter((value) => value.startsWith('@loom/') && value.split('/').length > 2),
+      imports.filter((value) => value.startsWith('@mgravey/loom-') && value.split('/').length > 2),
     ).toEqual([]);
-    expect(new Set(imports.filter((value) => value.startsWith('@loom/')))).toEqual(
+    expect(new Set(imports.filter((value) => value.startsWith('@mgravey/loom-')))).toEqual(
       new Set([
-        '@loom/agent-codex',
-        '@loom/auth-extension',
-        '@loom/coding',
-        '@loom/execution-browser',
-        '@loom/model-codex-experimental',
-        '@loom/tool-workspace',
-        '@loom/types',
-        '@loom/workspace-fsa',
+        '@mgravey/loom-agent-codex',
+        '@mgravey/loom-auth-extension',
+        '@mgravey/loom-coding',
+        '@mgravey/loom-execution-browser',
+        '@mgravey/loom-model-codex-experimental',
+        '@mgravey/loom-tool-workspace',
+        '@mgravey/loom-types',
+        '@mgravey/loom-workspace-fsa',
       ]),
     );
   });
 
   it('keeps the browser example on explicit public package dependencies', async () => {
     const allowed = [
-      '@loom/agent-codex',
-      '@loom/core',
-      '@loom/examples',
-      '@loom/platform-browser',
-      '@loom/storage-indexeddb',
-      '@loom/types',
-      '@loom/workspace-fsa',
+      '@mgravey/loom-agent-codex',
+      '@mgravey/loom-core',
+      '@mgravey/loom-examples',
+      '@mgravey/loom-platform-browser',
+      '@mgravey/loom-storage-indexeddb',
+      '@mgravey/loom-types',
+      '@mgravey/loom-workspace-fsa',
     ];
     const imports = await packageImports('example-browser');
     expect(imports.filter((value) => value.startsWith('node:'))).toEqual([]);
     expect(
-      imports.filter((value) => value.startsWith('@loom/') && !allowed.includes(value)),
+      imports.filter((value) => value.startsWith('@mgravey/loom-') && !allowed.includes(value)),
     ).toEqual([]);
 
     const manifest = JSON.parse(
@@ -179,11 +240,11 @@ describe('package architecture', () => {
   });
 
   it('keeps the credential broker example on explicit public package dependencies', async () => {
-    const allowed = ['@loom/auth-extension', '@loom/core'];
+    const allowed = ['@mgravey/loom-auth-extension', '@mgravey/loom-core'];
     const imports = await packageImports('example-extension');
     expect(imports.filter((value) => value.startsWith('node:'))).toEqual([]);
     expect(
-      imports.filter((value) => value.startsWith('@loom/') && !allowed.includes(value)),
+      imports.filter((value) => value.startsWith('@mgravey/loom-') && !allowed.includes(value)),
     ).toEqual([]);
 
     const manifest = JSON.parse(
@@ -239,7 +300,7 @@ describe('package architecture', () => {
 
   it('keeps Phase 2 plugins provider- and host-neutral', async () => {
     const forbiddenImports = [
-      '@loom/core',
+      '@mgravey/loom-core',
       'openai',
       'anthropic',
       '@google/generative-ai',
@@ -279,8 +340,8 @@ describe('package architecture', () => {
 
   it('keeps Phase 3 browser plugins isolated from core and provider implementations', async () => {
     const forbiddenImports = [
-      '@loom/core',
-      '@loom/agent-codex',
+      '@mgravey/loom-core',
+      '@mgravey/loom-agent-codex',
       'openai',
       'anthropic',
       '@google/generative-ai',
@@ -305,8 +366,8 @@ describe('package architecture', () => {
 
   it('keeps Phase 4 broker packages isolated from core and concrete providers', async () => {
     const forbiddenImports = [
-      '@loom/core',
-      '@loom/agent-codex',
+      '@mgravey/loom-core',
+      '@mgravey/loom-agent-codex',
       'openai',
       'anthropic',
       '@google/generative-ai',
@@ -340,18 +401,18 @@ describe('package architecture', () => {
       'extension-codex-experimental',
     ] as const) {
       const imports = await packageImports(packageName);
-      expect(imports).not.toContain('@loom/core');
-      expect(imports).not.toContain('@loom/plugin-api');
-      expect(imports).not.toContain('@loom/types');
+      expect(imports).not.toContain('@mgravey/loom-core');
+      expect(imports).not.toContain('@mgravey/loom-plugin-api');
+      expect(imports).not.toContain('@mgravey/loom-types');
       expect(imports.filter((value) => value.startsWith('node:'))).toEqual([]);
     }
 
     const modelImports = await packageImports('model-codex-experimental');
-    expect(modelImports).not.toContain('@loom/core');
+    expect(modelImports).not.toContain('@mgravey/loom-core');
     expect(modelImports.filter((value) => value.startsWith('node:'))).toEqual([]);
 
     const platformModelImports = await packageImports('model-openai-responses');
-    expect(platformModelImports).not.toContain('@loom/core');
+    expect(platformModelImports).not.toContain('@mgravey/loom-core');
     expect(platformModelImports.filter((value) => value.startsWith('node:'))).toEqual([]);
 
     for (const packageName of [

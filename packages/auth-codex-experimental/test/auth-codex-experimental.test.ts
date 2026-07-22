@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 
-import { CredentialProviderError } from '@loom/credential-provider-api';
+import { CredentialProviderError } from '@mgravey/loom-credential-provider-api';
 import { describe, expect, it, vi } from 'vitest';
 
 import {

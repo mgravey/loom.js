@@ -15,7 +15,7 @@ import {
   type ServiceRegistrar,
   type ServiceResolver,
   type ServiceToken,
-} from '@loom/plugin-api';
+} from '@mgravey/loom-plugin-api';
 import {
   LoomAggregateError,
   LoomError,
@@ -23,7 +23,7 @@ import {
   type PluginId,
   type PluginState,
   type RuntimeState,
-} from '@loom/types';
+} from '@mgravey/loom-types';
 
 import { createCapabilityRegistry } from './capability-registry.js';
 import { createConfigurationStore } from './configuration.js';

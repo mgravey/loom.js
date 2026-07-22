@@ -3,22 +3,22 @@ import {
   CODEX_AGENT_PLUGIN_ID,
   createCodexAgentPlugin,
   type CodexAgentEvent,
-} from '@loom/agent-codex';
-import { createLoomRuntime } from '@loom/core';
+} from '@mgravey/loom-agent-codex';
+import { createLoomRuntime } from '@mgravey/loom-core';
 import {
   createInMemoryTextWorkspace,
   createScriptedCodexModelPlugin,
   EXAMPLE_CODEX_MODEL_KEY,
   EXAMPLE_CODEX_SESSION_CONFIGURATION,
-} from '@loom/examples';
+} from '@mgravey/loom-examples';
 import {
   LIST_FILES_TOOL_KEY,
   READ_FILE_TOOL_KEY,
   WRITE_FILE_TOOL_KEY,
   WORKSPACE_OPERATIONS,
   createWorkspaceToolsPlugin,
-} from '@loom/tool-workspace';
-import { sessionId } from '@loom/types';
+} from '@mgravey/loom-tool-workspace';
+import { sessionId } from '@mgravey/loom-types';
 import { describe, expect, it } from 'vitest';
 
 describe('minimal agent public integration', () => {

@@ -3,7 +3,7 @@ import {
   messageSenderOrigin,
   type ChromeMessageSender,
   type OriginAuthorizer,
-} from '@loom/extension';
+} from '@mgravey/loom-extension';
 
 export const ALL_HTTPS_EXTERNALLY_CONNECTABLE_MATCH = 'https://*/*' as const;
 

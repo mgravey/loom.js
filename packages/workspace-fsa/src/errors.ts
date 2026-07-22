@@ -1,4 +1,4 @@
-import type { WorkspacePath } from '@loom/tool-workspace';
+import type { WorkspacePath } from '@mgravey/loom-tool-workspace';
 
 export type FileSystemAccessWorkspaceErrorCode =
   | 'INVALID_ROOT'

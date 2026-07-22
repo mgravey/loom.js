@@ -1,4 +1,4 @@
-import type { ChromeStorageArea } from '@loom/extension';
+import type { ChromeStorageArea } from '@mgravey/loom-extension';
 
 export const CODEX_DEVICE_EXPERIMENT_ENABLED_KEY =
   'loom.codex-experimental.device-authorization-enabled' as const;

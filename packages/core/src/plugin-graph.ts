@@ -1,5 +1,5 @@
-import { PLUGIN_API_VERSION, type LoomPlugin } from '@loom/plugin-api';
-import { LoomError, isNamespacedId, isSemanticVersion, type PluginId } from '@loom/types';
+import { PLUGIN_API_VERSION, type LoomPlugin } from '@mgravey/loom-plugin-api';
+import { LoomError, isNamespacedId, isSemanticVersion, type PluginId } from '@mgravey/loom-types';
 
 export interface ValidatedPluginGraph {
   readonly ordered: readonly LoomPlugin[];

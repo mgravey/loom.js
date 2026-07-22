@@ -1,5 +1,5 @@
 {
-  "name": "@loom/examples",
+  "name": "@mgravey/loom-examples",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -18,13 +18,13 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@loom/agent-codex": "workspace:*",
-    "@loom/plugin-api": "workspace:*",
-    "@loom/tool-workspace": "workspace:*",
-    "@loom/types": "workspace:*"
+    "@mgravey/loom-agent-codex": "workspace:^",
+    "@mgravey/loom-plugin-api": "workspace:^",
+    "@mgravey/loom-tool-workspace": "workspace:^",
+    "@mgravey/loom-types": "workspace:^"
   },
   "devDependencies": {
-    "@loom/core": "workspace:*",
+    "@mgravey/loom-core": "workspace:^",
     "tsup": "^8.5.0",
     "typescript": "^5.9.2"
   }

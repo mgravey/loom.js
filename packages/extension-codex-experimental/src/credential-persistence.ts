@@ -4,7 +4,7 @@ import {
   type ChromeStorageArea,
   type RefreshCredentialStore,
   type StoredRefreshCredential,
-} from '@loom/extension';
+} from '@mgravey/loom-extension';
 
 import {
   createCodexAccountRoutingStore,

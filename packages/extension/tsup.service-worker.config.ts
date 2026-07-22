@@ -8,6 +8,6 @@ export default defineConfig({
   outDir: 'dist',
   clean: false,
   splitting: false,
-  noExternal: [/^@loom\//],
+  noExternal: [/^@mgravey\/loom-/],
   tsconfig: 'tsconfig.build.json',
 });

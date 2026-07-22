@@ -4,8 +4,8 @@ import type {
   CapabilityKind,
   CapabilityRegistrar,
   CapabilityRegistryReader,
-} from '@loom/plugin-api';
-import { pluginId, type CapabilityId, type PluginId } from '@loom/types';
+} from '@mgravey/loom-plugin-api';
+import { pluginId, type CapabilityId, type PluginId } from '@mgravey/loom-types';
 
 import { CoreError } from './errors.js';
 import { assertNonEmpty } from './internal.js';

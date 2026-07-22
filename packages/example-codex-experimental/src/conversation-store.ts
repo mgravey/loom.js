@@ -1,5 +1,9 @@
-import type { CodingTranscriptEntry } from '@loom/coding';
-import { workspacePath, type ProjectWorkspace, type WorkspacePath } from '@loom/tool-workspace';
+import type { CodingTranscriptEntry } from '@mgravey/loom-coding';
+import {
+  workspacePath,
+  type ProjectWorkspace,
+  type WorkspacePath,
+} from '@mgravey/loom-tool-workspace';
 
 export const LOOM_DIRECTORY = workspacePath('.loom');
 export const CONVERSATION_DIRECTORY = workspacePath('.loom/conversations');

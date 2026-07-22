@@ -12,8 +12,8 @@ import {
   PLUGIN_API_VERSION,
   type CapabilityKey,
   type PluginInitializeContext,
-} from '@loom/plugin-api';
-import { systemClock } from '@loom/types';
+} from '@mgravey/loom-plugin-api';
+import { systemClock } from '@mgravey/loom-types';
 
 function fakeIdbFactory(label: string): IDBFactory {
   return Object.freeze({ label }) as unknown as IDBFactory;

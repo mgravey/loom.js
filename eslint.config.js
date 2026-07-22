@@ -13,7 +13,10 @@ export default tseslint.config(
       '**/node_modules/**',
       '**/playwright-report/**',
       '**/test-results/**',
+      '**/.scratch/**',
       '**/*.d.ts',
+      'release-artifacts/**',
+      'site-preview/**',
       'scripts/after-effects/*.jsx',
     ],
   },
@@ -87,8 +90,8 @@ export default tseslint.config(
         {
           patterns: [
             {
-              group: ['@loom/*', 'node:*'],
-              message: '@loom/types is dependency-free and environment-neutral.',
+              group: ['@mgravey/loom-*', 'node:*'],
+              message: '@mgravey/loom-types is dependency-free and environment-neutral.',
             },
           ],
         },
@@ -103,8 +106,8 @@ export default tseslint.config(
         {
           patterns: [
             {
-              group: ['@loom/*', '!@loom/types', 'node:*'],
-              message: '@loom/plugin-api may depend only on @loom/types.',
+              group: ['@mgravey/loom-*', '!@mgravey/loom-types', 'node:*'],
+              message: '@mgravey/loom-plugin-api may depend only on @mgravey/loom-types.',
             },
           ],
         },
@@ -120,9 +123,9 @@ export default tseslint.config(
           patterns: [
             {
               group: [
-                '@loom/*',
-                '!@loom/types',
-                '!@loom/plugin-api',
+                '@mgravey/loom-*',
+                '!@mgravey/loom-types',
+                '!@mgravey/loom-plugin-api',
                 '@openai/*',
                 '@anthropic-ai/*',
                 '@google/generative-ai',
@@ -136,7 +139,8 @@ export default tseslint.config(
                 'simple-git',
                 'node:*',
               ],
-              message: '@loom/core may depend only on @loom/types and @loom/plugin-api.',
+              message:
+                '@mgravey/loom-core may depend only on @mgravey/loom-types and @mgravey/loom-plugin-api.',
             },
           ],
         },
@@ -159,8 +163,14 @@ export default tseslint.config(
         {
           patterns: [
             {
-              group: ['@loom/*', '!@loom/types', '!@loom/plugin-api', 'node:*'],
-              message: '@loom/tool-workspace may depend only on @loom/types and @loom/plugin-api.',
+              group: [
+                '@mgravey/loom-*',
+                '!@mgravey/loom-types',
+                '!@mgravey/loom-plugin-api',
+                'node:*',
+              ],
+              message:
+                '@mgravey/loom-tool-workspace may depend only on @mgravey/loom-types and @mgravey/loom-plugin-api.',
             },
           ],
         },
@@ -176,13 +186,14 @@ export default tseslint.config(
           patterns: [
             {
               group: [
-                '@loom/*',
-                '!@loom/types',
-                '!@loom/plugin-api',
-                '!@loom/tool-workspace',
+                '@mgravey/loom-*',
+                '!@mgravey/loom-types',
+                '!@mgravey/loom-plugin-api',
+                '!@mgravey/loom-tool-workspace',
                 'node:*',
               ],
-              message: '@loom/agent-codex may depend only on Loom contracts and workspace tools.',
+              message:
+                '@mgravey/loom-agent-codex may depend only on Loom contracts and workspace tools.',
             },
           ],
         },
@@ -197,8 +208,13 @@ export default tseslint.config(
         {
           patterns: [
             {
-              group: ['@loom/*', '!@loom/types', '!@loom/plugin-api', 'node:*'],
-              message: '@loom/platform-browser may depend only on Loom public contracts.',
+              group: [
+                '@mgravey/loom-*',
+                '!@mgravey/loom-types',
+                '!@mgravey/loom-plugin-api',
+                'node:*',
+              ],
+              message: '@mgravey/loom-platform-browser may depend only on Loom public contracts.',
             },
           ],
         },
@@ -213,8 +229,13 @@ export default tseslint.config(
         {
           patterns: [
             {
-              group: ['@loom/*', '!@loom/types', '!@loom/plugin-api', 'node:*'],
-              message: '@loom/storage-indexeddb may depend only on Loom public contracts.',
+              group: [
+                '@mgravey/loom-*',
+                '!@mgravey/loom-types',
+                '!@mgravey/loom-plugin-api',
+                'node:*',
+              ],
+              message: '@mgravey/loom-storage-indexeddb may depend only on Loom public contracts.',
             },
           ],
         },
@@ -230,13 +251,13 @@ export default tseslint.config(
           patterns: [
             {
               group: [
-                '@loom/*',
-                '!@loom/types',
-                '!@loom/plugin-api',
-                '!@loom/tool-workspace',
+                '@mgravey/loom-*',
+                '!@mgravey/loom-types',
+                '!@mgravey/loom-plugin-api',
+                '!@mgravey/loom-tool-workspace',
                 'node:*',
               ],
-              message: '@loom/workspace-fsa may depend only on Loom workspace contracts.',
+              message: '@mgravey/loom-workspace-fsa may depend only on Loom workspace contracts.',
             },
           ],
         },
@@ -251,7 +272,7 @@ export default tseslint.config(
         {
           patterns: [
             {
-              group: ['@loom/*', 'node:*'],
+              group: ['@mgravey/loom-*', 'node:*'],
               message: 'The credential broker protocol is dependency- and host-neutral.',
             },
           ],
@@ -267,7 +288,7 @@ export default tseslint.config(
         {
           patterns: [
             {
-              group: ['@loom/*', 'node:*'],
+              group: ['@mgravey/loom-*', 'node:*'],
               message: 'The credential provider SPI is dependency- and host-neutral.',
             },
           ],
@@ -284,10 +305,10 @@ export default tseslint.config(
           patterns: [
             {
               group: [
-                '@loom/*',
-                '!@loom/types',
-                '!@loom/plugin-api',
-                '!@loom/credential-broker-api',
+                '@mgravey/loom-*',
+                '!@mgravey/loom-types',
+                '!@mgravey/loom-plugin-api',
+                '!@mgravey/loom-credential-broker-api',
                 'node:*',
               ],
               message: 'The extension auth adapter may depend only on public Loom contracts.',
@@ -306,9 +327,9 @@ export default tseslint.config(
           patterns: [
             {
               group: [
-                '@loom/*',
-                '!@loom/credential-broker-api',
-                '!@loom/credential-provider-api',
+                '@mgravey/loom-*',
+                '!@mgravey/loom-credential-broker-api',
+                '!@mgravey/loom-credential-provider-api',
                 'node:*',
               ],
               message: 'The credential broker extension may depend only on public credential APIs.',
@@ -326,7 +347,7 @@ export default tseslint.config(
         {
           patterns: [
             {
-              group: ['@loom/*', '!@loom/credential-provider-api', 'node:*'],
+              group: ['@mgravey/loom-*', '!@mgravey/loom-credential-provider-api', 'node:*'],
               message: 'The Codex auth experiment may depend only on the provider SPI.',
             },
           ],
@@ -343,10 +364,10 @@ export default tseslint.config(
           patterns: [
             {
               group: [
-                '@loom/*',
-                '!@loom/agent-codex',
-                '!@loom/plugin-api',
-                '!@loom/types',
+                '@mgravey/loom-*',
+                '!@mgravey/loom-agent-codex',
+                '!@mgravey/loom-plugin-api',
+                '!@mgravey/loom-types',
                 'node:*',
               ],
               message: 'The OpenAI Responses adapter may depend only on public agent contracts.',
@@ -365,10 +386,10 @@ export default tseslint.config(
           patterns: [
             {
               group: [
-                '@loom/*',
-                '!@loom/agent-codex',
-                '!@loom/plugin-api',
-                '!@loom/types',
+                '@mgravey/loom-*',
+                '!@mgravey/loom-agent-codex',
+                '!@mgravey/loom-plugin-api',
+                '!@mgravey/loom-types',
                 'node:*',
               ],
               message: 'The experimental model adapter may depend only on public agent contracts.',
@@ -387,10 +408,10 @@ export default tseslint.config(
           patterns: [
             {
               group: [
-                '@loom/*',
-                '!@loom/auth-codex-experimental',
-                '!@loom/credential-provider-api',
-                '!@loom/extension',
+                '@mgravey/loom-*',
+                '!@mgravey/loom-auth-codex-experimental',
+                '!@mgravey/loom-credential-provider-api',
+                '!@mgravey/loom-extension',
                 'node:*',
               ],
               message: 'The experimental extension is a leaf composition over public APIs.',
@@ -408,7 +429,7 @@ export default tseslint.config(
         {
           patterns: [
             {
-              group: ['@loom/*/*', 'node:*'],
+              group: ['@mgravey/loom-*/*', 'node:*'],
               message: 'Examples must use public Loom package exports only.',
             },
           ],

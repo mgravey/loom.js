@@ -7,8 +7,8 @@ import {
   createServiceToken,
   definePlugin,
   type LoomPlugin,
-} from '@loom/plugin-api';
-import { pluginId, semanticVersion, sessionId, type JsonObject } from '@loom/types';
+} from '@mgravey/loom-plugin-api';
+import { pluginId, semanticVersion, sessionId, type JsonObject } from '@mgravey/loom-types';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createLoomRuntime } from '../src/runtime.js';

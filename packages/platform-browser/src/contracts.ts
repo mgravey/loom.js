@@ -1,5 +1,5 @@
-import { CAPABILITY_KINDS, createCapabilityKey, type Platform } from '@loom/plugin-api';
-import { capabilityId, pluginId } from '@loom/types';
+import { CAPABILITY_KINDS, createCapabilityKey, type Platform } from '@mgravey/loom-plugin-api';
+import { capabilityId, pluginId } from '@mgravey/loom-types';
 
 export type BrowserExecutionScope = 'window' | 'dedicated-worker';
 

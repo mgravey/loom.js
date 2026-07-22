@@ -24,58 +24,60 @@ flowchart TB
 
 ## Package boundaries
 
-`@loom/types` contains primitives that can be exchanged without pulling in a runtime. It has no
-internal dependency. `@loom/plugin-api` depends only on those primitives and defines contracts for
-plugin authors. `@loom/core` implements those contracts and depends only on the two lower-level
-packages. Plugins and examples consume public exports and never import implementation files.
+`@mgravey/loom-types` contains primitives that can be exchanged without pulling in a runtime. It has
+no internal dependency. `@mgravey/loom-plugin-api` depends only on those primitives and defines
+contracts for plugin authors. `@mgravey/loom-core` implements those contracts and depends only on
+the two lower-level packages. Plugins and examples consume public exports and never import
+implementation files.
 
-Phase 2 adds `@loom/tool-workspace` above the plugin API and `@loom/agent-codex` above both. These
-are ordinary plugins, not new core layers. The agent protocol and workspace semantics cannot flow
-back into `@loom/core`.
+Phase 2 adds `@mgravey/loom-tool-workspace` above the plugin API and `@mgravey/loom-agent-codex`
+above both. These are ordinary plugins, not new core layers. The agent protocol and workspace
+semantics cannot flow back into `@mgravey/loom-core`.
 
-Phase 3 adds `@loom/platform-browser`, `@loom/storage-indexeddb`, and `@loom/workspace-fsa` as
-host-specific leaves. They compile with browser typings and receive host objects explicitly, while
-the packages below them retain their environment-neutral boundary. See
-[the browser-platform guide](./browser-platform.md) and
+Phase 3 adds `@mgravey/loom-platform-browser`, `@mgravey/loom-storage-indexeddb`, and
+`@mgravey/loom-workspace-fsa` as host-specific leaves. They compile with browser typings and receive
+host objects explicitly, while the packages below them retain their environment-neutral boundary.
+See [the browser-platform guide](./browser-platform.md) and
 [ADR-007](./adr/007-explicit-browser-hosts.md).
 
-Phase 4 adds a separate credential path. `@loom/credential-broker-api` owns the transport-neutral
-message protocol. Both the Manifest V3 `@loom/extension` and the application-side
-`@loom/auth-extension` depend on that protocol without depending on one another. The auth adapter
-registers the existing minimal `AuthProvider` contract; the extension never becomes a core service
-or runtime singleton. See [the credential-broker guide](./credential-broker.md) and
+Phase 4 adds a separate credential path. `@mgravey/loom-credential-broker-api` owns the
+transport-neutral message protocol. Both the Manifest V3 `@mgravey/loom-extension` and the
+application-side `@mgravey/loom-auth-extension` depend on that protocol without depending on one
+another. The auth adapter registers the existing minimal `AuthProvider` contract; the extension
+never becomes a core service or runtime singleton. See
+[the credential-broker guide](./credential-broker.md) and
 [ADR-008](./adr/008-extension-credential-boundary.md).
 
-Phase 5 extracts `@loom/credential-provider-api` as a host-neutral provider SPI above the broker
-protocol. The generic extension consumes that SPI without knowing concrete providers.
-`@loom/auth-codex-experimental` implements the source-audited OAuth request shapes using injected
-host services, while `@loom/extension-codex-experimental` is the only Chrome/Codex composition root.
-Both are removable leaves: they do not change Core, plugin contracts, or the external broker
-protocol. See [the experiment guide](./codex-auth-experiment.md) and
+Phase 5 extracts `@mgravey/loom-credential-provider-api` as a host-neutral provider SPI above the
+broker protocol. The generic extension consumes that SPI without knowing concrete providers.
+`@mgravey/loom-auth-codex-experimental` implements the source-audited OAuth request shapes using
+injected host services, while `@mgravey/loom-extension-codex-experimental` is the only Chrome/Codex
+composition root. Both are removable leaves: they do not change Core, plugin contracts, or the
+external broker protocol. See [the experiment guide](./codex-auth-experiment.md) and
 [ADR-009](./adr/009-codex-auth-experiment-boundary.md).
 
-Phase 5.5 adds `@loom/model-codex-experimental` as another removable leaf above the Phase 2 model
-protocol. The experimental extension owns login and refresh state, while an explicitly approved
-localhost origin receives only short-lived direct credentials and performs every non-auth provider
-request itself when browser CORS permits. A pre-response failure falls back to a credential-free
-request over an authorized extension Port. The model path does not change Core, the generic
-credential broker, or the agent contract. See
+Phase 5.5 adds `@mgravey/loom-model-codex-experimental` as another removable leaf above the Phase 2
+model protocol. The experimental extension owns login and refresh state, while an explicitly
+approved localhost origin receives only short-lived direct credentials and performs every non-auth
+provider request itself when browser CORS permits. A pre-response failure falls back to a
+credential-free request over an authorized extension Port. The model path does not change Core, the
+generic credential broker, or the agent contract. See
 [the vertical-slice guide](./phase-5-5-vertical-slice.md),
 [ADR-013](./adr/013-direct-experimental-model-fetch.md), and
 [ADR-015](./adr/015-cors-relay-fallback.md).
 
-`@loom/model-openai-responses` is a separate removable leaf for the documented OpenAI Platform
-Responses API. It uses the agent-owned optional continuation and caller fields to replay stateless
-reasoning and hosted-program items without moving provider wire formats into Core. Its preferred
-transport is credential-free from Loom's perspective and implemented by a trusted application
-backend. See [the Platform Responses guide](./openai-responses.md) and
+`@mgravey/loom-model-openai-responses` is a separate removable leaf for the documented OpenAI
+Platform Responses API. It uses the agent-owned optional continuation and caller fields to replay
+stateless reasoning and hosted-program items without moving provider wire formats into Core. Its
+preferred transport is credential-free from Loom's perspective and implemented by a trusted
+application backend. See [the Platform Responses guide](./openai-responses.md) and
 [ADR-011](./adr/011-platform-responses-programs.md).
 
-The browser workbench adds two more removable layers. `@loom/coding` owns application-level coding
-session lifecycle and composes the existing model, agent, and tool contracts without entering Core.
-`@loom/execution-browser` owns credential-free QuickJS, WebContainer, and Pyodide adapters. Expanded
-`ProjectWorkspace` contracts remain environment-neutral in `@loom/tool-workspace`; memory and FSA/
-OPFS implementations sit above them. See
+The browser workbench adds two more removable layers. `@mgravey/loom-coding` owns application-level
+coding session lifecycle and composes the existing model, agent, and tool contracts without entering
+Core. `@mgravey/loom-execution-browser` owns credential-free QuickJS, WebContainer, and Pyodide
+adapters. Expanded `ProjectWorkspace` contracts remain environment-neutral in
+`@mgravey/loom-tool-workspace`; memory and FSA/ OPFS implementations sit above them. See
 [the browser workbench guide](./browser-coding-workbench.md).
 
 Core and portable plugin TypeScript projects compile with `lib: ["ES2022"]`. DOM and Node typings
@@ -157,9 +159,9 @@ owns immutable metadata, a plugin configuration overlay, child service scope, ev
 cancellation state. An explicitly supplied plugin overlay replaces that plugin's runtime value; it
 is not recursively merged. Closing is idempotent and deterministic.
 
-Core sessions still do not imply conversation persistence. `@loom/coding` is an application-owned
-conversation manager: it keeps a transcript, contextualizes follow-ups, serializes active work, and
-owns cancellation without changing Core session semantics.
+Core sessions still do not imply conversation persistence. `@mgravey/loom-coding` is an
+application-owned conversation manager: it keeps a transcript, contextualizes follow-ups, serializes
+active work, and owns cancellation without changing Core session semantics.
 
 ## Minimal agent composition
 
@@ -170,8 +172,8 @@ operation context as the agent run. Application tools use unique namespaced oper
 their implementation authority outside Core.
 
 The workspace tools operate only through an injected text-workspace adapter. The deterministic
-in-memory adapter and scripted model in `@loom/examples` demonstrate composition; they are not
-defaults or production providers. See [the minimal-agent guide](./minimal-agent.md) and
+in-memory adapter and scripted model in `@mgravey/loom-examples` demonstrate composition; they are
+not defaults or production providers. See [the minimal-agent guide](./minimal-agent.md) and
 [ADR-006](./adr/006-agent-owned-protocol.md).
 
 ## Extension credential boundary

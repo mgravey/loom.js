@@ -20,7 +20,13 @@ import type {
   CodexResponsesTransport,
   CodexResponsesWireProtocol,
 } from './contracts.js';
-import { CodexExperimentalModelError } from './errors.js';
+import { CodexExperimentalModelError, type CodexProviderFailureDetails } from './errors.js';
+import {
+  boundedCodexProviderString,
+  isRetryableProviderFailure,
+  sanitizeCodexProviderMessage,
+  validCodexRetryAfterMs,
+} from './provider-failure.js';
 
 const DEFAULT_ORIGINATOR = 'loom_js_experimental';
 
@@ -499,10 +505,76 @@ function emitCall(
   };
 }
 
-function providerFailure(): CodexExperimentalModelError {
+function validStatus(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 100 && value <= 599
+    ? value
+    : undefined;
+}
+
+function providerFailure(
+  details: CodexProviderFailureDetails = {},
+  status?: number,
+): CodexExperimentalModelError {
+  const providerCode = boundedCodexProviderString(details.providerCode);
+  const incompleteReason = boundedCodexProviderString(details.incompleteReason);
+  const retryAfterMs = validCodexRetryAfterMs(details.retryAfterMs);
   return new CodexExperimentalModelError(
     'PROVIDER_ERROR',
     'Experimental Codex provider reported a response failure.',
+    {
+      ...(status === undefined ? {} : { status }),
+      ...(providerCode === undefined ? {} : { providerCode }),
+      ...(details.providerMessage === undefined
+        ? {}
+        : { providerMessage: sanitizeCodexProviderMessage(details.providerMessage) }),
+      ...(incompleteReason === undefined ? {} : { incompleteReason }),
+      retryable: isRetryableProviderFailure(status, providerCode),
+      ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
+    },
+  );
+}
+
+function eventStatus(
+  event: Readonly<Record<string, unknown>>,
+  ...nested: readonly (Readonly<Record<string, unknown>> | undefined)[]
+): number | undefined {
+  return (
+    validStatus(event.status) ??
+    nested.map((value) => validStatus(value?.status)).find((value) => value !== undefined)
+  );
+}
+
+function streamedProviderFailure(
+  type: 'error' | 'response.failed' | 'response.incomplete',
+  event: Readonly<Record<string, unknown>>,
+): CodexExperimentalModelError {
+  const response = isRecord(event.response) ? event.response : undefined;
+  if (type === 'response.incomplete') {
+    const details = isRecord(response?.incomplete_details)
+      ? response.incomplete_details
+      : isRecord(event.incomplete_details)
+        ? event.incomplete_details
+        : undefined;
+    const incompleteReason = boundedCodexProviderString(
+      details?.reason ?? response?.reason ?? event.reason,
+    );
+    return providerFailure(
+      { ...(incompleteReason === undefined ? {} : { incompleteReason }) },
+      eventStatus(event, response, details),
+    );
+  }
+
+  const nestedError =
+    (isRecord(response?.error) ? response.error : undefined) ??
+    (isRecord(event.error) ? event.error : undefined);
+  const source = nestedError ?? response ?? event;
+  const providerCode = boundedCodexProviderString(source.code ?? event.code);
+  return providerFailure(
+    {
+      ...(providerCode === undefined ? {} : { providerCode }),
+      providerMessage: sanitizeCodexProviderMessage(source.message ?? event.message),
+    },
+    eventStatus(event, response, nestedError),
   );
 }
 
@@ -519,7 +591,7 @@ async function* decodeEvents(
     if (event === undefined) continue;
     const type = eventType(event, message);
     if (type === 'error' || type === 'response.failed' || type === 'response.incomplete') {
-      throw providerFailure();
+      throw streamedProviderFailure(type, event);
     }
     if (type === 'response.output_text.delta') {
       if (typeof event.delta !== 'string') {
@@ -596,6 +668,24 @@ export async function* decodeCodexResponsesEvents(
   }
 }
 
+function httpFailureDetails(
+  response: CodexResponsesHttpResponse,
+): CodexProviderFailureDetails & { readonly status: number } {
+  const providerCode = boundedCodexProviderString(response.providerCode);
+  const providerMessage =
+    response.providerMessage === undefined
+      ? undefined
+      : sanitizeCodexProviderMessage(response.providerMessage);
+  const retryAfterMs = validCodexRetryAfterMs(response.retryAfterMs);
+  return {
+    status: response.status,
+    ...(providerCode === undefined ? {} : { providerCode }),
+    ...(providerMessage === undefined ? {} : { providerMessage }),
+    retryable: isRetryableProviderFailure(response.status, providerCode),
+    ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
+  };
+}
+
 export function createCodexExperimentalModel(
   options: CreateCodexExperimentalModelOptions,
 ): CodexModel {
@@ -622,7 +712,7 @@ export function createCodexExperimentalModel(
           throw new CodexExperimentalModelError(
             'HTTP_ERROR',
             'Experimental Codex request was rejected.',
-            { status: response.status },
+            httpFailureDetails(response),
           );
         }
         yield* decodeCodexResponsesEvents(response.body, context, aliases.byProviderName);
@@ -659,7 +749,7 @@ export function createCodexExperimentalModel(
         throw new CodexExperimentalModelError(
           'HTTP_ERROR',
           'Experimental Codex request was rejected.',
-          { status: response.status },
+          httpFailureDetails(response),
         );
       }
       yield* decodeCodexResponsesEvents(response.body, context, aliases.byProviderName);

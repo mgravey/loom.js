@@ -7,6 +7,9 @@ requests; refresh and ID tokens remain extension-only. A page must match the man
 one-time exact-origin approval from trusted extension UI before any auth message is accepted. Model
 requests are direct-first. A pre-response browser failure retries the credential-free request body
 through the same origin-authorized extension, which then handles the prompt and response stream.
+Rejected provider responses are reduced to a bounded code, sanitized 512-character message,
+retryability classification, and a capped millisecond delay parsed from `Retry-After`; complete
+bodies and response headers never cross the extension port.
 
 It remains an unsupported ChatGPT/Codex compatibility experiment. Chrome Web Store packaging does
 not make the provider integration supported or authorized. Do not submit it publicly until the

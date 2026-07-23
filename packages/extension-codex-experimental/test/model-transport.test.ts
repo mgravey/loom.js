@@ -239,7 +239,7 @@ describe('experimental Codex extension model transport', () => {
     );
   });
 
-  it('reports only allowlisted provider error metadata for rejected HTTP responses', async () => {
+  it('reports only sanitized provider metadata and Retry-After for rejected HTTP responses', async () => {
     const diagnostics: CodexModelDiagnosticEvent[] = [];
     const encoder = new TextEncoder();
     const externalPort = port();
@@ -249,15 +249,20 @@ describe('experimental Codex extension model transport', () => {
       accountRoutingStore: routingStore(),
       fetchRequest: vi.fn<CodexModelFetch>(() =>
         Promise.resolve({
-          status: 400,
+          status: 429,
+          headers: {
+            get(name) {
+              return name.toLowerCase() === 'retry-after' ? '15' : null;
+            },
+          },
           body: new ReadableStream<Uint8Array>({
             start(controller) {
               controller.enqueue(
                 encoder.encode(
                   JSON.stringify({
                     error: {
-                      message: 'secret provider explanation',
-                      code: 'invalid_model',
+                      message: 'Rate limit reached for API key sk-private-secret.',
+                      code: 'rate_limit_exceeded',
                       type: 'invalid_request_error',
                       param: 'model',
                     },
@@ -281,19 +286,23 @@ describe('experimental Codex extension model transport', () => {
     expect(externalPort.messages).toContainEqual({
       type: 'provider-error',
       requestId: 'request-1',
-      status: 400,
-      providerCode: 'invalid_model',
-      providerType: 'invalid_request_error',
-      providerParam: 'model',
+      status: 429,
+      providerCode: 'rate_limit_exceeded',
+      providerMessage: 'Rate limit reached for API key [REDACTED].',
+      retryable: true,
+      retryAfterMs: 15_000,
     });
     expect(diagnostics).toContainEqual(
       expect.objectContaining({
         event: 'provider.response.rejected',
-        providerCode: 'invalid_model',
+        providerCode: 'rate_limit_exceeded',
+        providerMessage: 'Rate limit reached for API key [REDACTED].',
+        retryable: true,
+        retryAfterMs: 15_000,
       }),
     );
-    expect(JSON.stringify(externalPort.messages)).not.toContain('secret provider explanation');
-    expect(JSON.stringify(diagnostics)).not.toContain('secret provider explanation');
+    expect(JSON.stringify(externalPort.messages)).not.toContain('sk-private-secret');
+    expect(JSON.stringify(diagnostics)).not.toContain('sk-private-secret');
   });
 
   it('rejects bodies that could retain a provider response', async () => {

@@ -99,6 +99,9 @@ export type OAuthFetch = (
 export interface CodexModelFetchResponse {
   readonly status: number;
   readonly body: ReadableStream<Uint8Array> | null;
+  readonly headers?: {
+    get(name: string): string | null;
+  };
 }
 
 export type CodexModelFetch = (

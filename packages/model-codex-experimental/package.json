@@ -1,6 +1,6 @@
 {
   "name": "@mgravey/loom-model-codex-experimental",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Experimental credential-free Codex request generation and streamed response parsing for Loom.js.",
   "license": "MPL-2.0",
   "author": "Mathieu Gravey",

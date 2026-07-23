@@ -23,6 +23,11 @@ export interface CodexResponsesHttpRequest {
 export interface CodexResponsesHttpResponse {
   readonly status: number;
   readonly body: AsyncIterable<string>;
+  /** Sanitized allowlisted metadata; transports must never attach raw bodies or headers. */
+  readonly providerCode?: string;
+  readonly providerMessage?: string;
+  readonly retryable?: boolean;
+  readonly retryAfterMs?: number;
 }
 
 export interface CodexResponsesSseMessage {

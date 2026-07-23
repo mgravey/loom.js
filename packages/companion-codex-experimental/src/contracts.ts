@@ -40,6 +40,9 @@ export interface CodexCompanionDiagnosticEvent {
   readonly code?: string;
   readonly status?: number;
   readonly characters?: number;
+  readonly providerMessage?: string;
+  readonly retryable?: boolean;
+  readonly retryAfterMs?: number;
 }
 
 export type CodexCompanionDiagnosticSink = (event: CodexCompanionDiagnosticEvent) => void;

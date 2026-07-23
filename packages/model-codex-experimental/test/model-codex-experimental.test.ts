@@ -9,7 +9,9 @@ import {
   createCodexExperimentalModelPlugin,
   createCodexResponsesRequestBody,
   decodeCodexResponsesEvents,
+  isRetryableProviderFailure,
   parseCodexResponsesSse,
+  sanitizeCodexProviderMessage,
   type CodexResponsesHttpRequest,
   type CodexResponsesHttpResponse,
   type CodexResponsesRequest,
@@ -274,6 +276,103 @@ describe('experimental Codex Responses model', () => {
     ).rejects.toMatchObject({ code: 'MALFORMED_RESPONSE' });
   });
 
+  it('preserves sanitized structured failures from nested and top-level stream events', async () => {
+    const topLevel = await collect(
+      decodeCodexResponsesEvents(
+        chunks(
+          'data: {"type":"error","status":429,"code":"rate_limit_exceeded","message":"Rate limit reached\\nBearer top-secret-token"}\n\n',
+        ),
+      ),
+    ).catch((error: unknown) => error);
+    expect(topLevel).toMatchObject({
+      code: 'PROVIDER_ERROR',
+      status: 429,
+      providerCode: 'rate_limit_exceeded',
+      providerMessage: 'Rate limit reached Bearer [REDACTED]',
+      retryable: true,
+    });
+    expect(String((topLevel as CodexExperimentalModelError).providerMessage)).not.toContain(
+      'top-secret-token',
+    );
+
+    await expect(
+      collect(
+        decodeCodexResponsesEvents(
+          chunks(
+            'data: {"type":"response.failed","response":{"error":{"code":"server_error","message":"Try again later."}}}\n\n',
+          ),
+        ),
+      ),
+    ).rejects.toMatchObject({
+      code: 'PROVIDER_ERROR',
+      providerCode: 'server_error',
+      providerMessage: 'Try again later.',
+      retryable: true,
+    });
+
+    await expect(
+      collect(
+        decodeCodexResponsesEvents(
+          chunks(
+            'data: {"type":"response.failed","status":429,"code":"insufficient_quota","message":"Add credit."}\n\n',
+          ),
+        ),
+      ),
+    ).rejects.toMatchObject({
+      code: 'PROVIDER_ERROR',
+      providerCode: 'insufficient_quota',
+      providerMessage: 'Add credit.',
+      retryable: false,
+    });
+
+    await expect(
+      collect(
+        decodeCodexResponsesEvents(
+          chunks(
+            'data: {"type":"response.incomplete","response":{"incomplete_details":{"reason":"max_output_tokens"}}}\n\n',
+          ),
+        ),
+      ),
+    ).rejects.toMatchObject({
+      code: 'PROVIDER_ERROR',
+      incompleteReason: 'max_output_tokens',
+      retryable: false,
+    });
+    await expect(
+      collect(
+        decodeCodexResponsesEvents(
+          chunks(
+            'data: {"type":"response.incomplete","incomplete_details":{"reason":"content_filter"}}\n\n',
+          ),
+        ),
+      ),
+    ).rejects.toMatchObject({
+      incompleteReason: 'content_filter',
+      retryable: false,
+    });
+  });
+
+  it('sanitizes provider messages and classifies only transient failures as retryable', () => {
+    expect(
+      sanitizeCodexProviderMessage(
+        'Denied\u0000 api_key=private-key cookie=session-secret refresh_token=refresh-secret',
+      ),
+    ).toBe('Denied api_key=[REDACTED] cookie: [REDACTED]');
+    expect(
+      sanitizeCodexProviderMessage('Denied "api_key": "private key value" after validation.'),
+    ).toBe('Denied "api_key": "[REDACTED]" after validation.');
+    expect(sanitizeCodexProviderMessage({ raw: 'body' })).toBe(
+      'The provider rejected the request.',
+    );
+    expect(isRetryableProviderFailure(408)).toBe(true);
+    expect(isRetryableProviderFailure(503, 'server_error')).toBe(true);
+    expect(isRetryableProviderFailure(429, 'insufficient_quota')).toBe(false);
+    expect(isRetryableProviderFailure(503, 'billing_credit_rejected')).toBe(false);
+    expect(isRetryableProviderFailure(503, 'authentication_failed')).toBe(false);
+    expect(isRetryableProviderFailure(503, 'invalid_request_error')).toBe(false);
+    expect(isRetryableProviderFailure(503, 'account_policy_restricted')).toBe(false);
+  });
+
   it('rejects invalid composition options at the provider-neutral boundary', () => {
     const invalidOptions: readonly unknown[] = [
       undefined,
@@ -380,11 +479,22 @@ describe('experimental Codex Responses model', () => {
       model: 'model',
       endpoint: 'endpoint',
       authentication: async () => 'token',
-      fetch: async () => ({ status: 503, body: chunks('private provider detail') }),
+      fetch: async () => ({
+        status: 503,
+        body: chunks('private provider detail'),
+        providerCode: 'service_unavailable',
+        providerMessage: 'Temporarily unavailable. Bearer private-token',
+        retryable: true,
+        retryAfterMs: 15_000,
+      }),
     });
     await expect(collect(rejected.generate(REQUEST))).rejects.toMatchObject({
       code: 'HTTP_ERROR',
       status: 503,
+      providerCode: 'service_unavailable',
+      providerMessage: 'Temporarily unavailable. Bearer [REDACTED]',
+      retryable: true,
+      retryAfterMs: 15_000,
     });
   });
 

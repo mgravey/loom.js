@@ -22,6 +22,12 @@ This project follows a milestone changelog alongside Changesets for public packa
   `loom-companion-codex-experimental`.
 - Kept examples and extension-owned Codex authentication/provider implementations private.
 
+## 0.1.1 — Structured experimental provider failures
+
+- Structured experimental Codex provider failures preserve bounded codes, sanitized messages,
+  incomplete reasons, retryability, and Retry-After delays across streamed events and the Companion
+  extension boundary without exposing response bodies or headers.
+
 ## Unreleased — Browser coding workbench
 
 ### Added

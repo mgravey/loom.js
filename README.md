@@ -187,7 +187,11 @@ hosts and makes the trust boundary explicit.
 The explicitly experimental full model path uses `@mgravey/loom-companion-codex-experimental`. Its
 website client requests approval for the exact origin and sends credential-free request bodies over
 a versioned Chrome Port. The extension owns access tokens, account routing, provider headers,
-endpoint selection, and the upstream fetch.
+endpoint selection, and the upstream fetch. Rejected responses cross that boundary only as bounded,
+sanitized metadata (`providerCode`, `providerMessage`, `retryable`, and `retryAfterMs`); raw
+response bodies and headers remain extension-owned. Streamed `error`, `response.failed`, and
+`response.incomplete` events produce the same structured model-error fields. See
+[Provider failure handling](./docs/provider-failures.md).
 
 ## Install as a library
 

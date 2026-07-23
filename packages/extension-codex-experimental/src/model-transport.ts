@@ -4,7 +4,6 @@ import {
   type ExtensionTokenService,
   type OriginAuthorizer,
 } from '@mgravey/loom-extension';
-
 import type { CodexAccountRoutingStore } from './account-routing.js';
 import type { CodexExternalPort, CodexModelFetch } from './chrome-contracts.js';
 import { DEVELOPMENT_ALLOWED_ORIGINS } from './composition.js';
@@ -16,6 +15,11 @@ export const CODEX_RESPONSES_ENDPOINT = 'https://chatgpt.com/backend-api/codex/r
 
 const MAXIMUM_REQUEST_BODY_LENGTH = 4 * 1024 * 1024;
 const MAXIMUM_PROVIDER_ERROR_BODY_LENGTH = 16 * 1024;
+const MAXIMUM_PROVIDER_MESSAGE_LENGTH = 512;
+const MAXIMUM_RETRY_AFTER_MS = 24 * 60 * 60 * 1_000;
+const GENERIC_PROVIDER_MESSAGE = 'The provider rejected the request.';
+const NON_RETRYABLE_PROVIDER_CODE =
+  /(account|auth|billing|credit|forbidden|insufficient_quota|invalid|payment|permission|policy|quota_exceeded|restricted|unauthorized)/u;
 
 interface GenerateRequest {
   readonly protocol: typeof CODEX_MODEL_TRANSPORT_PROTOCOL;
@@ -64,8 +68,9 @@ export interface CodexModelDiagnosticEvent {
   readonly targetPath?: string;
   readonly model?: string;
   readonly providerCode?: string;
-  readonly providerType?: string;
-  readonly providerParam?: string;
+  readonly providerMessage?: string;
+  readonly retryable?: boolean;
+  readonly retryAfterMs?: number;
 }
 
 export type CodexModelDiagnosticSink = (event: CodexModelDiagnosticEvent) => void;
@@ -112,16 +117,91 @@ function providerIdentifier(value: unknown): string | undefined {
     : undefined;
 }
 
+function withoutControlCharacters(value: string): string {
+  let sanitized = '';
+  for (const character of value) {
+    const codePoint = character.codePointAt(0) ?? 0;
+    sanitized += codePoint <= 0x1f || (codePoint >= 0x7f && codePoint <= 0x9f) ? ' ' : character;
+  }
+  return sanitized;
+}
+
+function sanitizedProviderMessage(value: unknown): string {
+  if (typeof value !== 'string') return GENERIC_PROVIDER_MESSAGE;
+  const sanitized = withoutControlCharacters(value.slice(0, MAXIMUM_PROVIDER_MESSAGE_LENGTH * 4))
+    .replaceAll(/\bBearer\s+[^\s,;]+/giu, 'Bearer [REDACTED]')
+    .replaceAll(/\bsk-[a-z0-9_-]{8,}\b/giu, '[REDACTED]')
+    .replaceAll(
+      /("?(?:api[-_ ]?key|access[-_ ]?token|refresh[-_ ]?token|client[-_ ]?secret|password)"?\s*:\s*")[^"]*"/giu,
+      '$1[REDACTED]"',
+    )
+    .replaceAll(
+      /('?(?:api[-_ ]?key|access[-_ ]?token|refresh[-_ ]?token|client[-_ ]?secret|password)'?\s*:\s*')[^']*'/giu,
+      "$1[REDACTED]'",
+    )
+    .replaceAll(/\b(cookie|set-cookie|authorization)\b\s*[:=]\s*.+$/giu, '$1: [REDACTED]')
+    .replaceAll(
+      /\b(api[-_ ]?key|authorization|cookie|set-cookie|access[-_ ]?token|refresh[-_ ]?token|client[-_ ]?secret|password)\b(\s*[:=]\s*|"\s*:\s*")[^,\s;"'}]+/giu,
+      '$1$2[REDACTED]',
+    )
+    .replaceAll(/\s+/gu, ' ')
+    .trim();
+  return (sanitized || GENERIC_PROVIDER_MESSAGE).slice(0, MAXIMUM_PROVIDER_MESSAGE_LENGTH);
+}
+
+function retryableProviderFailure(status: number, providerCode?: string): boolean {
+  const normalizedCode = providerCode?.toLowerCase();
+  if (normalizedCode !== undefined && NON_RETRYABLE_PROVIDER_CODE.test(normalizedCode))
+    return false;
+  return (
+    status === 408 ||
+    status === 429 ||
+    (status >= 500 && status <= 599) ||
+    ['rate_limit_exceeded', 'server_error', 'service_unavailable'].includes(normalizedCode ?? '')
+  );
+}
+
 interface ProviderErrorMetadata {
   readonly providerCode?: string;
-  readonly providerType?: string;
-  readonly providerParam?: string;
+  readonly providerMessage: string;
+  readonly retryable: boolean;
+  readonly retryAfterMs?: number;
+}
+
+function retryAfterMilliseconds(
+  headers: { get(name: string): string | null } | undefined,
+  now = Date.now(),
+): number | undefined {
+  let value: string | undefined;
+  try {
+    value = headers?.get('Retry-After')?.trim();
+  } catch {
+    return undefined;
+  }
+  if (value === undefined || value === '') return undefined;
+  let milliseconds: number;
+  if (/^\d+$/u.test(value)) {
+    milliseconds = Number(value) * 1_000;
+  } else {
+    const retryAt = Date.parse(value);
+    if (!Number.isFinite(retryAt)) return undefined;
+    milliseconds = Math.max(0, retryAt - now);
+  }
+  if (!Number.isFinite(milliseconds)) return undefined;
+  return Math.min(Math.round(milliseconds), MAXIMUM_RETRY_AFTER_MS);
 }
 
 async function readProviderErrorMetadata(
   body: ReadableStream<Uint8Array> | null,
+  status: number,
+  retryAfterMs: number | undefined,
 ): Promise<ProviderErrorMetadata> {
-  if (body === null) return Object.freeze({});
+  const fallback = Object.freeze({
+    providerMessage: GENERIC_PROVIDER_MESSAGE,
+    retryable: retryableProviderFailure(status),
+    ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
+  });
+  if (body === null) return fallback;
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let bytes = 0;
@@ -133,31 +213,35 @@ async function readProviderErrorMetadata(
       bytes += result.value.byteLength;
       if (bytes > MAXIMUM_PROVIDER_ERROR_BODY_LENGTH) {
         await reader.cancel();
-        return Object.freeze({});
+        return fallback;
       }
       text += decoder.decode(result.value, { stream: true });
     }
     text += decoder.decode();
   } catch {
-    return Object.freeze({});
+    return fallback;
   } finally {
     reader.releaseLock();
   }
 
   try {
     const envelope: unknown = JSON.parse(text);
-    const error = isRecord(envelope) && isRecord(envelope.error) ? envelope.error : undefined;
-    if (error === undefined) return Object.freeze({});
+    const error =
+      isRecord(envelope) && isRecord(envelope.error)
+        ? envelope.error
+        : isRecord(envelope)
+          ? envelope
+          : undefined;
+    if (error === undefined) return fallback;
     const providerCode = providerIdentifier(error.code);
-    const providerType = providerIdentifier(error.type);
-    const providerParam = providerIdentifier(error.param);
     return Object.freeze({
       ...(providerCode === undefined ? {} : { providerCode }),
-      ...(providerType === undefined ? {} : { providerType }),
-      ...(providerParam === undefined ? {} : { providerParam }),
+      providerMessage: sanitizedProviderMessage(error.message),
+      retryable: retryableProviderFailure(status, providerCode),
+      ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
     });
   } catch {
-    return Object.freeze({});
+    return fallback;
   }
 }
 
@@ -412,7 +496,12 @@ export function createCodexModelPortListener(
           });
           if (!post(port, { type: 'start', requestId, status: response.status })) return;
           if (response.status < 200 || response.status >= 300) {
-            const metadata = await readProviderErrorMetadata(response.body);
+            const retryAfterMs = retryAfterMilliseconds(response.headers);
+            const metadata = await readProviderErrorMetadata(
+              response.body,
+              response.status,
+              retryAfterMs,
+            );
             report(options.diagnosticSink, {
               event: 'provider.response.rejected',
               stage,

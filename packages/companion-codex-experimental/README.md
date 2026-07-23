@@ -31,6 +31,11 @@ const model = createCodexExperimentalModel({
 });
 ```
 
+For rejected upstream responses, the extension sends only a validated status and bounded
+`providerCode`, `providerMessage`, `retryable`, and `retryAfterMs` values. The Companion validates
+and re-sanitizes every field before exposing it to the model adapter. It never exposes the complete
+provider body, response headers, credentials, or arbitrary error objects.
+
 The default extension ID is `gdcebopdllcifgleoefgbobdopiaholg`. Production callers must use HTTPS,
 and the extension user must approve the exact website origin. Local development is limited to
 localhost and `127.0.0.1`. The extension protocol and Codex-compatible provider integration remain

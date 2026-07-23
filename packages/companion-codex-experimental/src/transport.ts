@@ -4,6 +4,13 @@ import type {
   CodexResponsesRequest,
   CodexResponsesTransport,
 } from '@mgravey/loom-model-codex-experimental';
+import {
+  CODEX_PROVIDER_MESSAGE_MAXIMUM_LENGTH,
+  GENERIC_CODEX_PROVIDER_MESSAGE,
+  isRetryableProviderFailure,
+  sanitizeCodexProviderMessage,
+  validCodexRetryAfterMs,
+} from '@mgravey/loom-model-codex-experimental';
 
 import type { CodexCompanionPort, CreateCodexExtensionTransportOptions } from './contracts.js';
 import { CodexCompanionError } from './errors.js';
@@ -20,6 +27,43 @@ import {
 } from './shared.js';
 
 const MAXIMUM_REQUEST_BODY_LENGTH = 4 * 1024 * 1024;
+const PROVIDER_CODE_PATTERN = /^[a-zA-Z0-9._:[\]-]{1,256}$/u;
+
+interface ValidatedProviderError {
+  readonly providerCode?: string;
+  readonly providerMessage: string;
+  readonly retryable: boolean;
+  readonly retryAfterMs?: number;
+}
+
+function validateProviderError(
+  message: Readonly<Record<string, unknown>>,
+  status: number,
+): ValidatedProviderError {
+  const providerCode =
+    typeof message.providerCode === 'string' && PROVIDER_CODE_PATTERN.test(message.providerCode)
+      ? message.providerCode
+      : undefined;
+  const providerMessage =
+    typeof message.providerMessage === 'string' &&
+    message.providerMessage.length <= CODEX_PROVIDER_MESSAGE_MAXIMUM_LENGTH
+      ? sanitizeCodexProviderMessage(message.providerMessage)
+      : GENERIC_CODEX_PROVIDER_MESSAGE;
+  const classifiedRetryable = isRetryableProviderFailure(status, providerCode);
+  const retryable =
+    message.retryable === undefined
+      ? classifiedRetryable
+      : typeof message.retryable === 'boolean' && message.retryable === classifiedRetryable
+        ? message.retryable
+        : false;
+  const retryAfterMs = validCodexRetryAfterMs(message.retryAfterMs);
+  return Object.freeze({
+    ...(providerCode === undefined ? {} : { providerCode }),
+    providerMessage,
+    retryable,
+    ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
+  });
+}
 
 function createChunkStream(): {
   readonly body: AsyncIterable<string>;
@@ -122,6 +166,7 @@ function sendThroughPort(
 
   const stream = createChunkStream();
   let responseStarted = false;
+  let responseStatus: number | undefined;
   let ended = false;
   let settled = false;
   let unsubscribe = (): void => undefined;
@@ -167,17 +212,27 @@ function sendThroughPort(
         !responseStarted
       ) {
         responseStarted = true;
-        settled = true;
+        responseStatus = message.status;
         report(options.diagnosticSink, {
           event: 'model.response.started',
           stage: 'response',
           requestId,
           status: message.status,
         });
-        resolve(Object.freeze({ status: message.status, body: stream.body }));
+        if (message.status >= 200 && message.status < 300) {
+          settled = true;
+          resolve(Object.freeze({ status: message.status, body: stream.body }));
+        }
         return;
       }
-      if (message.type === 'chunk' && typeof message.chunk === 'string' && responseStarted) {
+      if (
+        message.type === 'chunk' &&
+        typeof message.chunk === 'string' &&
+        responseStarted &&
+        responseStatus !== undefined &&
+        responseStatus >= 200 &&
+        responseStatus < 300
+      ) {
         report(options.diagnosticSink, {
           event: 'model.response.chunk',
           stage: 'stream',
@@ -188,15 +243,35 @@ function sendThroughPort(
         return;
       }
       if (message.type === 'provider-error' && responseStarted) {
+        if (
+          responseStatus === undefined ||
+          (responseStatus >= 200 && responseStatus < 300) ||
+          typeof message.status !== 'number' ||
+          !Number.isInteger(message.status) ||
+          message.status !== responseStatus
+        ) {
+          invalidResponse();
+          return;
+        }
+        const metadata = validateProviderError(message, responseStatus);
         report(options.diagnosticSink, {
           event: 'model.provider.rejected',
           stage: 'response',
           requestId,
-          ...(typeof message.status === 'number' ? { status: message.status } : {}),
-          ...(typeof message.providerCode === 'string'
-            ? { code: message.providerCode.slice(0, 256) }
-            : {}),
+          status: responseStatus,
+          ...(metadata.providerCode === undefined ? {} : { code: metadata.providerCode }),
+          providerMessage: metadata.providerMessage,
+          retryable: metadata.retryable,
+          ...(metadata.retryAfterMs === undefined ? {} : { retryAfterMs: metadata.retryAfterMs }),
         });
+        settled = true;
+        resolve(
+          Object.freeze({
+            status: responseStatus,
+            body: stream.body,
+            ...metadata,
+          }),
+        );
         return;
       }
       if (message.type === 'end' && responseStarted) {
@@ -207,6 +282,17 @@ function sendThroughPort(
           stage: 'stream',
           requestId,
         });
+        if (!settled && responseStatus !== undefined) {
+          settled = true;
+          resolve(
+            Object.freeze({
+              status: responseStatus,
+              body: stream.body,
+              providerMessage: GENERIC_CODEX_PROVIDER_MESSAGE,
+              retryable: isRetryableProviderFailure(responseStatus),
+            }),
+          );
+        }
         stream.finish();
         return;
       }

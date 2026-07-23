@@ -33,6 +33,8 @@ packages/*/*.zip
 *.netlog
 *.openai-response.json
 openai-response-dumps/
+# Raw provider-error captures are local security-debugging artifacts, never fixtures.
+provider-error-dumps/
 .DS_Store
 .env
 .env.*

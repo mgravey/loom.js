@@ -2,3 +2,4 @@ export type * from './contracts.js';
 export * from './errors.js';
 export * from './model.js';
 export * from './plugin.js';
+export * from './provider-failure.js';

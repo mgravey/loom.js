@@ -13,7 +13,10 @@ Route requests through the published Loom.js Companion extension with
 `@mgravey/loom-companion-codex-experimental`, or inject another explicitly audited transport.
 
 ```ts
-import { createCodexExperimentalModel } from '@mgravey/loom-model-codex-experimental';
+import {
+  CodexExperimentalModelError,
+  createCodexExperimentalModel,
+} from '@mgravey/loom-model-codex-experimental';
 
 const model = createCodexExperimentalModel({
   model: 'gpt-5.6-sol',
@@ -21,6 +24,26 @@ const model = createCodexExperimentalModel({
   transport,
 });
 ```
+
+Provider rejections throw `CodexExperimentalModelError` with safe structured fields:
+
+```ts
+try {
+  for await (const event of model.generate(request)) {
+    // Consume events.
+  }
+} catch (error) {
+  if (error instanceof CodexExperimentalModelError && error.code === 'PROVIDER_ERROR') {
+    console.log(error.providerCode, error.providerMessage);
+    if (error.retryable) scheduleRetry(error.retryAfterMs);
+  }
+}
+```
+
+The parser supports top-level and nested `error`, `response.failed`, and `response.incomplete`
+shapes. Messages are limited to 512 characters, stripped of control characters, and redacted for
+common bearer-token, API-key, cookie, and credential patterns. Authentication, billing, invalid
+request, policy, and account restrictions are never classified as automatically retryable.
 
 This package implements an unsupported compatibility experiment. It is not an official OpenAI
 authentication method or API client, and its upstream protocol may change without notice.

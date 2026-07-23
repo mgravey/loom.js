@@ -17,6 +17,8 @@ phases.
 - [Minimal coding agent](./docs/minimal-agent.md) — Phase 2 composition and protocol boundaries
 - [OpenAI Platform Responses](./docs/openai-responses.md) — supported Responses API adapter,
   Programmatic Tool Calling, continuation, and API-key trust boundary
+- [Provider failure handling](./docs/provider-failures.md) — sanitized Codex failure fields, retry
+  classification, Retry-After propagation, and transport validation
 - [Browser platform](./docs/browser-platform.md) — Phase 3 host adapters and permission boundaries
 - [Credential broker](./docs/credential-broker.md) — Phase 4 extension protocol and trust boundary
 - [Codex authentication experiment](./docs/codex-auth-experiment.md) — Phase 5 audit, threat model,

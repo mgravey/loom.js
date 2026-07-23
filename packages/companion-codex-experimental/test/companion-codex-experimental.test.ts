@@ -172,6 +172,97 @@ describe('experimental Loom.js Companion client', () => {
     await expect(response).rejects.not.toThrow('secret provider detail');
   });
 
+  it('validates and exposes only bounded provider failure metadata', async () => {
+    const harness = createPortHarness();
+    const diagnostics: unknown[] = [];
+    const runtime = {
+      connect: () => harness.port,
+      sendMessage: vi.fn(),
+    } as unknown as CodexCompanionRuntime;
+    const transport = createCodexExtensionTransport({
+      runtime,
+      sessionId: 'session-1',
+      requestIdFactory: () => 'request-provider-error',
+      diagnosticSink: (event) => diagnostics.push(event),
+    });
+    const responsePromise = transport.send({
+      body: '{"model":"gpt-5.6-sol","input":[]}',
+      wireProtocol: 'responses-lite',
+    });
+
+    harness.message({
+      type: 'start',
+      requestId: 'request-provider-error',
+      status: 429,
+    });
+    harness.message({
+      type: 'provider-error',
+      requestId: 'request-provider-error',
+      status: 429,
+      providerCode: 'rate_limit_exceeded',
+      providerMessage: 'Rate limited. cookie=session-secret',
+      retryable: true,
+      retryAfterMs: 15_000,
+      headers: { authorization: 'private' },
+      error: { body: 'private response body' },
+    });
+    harness.message({ type: 'end', requestId: 'request-provider-error' });
+
+    await expect(responsePromise).resolves.toMatchObject({
+      status: 429,
+      providerCode: 'rate_limit_exceeded',
+      providerMessage: 'Rate limited. cookie: [REDACTED]',
+      retryable: true,
+      retryAfterMs: 15_000,
+    });
+    const response = await responsePromise;
+    expect(response).not.toHaveProperty('headers');
+    expect(response).not.toHaveProperty('error');
+    expect(JSON.stringify(response)).not.toContain('private response body');
+    expect(JSON.stringify(diagnostics)).not.toContain('session-secret');
+  });
+
+  it('falls back safely when extension provider metadata fails validation', async () => {
+    const harness = createPortHarness();
+    const runtime = {
+      connect: () => harness.port,
+      sendMessage: vi.fn(),
+    } as unknown as CodexCompanionRuntime;
+    const transport = createCodexExtensionTransport({
+      runtime,
+      sessionId: 'session-1',
+      requestIdFactory: () => 'request-invalid-provider-error',
+    });
+    const responsePromise = transport.send({
+      body: '{"model":"gpt-5.6-sol","input":[]}',
+      wireProtocol: 'responses-lite',
+    });
+    harness.message({
+      type: 'start',
+      requestId: 'request-invalid-provider-error',
+      status: 503,
+    });
+    harness.message({
+      type: 'provider-error',
+      requestId: 'request-invalid-provider-error',
+      status: 503,
+      providerCode: 'invalid code with spaces',
+      providerMessage: 'x'.repeat(513),
+      retryable: 'yes',
+      retryAfterMs: Number.MAX_SAFE_INTEGER,
+    });
+    harness.message({ type: 'end', requestId: 'request-invalid-provider-error' });
+
+    await expect(responsePromise).resolves.toMatchObject({
+      status: 503,
+      providerMessage: 'The provider rejected the request.',
+      retryable: false,
+    });
+    const response = await responsePromise;
+    expect(response.providerCode).toBeUndefined();
+    expect(response.retryAfterMs).toBeUndefined();
+  });
+
   it('fails a started stream when the extension disconnects early', async () => {
     const harness = createPortHarness();
     const runtime = {

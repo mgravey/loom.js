@@ -2,8 +2,12 @@ import type { CodexAgentEvent, CodexAgentTool } from '@mgravey/loom-agent-codex'
 import {
   createExternalCredentialBroker,
   createExtensionAuthProvider,
-  type ExternalMessageRuntime,
 } from '@mgravey/loom-auth-extension';
+import {
+  createCodexExtensionFetch,
+  requestCodexOriginAccess,
+  type CodexCompanionRuntime,
+} from '@mgravey/loom-companion-codex-experimental';
 import { createCodingSession, type CodingSession } from '@mgravey/loom-coding';
 import {
   createPyodideExecutionRuntime,
@@ -54,11 +58,6 @@ const PROVIDER_ID = 'openai/codex-experimental';
 const CODEX_RESPONSES_ENDPOINT = 'https://chatgpt.com/backend-api/codex/responses';
 const DIRECT_AUTH_PROTOCOL = 'loom/codex-direct-auth-experimental';
 const DIRECT_AUTH_VERSION = 1;
-const ORIGIN_ACCESS_PROTOCOL = 'loom/codex-origin-access-experimental';
-const ORIGIN_ACCESS_VERSION = 1;
-const MODEL_PORT_NAME = 'loom/codex-model-experimental/v1';
-const MODEL_PROTOCOL = 'loom/codex-model-experimental';
-const MODEL_PROTOCOL_VERSION = 1;
 const DEFAULT_RUN_SESSION_ID = sessionId('codex-experimental-browser-run');
 const OPFS_DIRECTORY = 'loom-workbench';
 const OPFS_ARCHIVE = 'project.zip';
@@ -82,21 +81,6 @@ interface DirectCredentials {
   readonly accessToken: string;
   readonly accountId: string;
   readonly expiresAt: number;
-}
-
-interface PortEvent<T> {
-  addListener(listener: (value: T) => void): void;
-}
-
-interface ExternalPort {
-  readonly onMessage: PortEvent<unknown>;
-  readonly onDisconnect: PortEvent<void>;
-  postMessage(message: unknown): void;
-  disconnect(): void;
-}
-
-interface RelayRuntime extends ExternalMessageRuntime {
-  connect(extensionId: string, options: { readonly name: string }): ExternalPort;
 }
 
 class DirectProviderConnectionError extends Error {
@@ -387,10 +371,10 @@ function providerDiagnostic(value: unknown): string {
     : 'unclassified';
 }
 
-function extensionRuntime(): RelayRuntime {
+function extensionRuntime(): CodexCompanionRuntime {
   const runtime = (
     globalThis as typeof globalThis & {
-      readonly chrome?: { readonly runtime?: RelayRuntime };
+      readonly chrome?: { readonly runtime?: CodexCompanionRuntime };
     }
   ).chrome?.runtime;
   if (
@@ -425,8 +409,6 @@ function directoryPicker(): DirectoryPickerHost['showDirectoryPicker'] {
 }
 
 let nextDirectAuthRequest = 0;
-let nextOriginAccessRequest = 0;
-let nextRelayRequest = 0;
 let cachedDirectCredentials: Promise<DirectCredentials> | undefined;
 let modelTransportMode: 'direct' | 'relay' = 'direct';
 
@@ -540,33 +522,18 @@ async function requestDirectCredentials(): Promise<DirectCredentials> {
 }
 
 async function ensureOriginAccess(): Promise<void> {
-  nextOriginAccessRequest += 1;
-  const requestId = `loom-origin-access-${String(nextOriginAccessRequest)}`;
-  pageDiagnostic('origin.access.request', { requestId });
-  const response = await sendExtensionMessage({
-    protocol: ORIGIN_ACCESS_PROTOCOL,
-    version: ORIGIN_ACCESS_VERSION,
-    type: 'requestOriginAccess',
-    requestId,
+  const status = await requestCodexOriginAccess({
+    extensionId: selectedExtensionId,
+    runtime: extensionRuntime,
+    diagnosticSink(event) {
+      pageDiagnostic(event.event, {
+        stage: event.stage,
+        ...(event.requestId === undefined ? {} : { requestId: event.requestId }),
+        ...(event.code === undefined ? {} : { code: event.code }),
+      });
+    },
   });
-  if (
-    !isRecord(response) ||
-    response.protocol !== ORIGIN_ACCESS_PROTOCOL ||
-    response.version !== ORIGIN_ACCESS_VERSION ||
-    response.type !== 'originAccessResult' ||
-    response.requestId !== requestId ||
-    response.ok !== true ||
-    typeof response.approved !== 'boolean'
-  ) {
-    const code =
-      isRecord(response) && isRecord(response.error)
-        ? providerDiagnostic(response.error.code)
-        : 'INVALID_EXTENSION_RESPONSE';
-    pageDiagnostic('origin.access.rejected', { requestId, code });
-    throw new Error(`Extension website authorization failed (${code}).`);
-  }
-  pageDiagnostic('origin.access.response', { requestId, approved: response.approved });
-  if (!response.approved) {
+  if (!status.approved) {
     throw new Error(
       'Approve this exact website origin in the extension options page, then check authentication again.',
     );
@@ -694,123 +661,21 @@ const directModelFetch: CodexResponsesFetch = async (
   });
 };
 
-function createChunkStream(): {
-  readonly body: AsyncIterable<string>;
-  push(chunk: string): void;
-  finish(): void;
-  fail(error: Error): void;
-} {
-  const chunks: string[] = [];
-  const waiters: (() => void)[] = [];
-  let finished = false;
-  let failure: Error | undefined;
-  const wake = (): void => {
-    for (const waiter of waiters.splice(0)) waiter();
-  };
-  return {
-    body: {
-      async *[Symbol.asyncIterator]() {
-        for (;;) {
-          const chunk = chunks.shift();
-          if (chunk !== undefined) {
-            yield chunk;
-            continue;
-          }
-          if (failure !== undefined) throw failure;
-          if (finished) return;
-          await new Promise<void>((resolve) => waiters.push(resolve));
-        }
-      },
-    },
-    push(chunk) {
-      if (!finished && failure === undefined) chunks.push(chunk);
-      wake();
-    },
-    finish() {
-      finished = true;
-      wake();
-    },
-    fail(error) {
-      failure = error;
-      wake();
-    },
-  };
-}
-
-const relayModelFetch: CodexResponsesFetch = (request) => {
-  nextRelayRequest += 1;
-  const requestId = `loom-relay-${String(nextRelayRequest)}`;
-  const port = extensionRuntime().connect(selectedExtensionId(), { name: MODEL_PORT_NAME });
-  const stream = createChunkStream();
-  let started = false;
-  let ended = false;
-  let settled = false;
-  let unsubscribe = (): void => undefined;
-  pageDiagnostic('model.relay.started', { requestId, target: 'chatgpt.com' });
-  return new Promise((resolve, reject) => {
-    const rejectOnce = (error: Error): void => {
-      if (settled) stream.fail(error);
-      else {
-        settled = true;
-        reject(error);
-      }
-    };
-    port.onMessage.addListener((message) => {
-      if (!isRecord(message) || message.requestId !== requestId) return;
-      if (message.type === 'start' && typeof message.status === 'number' && !started) {
-        started = true;
-        settled = true;
-        pageDiagnostic('model.relay.response', { requestId, status: message.status });
-        resolve(Object.freeze({ status: message.status, body: stream.body }));
-        return;
-      }
-      if (message.type === 'chunk' && typeof message.chunk === 'string' && started) {
-        stream.push(message.chunk);
-        return;
-      }
-      if (message.type === 'end') {
-        ended = true;
-        unsubscribe();
-        stream.finish();
-        return;
-      }
-      if (message.type === 'provider-error' && typeof message.status === 'number') {
-        appendLog(
-          `Provider rejected the relayed request (${String(message.status)}): ${providerDiagnostic(message.providerCode)}; type ${providerDiagnostic(message.providerType)}; parameter ${providerDiagnostic(message.providerParam)}.`,
-        );
-        return;
-      }
-      if (message.type === 'error') {
-        unsubscribe();
-        rejectOnce(new Error('Experimental extension relay failed.'));
-      }
+const relayModelFetch = createCodexExtensionFetch({
+  extensionId: selectedExtensionId,
+  runtime: extensionRuntime,
+  sessionId: currentRunSessionId,
+  threadId: currentRunSessionId,
+  diagnosticSink(event) {
+    pageDiagnostic(event.event, {
+      stage: event.stage,
+      ...(event.requestId === undefined ? {} : { requestId: event.requestId }),
+      ...(event.code === undefined ? {} : { code: event.code }),
+      ...(event.status === undefined ? {} : { status: event.status }),
+      ...(event.characters === undefined ? {} : { characters: event.characters }),
     });
-    port.onDisconnect.addListener(() => {
-      pageDiagnostic('model.relay.disconnect', { requestId, ended });
-      unsubscribe();
-      if (!ended) rejectOnce(new Error('Experimental extension relay disconnected.'));
-    });
-    if (request.signal !== undefined) {
-      unsubscribe = request.signal.onCancel(() => {
-        stream.fail(new Error('Experimental extension relay was cancelled.'));
-        port.disconnect();
-      });
-    }
-    port.postMessage({
-      protocol: MODEL_PROTOCOL,
-      version: MODEL_PROTOCOL_VERSION,
-      type: 'generate',
-      requestId,
-      sessionId: currentRunSessionId(),
-      threadId: currentRunSessionId(),
-      body: request.body,
-      wireProtocol:
-        request.headers['x-openai-internal-codex-responses-lite'] === 'true'
-          ? 'responses-lite'
-          : 'classic',
-    });
-  });
-};
+  },
+});
 
 const directFirstModelFetch: CodexResponsesFetch = async (request) => {
   if (modelTransportMode === 'relay') return relayModelFetch(request);

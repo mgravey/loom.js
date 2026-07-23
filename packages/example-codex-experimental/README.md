@@ -29,6 +29,9 @@ from the development `deployment-config.js`. Another checkout may receive a diff
 so `chrome://extensions` remains authoritative. Production Pages artifacts default to the assigned
 Store ID `gdcebopdllcifgleoefgbobdopiaholg` and attempt that connection on page load.
 
+The website consumes `@mgravey/loom-companion-codex-experimental` for origin approval and the
+streaming Chrome Port model relay instead of carrying a private copy of the client protocol.
+
 ## Build and run
 
 From the repository root:

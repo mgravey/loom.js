@@ -133,6 +133,28 @@ importers:
         specifier: ^3.2.4
         version: 3.2.7(@types/node@22.20.1)
 
+  packages/companion-codex-experimental:
+    dependencies:
+      '@mgravey/loom-auth-extension':
+        specifier: workspace:^
+        version: link:../auth-extension
+      '@mgravey/loom-model-codex-experimental':
+        specifier: workspace:^
+        version: link:../model-codex-experimental
+      '@mgravey/loom-plugin-api':
+        specifier: workspace:^
+        version: link:../plugin-api
+    devDependencies:
+      tsup:
+        specifier: ^8.5.0
+        version: 8.5.1(postcss@8.5.19)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7(@types/node@22.20.1)
+
   packages/core:
     dependencies:
       '@mgravey/loom-plugin-api':
@@ -218,6 +240,9 @@ importers:
       '@mgravey/loom-coding':
         specifier: workspace:^
         version: link:../coding
+      '@mgravey/loom-companion-codex-experimental':
+        specifier: workspace:^
+        version: link:../companion-codex-experimental
       '@mgravey/loom-execution-browser':
         specifier: workspace:^
         version: link:../execution-browser

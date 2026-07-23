@@ -24,6 +24,7 @@ const runtimePackages = [
   'auth-codex-experimental',
   'extension-codex-experimental',
   'model-codex-experimental',
+  'companion-codex-experimental',
   'examples',
 ] as const;
 
@@ -43,6 +44,8 @@ const publicRuntimePackages = new Set<(typeof runtimePackages)[number]>([
   'credential-provider-api',
   'auth-extension',
   'extension',
+  'model-codex-experimental',
+  'companion-codex-experimental',
 ]);
 
 const allowedInternalDependencies: Readonly<
@@ -95,6 +98,11 @@ const allowedInternalDependencies: Readonly<
     '@mgravey/loom-plugin-api',
     '@mgravey/loom-types',
   ],
+  'companion-codex-experimental': [
+    '@mgravey/loom-auth-extension',
+    '@mgravey/loom-model-codex-experimental',
+    '@mgravey/loom-plugin-api',
+  ],
   examples: [
     '@mgravey/loom-agent-codex',
     '@mgravey/loom-plugin-api',
@@ -139,7 +147,7 @@ async function packageImports(packageName: string): Promise<readonly string[]> {
 }
 
 describe('package architecture', () => {
-  it('keeps stable packages public, experiments private, ESM-only, and explicitly exported', async () => {
+  it('keeps supported libraries and explicit public experiments publishable', async () => {
     for (const packageName of runtimePackages) {
       const manifest = JSON.parse(
         await readFile(join(workspaceRoot, 'packages', packageName, 'package.json'), 'utf8'),
@@ -208,6 +216,7 @@ describe('package architecture', () => {
         '@mgravey/loom-agent-codex',
         '@mgravey/loom-auth-extension',
         '@mgravey/loom-coding',
+        '@mgravey/loom-companion-codex-experimental',
         '@mgravey/loom-execution-browser',
         '@mgravey/loom-model-codex-experimental',
         '@mgravey/loom-tool-workspace',

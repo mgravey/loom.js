@@ -25,6 +25,7 @@ test('built packages publish declaration entry points', async () => {
     'auth-codex-experimental',
     'extension-codex-experimental',
     'model-codex-experimental',
+    'companion-codex-experimental',
     'examples',
   ]) {
     const declaration = await readFile(
@@ -55,6 +56,9 @@ test('built packages publish declaration entry points', async () => {
   );
   expect(declarations.get('model-codex-experimental')).toContain(
     'createCodexExperimentalModelPlugin',
+  );
+  expect(declarations.get('companion-codex-experimental')).toContain(
+    'createCodexExtensionTransport',
   );
   expect(declarations.get('examples')).toContain('createAllCapabilitiesPlugin');
   expect(declarations.get('examples')).toContain('createInMemoryTextWorkspace');
@@ -175,6 +179,7 @@ test('built ESM packages expose their public runtime APIs', async ({ page }) => 
       experimentalCodexAuth,
       experimentalCodexExtension,
       experimentalCodexModel,
+      experimentalCodexCompanion,
       examples,
     ] = await Promise.all([
       import(`${origin}/packages/types/dist/index.js`),
@@ -195,6 +200,7 @@ test('built ESM packages expose their public runtime APIs', async ({ page }) => 
       import(`${origin}/packages/auth-codex-experimental/dist/index.js`),
       import(`${origin}/packages/extension-codex-experimental/dist/index.js`),
       import(`${origin}/packages/model-codex-experimental/dist/index.js`),
+      import(`${origin}/packages/companion-codex-experimental/dist/index.js`),
       import(`${origin}/packages/examples/dist/index.js`),
     ]);
     return {
@@ -216,6 +222,7 @@ test('built ESM packages expose their public runtime APIs', async ({ page }) => 
       experimentalCodexAuth: Object.keys(experimentalCodexAuth),
       experimentalCodexExtension: Object.keys(experimentalCodexExtension),
       experimentalCodexModel: Object.keys(experimentalCodexModel),
+      experimentalCodexCompanion: Object.keys(experimentalCodexCompanion),
       examples: Object.keys(examples),
     };
   }, browserOrigin);
@@ -340,6 +347,14 @@ test('built ESM packages expose their public runtime APIs', async ({ page }) => 
       'createCodexExperimentalModel',
       'createCodexExperimentalModelPlugin',
       'createCodexResponsesRequestBody',
+    ]),
+  );
+  expect(exportsByPackage.experimentalCodexCompanion).toEqual(
+    expect.arrayContaining([
+      'LOOM_COMPANION_EXTENSION_ID',
+      'createCodexCompanion',
+      'createCodexExtensionTransport',
+      'requestCodexOriginAccess',
     ]),
   );
   expect(exportsByPackage.examples).toEqual(

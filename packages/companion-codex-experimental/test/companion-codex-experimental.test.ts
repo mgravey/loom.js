@@ -1,0 +1,250 @@
+import { describe, expect, it, vi } from 'vitest';
+
+import {
+  CODEX_COMPANION_PROVIDER_ID,
+  CODEX_MODEL_PORT_NAME,
+  CODEX_MODEL_TRANSPORT_PROTOCOL,
+  CODEX_ORIGIN_ACCESS_PROTOCOL,
+  CodexCompanionError,
+  LOOM_COMPANION_EXTENSION_ID,
+  createCodexCompanion,
+  createCodexExtensionTransport,
+  requestCodexOriginAccess,
+  type CodexCompanionPort,
+  type CodexCompanionRuntime,
+} from '../src/index.js';
+
+interface PortHarness {
+  readonly port: CodexCompanionPort;
+  readonly posted: unknown[];
+  message(value: unknown): void;
+  disconnect(): void;
+}
+
+function createPortHarness(): PortHarness {
+  const messageListeners: ((message: unknown) => void)[] = [];
+  const disconnectListeners: (() => void)[] = [];
+  const posted: unknown[] = [];
+  let disconnected = false;
+  return {
+    posted,
+    port: {
+      onMessage: {
+        addListener(listener) {
+          messageListeners.push(listener);
+        },
+      },
+      onDisconnect: {
+        addListener(listener) {
+          disconnectListeners.push(listener);
+        },
+      },
+      postMessage(message) {
+        posted.push(message);
+      },
+      disconnect() {
+        if (disconnected) return;
+        disconnected = true;
+        for (const listener of disconnectListeners) listener();
+      },
+    },
+    message(value) {
+      for (const listener of messageListeners) listener(value);
+    },
+    disconnect() {
+      if (disconnected) return;
+      disconnected = true;
+      for (const listener of disconnectListeners) listener();
+    },
+  };
+}
+
+async function collect(values: AsyncIterable<string>): Promise<readonly string[]> {
+  const collected: string[] = [];
+  for await (const value of values) collected.push(value);
+  return collected;
+}
+
+describe('experimental Loom.js Companion client', () => {
+  it('requests explicit origin approval through the published extension ID', async () => {
+    const sendMessage = vi.fn(
+      (
+        extensionId: string,
+        message: unknown,
+        _options: undefined,
+        callback: (response: unknown) => void,
+      ) => {
+        expect(extensionId).toBe(LOOM_COMPANION_EXTENSION_ID);
+        expect(message).toMatchObject({
+          protocol: CODEX_ORIGIN_ACCESS_PROTOCOL,
+          type: 'requestOriginAccess',
+        });
+        const requestId = (message as { readonly requestId: string }).requestId;
+        callback({
+          protocol: CODEX_ORIGIN_ACCESS_PROTOCOL,
+          version: 1,
+          type: 'originAccessResult',
+          requestId,
+          ok: true,
+          approved: false,
+        });
+      },
+    );
+    const runtime = {
+      sendMessage,
+      connect: vi.fn(),
+    } as unknown as CodexCompanionRuntime;
+
+    await expect(requestCodexOriginAccess({ runtime })).resolves.toEqual({ approved: false });
+    expect(sendMessage).toHaveBeenCalledOnce();
+  });
+
+  it('routes credential-free model bodies through a Chrome external port and streams text', async () => {
+    const harness = createPortHarness();
+    const connect = vi.fn((extensionId: string, options: { readonly name: string }) => {
+      expect(extensionId).toBe(LOOM_COMPANION_EXTENSION_ID);
+      expect(options.name).toBe(CODEX_MODEL_PORT_NAME);
+      return harness.port;
+    });
+    const runtime = { connect, sendMessage: vi.fn() } as unknown as CodexCompanionRuntime;
+    const transport = createCodexExtensionTransport({
+      runtime,
+      sessionId: 'session-1',
+      threadId: 'thread-1',
+      requestIdFactory: () => 'request-1',
+    });
+
+    const responsePromise = transport.send({
+      body: '{"model":"gpt-5.6-sol","input":[]}',
+      wireProtocol: 'responses-lite',
+    });
+    expect(harness.posted).toEqual([
+      {
+        protocol: CODEX_MODEL_TRANSPORT_PROTOCOL,
+        version: 1,
+        type: 'generate',
+        requestId: 'request-1',
+        sessionId: 'session-1',
+        threadId: 'thread-1',
+        body: '{"model":"gpt-5.6-sol","input":[]}',
+        wireProtocol: 'responses-lite',
+      },
+    ]);
+
+    harness.message({ type: 'start', requestId: 'request-1', status: 200 });
+    const response = await responsePromise;
+    harness.message({ type: 'chunk', requestId: 'request-1', chunk: 'data: first\n\n' });
+    harness.message({ type: 'chunk', requestId: 'request-1', chunk: 'data: second\n\n' });
+    harness.message({ type: 'end', requestId: 'request-1' });
+
+    await expect(collect(response.body)).resolves.toEqual(['data: first\n\n', 'data: second\n\n']);
+    expect(response.status).toBe(200);
+  });
+
+  it('maps extension failures to sanitized transport errors', async () => {
+    const harness = createPortHarness();
+    const runtime = {
+      connect: () => harness.port,
+      sendMessage: vi.fn(),
+    } as unknown as CodexCompanionRuntime;
+    const transport = createCodexExtensionTransport({
+      runtime,
+      sessionId: 'session-1',
+      requestIdFactory: () => 'request-2',
+    });
+    const response = transport.send({
+      body: '{"model":"gpt-5.6-sol","input":[]}',
+      wireProtocol: 'responses-lite',
+    });
+
+    harness.message({
+      type: 'error',
+      requestId: 'request-2',
+      code: 'UNAUTHORIZED_ORIGIN',
+      message: 'secret provider detail',
+    });
+
+    await expect(response).rejects.toMatchObject({
+      name: 'CodexCompanionError',
+      code: 'EXTENSION_REQUEST_FAILED',
+      remoteCode: 'UNAUTHORIZED_ORIGIN',
+    });
+    await expect(response).rejects.not.toThrow('secret provider detail');
+  });
+
+  it('fails a started stream when the extension disconnects early', async () => {
+    const harness = createPortHarness();
+    const runtime = {
+      connect: () => harness.port,
+      sendMessage: vi.fn(),
+    } as unknown as CodexCompanionRuntime;
+    const transport = createCodexExtensionTransport({
+      runtime,
+      sessionId: 'session-1',
+      requestIdFactory: () => 'request-3',
+    });
+    const responsePromise = transport.send({
+      body: '{"model":"gpt-5.6-sol","input":[]}',
+      wireProtocol: 'responses-lite',
+    });
+    harness.message({ type: 'start', requestId: 'request-3', status: 200 });
+    const response = await responsePromise;
+    harness.disconnect();
+
+    await expect(collect(response.body)).rejects.toMatchObject({
+      code: 'CONNECTION_FAILED',
+    });
+  });
+
+  it('composes origin approval, extension authentication, and model transport', async () => {
+    const harness = createPortHarness();
+    const runtime: CodexCompanionRuntime = {
+      connect: () => harness.port,
+      sendMessage(_extensionId, message, _options, callback) {
+        const request = message as Readonly<Record<string, unknown>>;
+        if (request.protocol === CODEX_ORIGIN_ACCESS_PROTOCOL) {
+          callback({
+            protocol: CODEX_ORIGIN_ACCESS_PROTOCOL,
+            version: 1,
+            type: 'originAccessResult',
+            requestId: request.requestId,
+            ok: true,
+            approved: true,
+          });
+          return;
+        }
+        callback({
+          protocol: 'loom/credential-broker',
+          version: 1,
+          type: 'getCredentialStatusResult',
+          requestId: request.requestId,
+          ok: true,
+          authenticated: true,
+        });
+      },
+    };
+    const companion = createCodexCompanion({
+      runtime,
+      sessionId: 'session-1',
+    });
+
+    expect(companion.configuration).toEqual({
+      extensionId: LOOM_COMPANION_EXTENSION_ID,
+      providerId: CODEX_COMPANION_PROVIDER_ID,
+    });
+    await expect(companion.ensureOriginAccess()).resolves.toBeUndefined();
+    await expect(companion.auth.isAuthenticated()).resolves.toBe(true);
+    expect(companion.transport).toHaveProperty('send');
+    expect(companion.fetch).toBeTypeOf('function');
+    expect(companion.authPlugin.manifest.id).toBe('loom/auth-extension');
+  });
+
+  it('rejects missing Chrome runtime configuration', () => {
+    expect(() =>
+      createCodexExtensionTransport({
+        runtime: undefined as unknown as CodexCompanionRuntime,
+        sessionId: 'session-1',
+      }),
+    ).toThrow(CodexCompanionError);
+  });
+});

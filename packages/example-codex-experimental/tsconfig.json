@@ -13,6 +13,7 @@
     { "path": "../agent-codex" },
     { "path": "../auth-extension" },
     { "path": "../coding" },
+    { "path": "../companion-codex-experimental" },
     { "path": "../execution-browser" },
     { "path": "../model-codex-experimental" },
     { "path": "../tool-workspace" },

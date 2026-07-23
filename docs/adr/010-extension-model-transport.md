@@ -34,6 +34,12 @@ ID in trusted storage. Do not retain or expose the raw ID token for inference ro
 model port protocol separate from `@mgravey/loom-credential-broker-api`; do not change Core or the
 generic agent contract.
 
+Publish the matching website-side Port client as `@mgravey/loom-companion-codex-experimental`. It
+validates the extension stream, handles cancellation and disconnects, requests explicit approval for
+the calling origin, and implements the credential-free transport contract consumed by
+`@mgravey/loom-model-codex-experimental`. The provider endpoint, access token, account routing, and
+privileged headers remain extension-owned.
+
 Automated tests use only local fixtures and synthetic credentials. Live compatibility remains an
 explicit, disabled-by-default manual experiment.
 
@@ -42,7 +48,8 @@ explicit, disabled-by-default manual experiment.
 The page can run a real Loom runtime and workspace agent without possessing provider credentials.
 The extension grows beyond a credential-only broker, but only in the provider-specific experimental
 composition root. Removing `@mgravey/loom-extension-codex-experimental` and
-`@mgravey/loom-model-codex-experimental` leaves the generic broker, Core, and agent unchanged.
+`@mgravey/loom-model-codex-experimental` leaves the generic broker, Core, and agent unchanged. The
+public Companion client can also be removed without changing those packages.
 
 The transport inherits the instability of an undocumented provider backend and current event shapes.
 Model IDs, headers, endpoints, and events require source re-audit before release. The extension host

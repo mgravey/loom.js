@@ -27,6 +27,8 @@ const packageEntries = Object.freeze({
   '@mgravey/loom-extension-codex-experimental':
     '/packages/extension-codex-experimental/dist/index.js',
   '@mgravey/loom-model-codex-experimental': '/packages/model-codex-experimental/dist/index.js',
+  '@mgravey/loom-companion-codex-experimental':
+    '/packages/companion-codex-experimental/dist/index.js',
   '@mgravey/loom-examples': '/packages/examples/dist/index.js',
 });
 

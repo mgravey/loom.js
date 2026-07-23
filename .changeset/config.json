@@ -14,7 +14,6 @@
     "@mgravey/loom-example-codex-experimental",
     "@mgravey/loom-example-extension",
     "@mgravey/loom-examples",
-    "@mgravey/loom-extension-codex-experimental",
-    "@mgravey/loom-model-codex-experimental"
+    "@mgravey/loom-extension-codex-experimental"
   ]
 }

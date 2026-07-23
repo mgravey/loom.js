@@ -60,9 +60,11 @@ Phase 5.5 adds `@mgravey/loom-model-codex-experimental` as another removable lea
 model protocol. The experimental extension owns login and refresh state, while an explicitly
 approved localhost origin receives only short-lived direct credentials and performs every non-auth
 provider request itself when browser CORS permits. A pre-response failure falls back to a
-credential-free request over an authorized extension Port. The model path does not change Core, the
-generic credential broker, or the agent contract. See
-[the vertical-slice guide](./phase-5-5-vertical-slice.md),
+credential-free request over an authorized extension Port. The reusable website side of that Port is
+published separately as `@mgravey/loom-companion-codex-experimental`; it owns origin-approval
+requests, the Chrome Port lifecycle, response validation, streaming, and cancellation without
+receiving credentials. The model path does not change Core, the generic credential broker, or the
+agent contract. See [the vertical-slice guide](./phase-5-5-vertical-slice.md),
 [ADR-013](./adr/013-direct-experimental-model-fetch.md), and
 [ADR-015](./adr/015-cors-relay-fallback.md).
 

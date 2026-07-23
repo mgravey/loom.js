@@ -423,8 +423,9 @@ development or production server before selecting the Node.js runtime.
 
 ## Current limitations
 
-- Stable packages are publish-ready; the first authenticated npm registry release is still pending.
-- Examples and unsupported experimental packages remain private.
+- The minimal Core/credential set and the explicitly experimental Companion coding path are
+  published at `0.1.0`; other stable adapters remain publish-ready.
+- Examples and extension-owned experimental provider implementations remain private.
 - Generic schema-bearing tools are agent-callable, but each application still owns tool discovery,
   user authorization, input validation, and UI presentation.
 - The browser run-file tool and ProjectWorkspace synchronization are example-owned rather than a

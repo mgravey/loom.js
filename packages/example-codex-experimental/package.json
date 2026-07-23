@@ -12,6 +12,7 @@
     "@mgravey/loom-agent-codex": "workspace:^",
     "@mgravey/loom-auth-extension": "workspace:^",
     "@mgravey/loom-coding": "workspace:^",
+    "@mgravey/loom-companion-codex-experimental": "workspace:^",
     "@mgravey/loom-execution-browser": "workspace:^",
     "@mgravey/loom-model-codex-experimental": "workspace:^",
     "@mgravey/loom-tool-workspace": "workspace:^",

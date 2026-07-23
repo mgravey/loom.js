@@ -1,8 +1,9 @@
 # Publishing Loom.js packages
 
-Loom.js publishes stable libraries as public ESM packages named `@mgravey/loom-*`. The repository
-root, examples, and unsupported Codex compatibility packages remain private. The source and package
-tarballs are licensed under the Mozilla Public License 2.0 (`MPL-2.0`).
+Loom.js publishes stable libraries and explicitly named experimental clients as public ESM packages
+under `@mgravey/loom-*`. The repository root, examples, and extension-owned provider implementation
+remain private. The source and package tarballs are licensed under the Mozilla Public License 2.0
+(`MPL-2.0`).
 
 ## Public package boundary
 
@@ -15,6 +16,14 @@ The public set contains the provider-neutral runtime and its stable adapters:
 - `@mgravey/loom-model-openai-responses`;
 - `@mgravey/loom-credential-broker-api`, `@mgravey/loom-credential-provider-api`,
   `@mgravey/loom-auth-extension`, and `@mgravey/loom-extension`.
+
+The public, unsupported compatibility set is intentionally named as experimental:
+
+- `@mgravey/loom-model-codex-experimental`;
+- `@mgravey/loom-companion-codex-experimental`.
+
+The experimental Companion path additionally publishes `loom-tool-workspace`, `loom-agent-codex`,
+and `loom-coding`. The extension-owned OAuth and provider implementation remains private.
 
 Core does not communicate with Chrome directly. The website-side Chrome path is
 `loom-auth-extension -> loom-credential-broker-api`; the extension-side path is
@@ -69,8 +78,18 @@ The first `0.1.0` release completed on 22 July 2026 for the minimal reusable set
 - `@mgravey/loom-auth-extension`.
 
 A clean npm consumer was able to install the two top-level packages, resolve all three transitive
-packages, and import all five public entry points. The remaining stable packages listed above are
-release-ready but have not yet had their first registry release.
+packages, and import all five public entry points.
+
+The second `0.1.0` publication set adds the dependency-complete coding and extension-model path:
+
+- `@mgravey/loom-tool-workspace`;
+- `@mgravey/loom-agent-codex`;
+- `@mgravey/loom-coding`;
+- `@mgravey/loom-model-codex-experimental`;
+- `@mgravey/loom-companion-codex-experimental`.
+
+The remaining stable packages listed above are release-ready but have not yet had their first
+registry release.
 
 For a remaining package's first npm release, the maintainer must control the `@mgravey` npm scope
 and use an npm account with two-factor authentication. Create each package record deliberately only

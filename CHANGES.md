@@ -2,7 +2,7 @@
 
 This project follows a milestone changelog alongside Changesets for public package versioning.
 
-## Public package preparation
+## Public package releases
 
 - Renamed workspace packages to the search-friendly `@mgravey/loom-*` scope and marked the stable
   runtime, browser, model, workspace, credential protocol, website extension client, and generic
@@ -14,7 +14,13 @@ This project follows a milestone changelog alongside Changesets for public packa
 - Published the initial `0.1.0` minimal runtime and website-to-extension set: `loom-types`,
   `loom-plugin-api`, `loom-core`, `loom-credential-broker-api`, and `loom-auth-extension`; verified
   a clean registry installation and import of all five packages.
-- Kept examples and all unsupported Codex compatibility packages private.
+- Added a public, explicitly experimental Companion client that requests exact-origin approval and
+  routes credential-free model request bodies and streamed responses through the published Chrome
+  extension.
+- Published and registry-verified the dependency-complete `0.1.0` coding path:
+  `loom-tool-workspace`, `loom-agent-codex`, `loom-coding`, `loom-model-codex-experimental`, and
+  `loom-companion-codex-experimental`.
+- Kept examples and extension-owned Codex authentication/provider implementations private.
 
 ## Unreleased — Browser coding workbench
 

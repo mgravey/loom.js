@@ -15,6 +15,8 @@ site-preview/
 site-preview-*.zip
 store-artifacts/
 release-artifacts/
+# Optional local destination for focused npm pack and publication inspection.
+.npm-pack/
 packages/extension-codex-experimental/.chrome-store-staging/
 .loom-runs/
 .loom/

@@ -28,7 +28,7 @@ This project follows a milestone changelog alongside Changesets for public packa
   incomplete reasons, retryability, and Retry-After delays across streamed events and the Companion
   extension boundary without exposing response bodies or headers.
 
-## Unreleased — Provider-native context compaction
+## 0.2.0 — Provider-native context compaction and Companion presentation
 
 - Added an explicit credential-free `compact` transport operation for the experimental Codex model,
   routed only to `responses/compact` by the extension.
@@ -38,6 +38,12 @@ This project follows a milestone changelog alongside Changesets for public packa
   checkpoint that records both the opaque items and the covered transcript prefix.
 - Context-window provider codes now set `contextCompactionRequired`; the agent preserves completed
   in-run tool history, compacts once before partial output, and retries only the failed model turn.
+- Declared the existing colored Loom artwork as an always-enabled Chrome toolbar action, preventing
+  permission-based visual dimming without adding page access, content scripts, or click behavior.
+- Updated the Companion manifest and provider client identifier to `0.2.0` for the corresponding
+  Chrome Web Store release.
+- Isolated Store verification artifacts from production upload archives so test configuration can
+  never overwrite the ZIP prepared for submission.
 
 ## Unreleased — Browser coding workbench
 

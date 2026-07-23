@@ -73,8 +73,9 @@ pnpm --filter @mgravey/loom-extension-codex-experimental build
 Load **Loom.js Companion** from `packages/extension-codex-experimental/dist` in
 `chrome://extensions` with Developer mode enabled. Its external messaging route accepts HTTPS
 websites, but each exact origin must still be approved from the trusted extension options page
-before it can use authentication or model relay. Only the fixed `localhost:4173` development origins
-are accepted over HTTP. See the
+before it can use authentication or model relay. Its colored toolbar artwork remains visible on
+every site as a purely visual browser action; this does not grant the extension access to the active
+page. Only the fixed `localhost:4173` development origins are accepted over HTTP. See the
 [extension installation and packaging README](./packages/extension-codex-experimental/README.md) for
 the complete unpacked workflow, extension-ID transition, permission rationale, production ZIP
 command, and Chrome Web Store blockers.

@@ -537,7 +537,7 @@ export function createCodexModelPortListener(
                 'session-id': request.sessionId,
                 'thread-id': request.threadId,
                 'x-client-request-id': request.requestId,
-                version: 'loom.js/0.1.0',
+                version: 'loom.js/0.2.0',
                 ...(request.wireProtocol === 'responses-lite'
                   ? { 'x-openai-internal-codex-responses-lite': 'true' }
                   : {}),

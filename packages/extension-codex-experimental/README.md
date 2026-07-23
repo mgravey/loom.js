@@ -11,6 +11,8 @@ Rejected provider responses are reduced to a bounded code, sanitized 512-charact
 retryability classification, and a capped millisecond delay parsed from `Retry-After`; complete
 bodies and response headers never cross the extension port.
 
+The current Chrome extension release version is `0.2.0`.
+
 It remains an unsupported ChatGPT/Codex compatibility experiment. Chrome Web Store packaging does
 not make the provider integration supported or authorized. Do not submit it publicly until the
 provider/client-registration blocker in `docs/chrome-web-store-submission.md` is resolved.
@@ -71,9 +73,11 @@ Authentication HTTPS requests carry data; they do not supply executable extensio
 
 The manifest icons use a compact square crop of the standalone Direction 08 Loom mark. Shortening
 the long input tails lets the weave and endpoint rings occupy almost the full height of Chrome's
-16px UI while preserving their proportions. The options and bundled privacy-page headings play the
-full self-contained Lottie weave once, then hold on its final frame. Reduced-motion preferences and
-rendering failures retain the compact 128px PNG fallback.
+16px UI while preserving their proportions. The same colored artwork is declared as an enabled
+toolbar action on every site. This is presentation only: it adds no page permission, content script,
+or active-tab access. The options and bundled privacy-page headings play the full self-contained
+Lottie weave once, then hold on its final frame. Reduced-motion preferences and rendering failures
+retain the compact 128px PNG fallback.
 
 ## Connect the local workbench
 

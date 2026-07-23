@@ -53,6 +53,8 @@ packages/example-codex-experimental/.direct-request-debug/
 packages/extension-codex-experimental/.persistent-auth-debug/
 # Optional disposable Chrome profile used while testing the unpacked extension.
 .chrome-dev-profile/
+# Local toolbar-icon visual checks are review artifacts, not extension payloads.
+packages/extension-codex-experimental/.toolbar-preview/
 # Private local exports of support or privacy correspondence.
 support-correspondence/
 

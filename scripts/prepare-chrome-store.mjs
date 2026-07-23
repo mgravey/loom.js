@@ -7,7 +7,9 @@ const root = resolve(import.meta.dirname, '..');
 const extensionRoot = join(root, 'packages', 'extension-codex-experimental');
 const dist = join(extensionRoot, 'dist');
 const staging = join(extensionRoot, '.chrome-store-staging');
-const artifacts = join(root, 'store-artifacts');
+const artifacts = resolve(
+  process.env.LOOM_STORE_ARTIFACTS_DIR?.trim() || join(root, 'store-artifacts'),
+);
 const defaultSiteOrigin = 'https://mgravey.com';
 const defaultSiteBasePath = '/loom.js';
 const externallyConnectableMatches = Object.freeze([
@@ -166,6 +168,16 @@ if (
 }
 if (manifest.icons?.['128'] !== 'icons/icon128.png') {
   throw new Error('Manifest must include the required 128px icon.');
+}
+if (
+  manifest.action?.default_title !== 'Loom.js Companion' ||
+  JSON.stringify(manifest.action?.default_icon) !==
+    JSON.stringify({
+      16: 'icons/icon16.png',
+      32: 'icons/icon32.png',
+    })
+) {
+  throw new Error('Manifest must keep the reviewed always-colored toolbar action.');
 }
 const requiredIcons = Object.freeze({ 16: 16, 32: 32, 48: 48, 128: 128 });
 for (const [key, size] of Object.entries(requiredIcons)) {

@@ -192,9 +192,10 @@ screenshot.
 
 - [x] Packaged icons: 16×16, 32×32, 48×48, and 128×128 PNG. A compact square crop shortens the long
       input tails so the weave and endpoint rings use substantially more vertical space, including
-      almost the full 16px toolbar canvas. The options page uses the full self-contained Lottie
-      weave in its heading, as does the bundled privacy page. Both retain the compact 128px asset as
-      their reduced-motion and rendering fallback.
+      almost the full 16px toolbar canvas. The manifest declares the colored 16px and 32px artwork
+      as an always-enabled toolbar action without adding page access or content scripts. The options
+      page uses the full self-contained Lottie weave in its heading, as does the bundled privacy
+      page. Both retain the compact 128px asset as their reduced-motion and rendering fallback.
 - [x] Required small promotional image: `store-listing/promo-small-440x280.png`, brand-led and
       readable when reduced.
 - [x] Required real-experience screenshot: `store-listing/screenshot-options-1280x800.png`, full

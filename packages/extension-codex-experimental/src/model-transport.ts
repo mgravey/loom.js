@@ -12,6 +12,8 @@ export const CODEX_MODEL_PORT_NAME = 'loom/codex-model-experimental/v1' as const
 export const CODEX_MODEL_TRANSPORT_PROTOCOL = 'loom/codex-model-experimental' as const;
 export const CODEX_MODEL_TRANSPORT_VERSION = 1 as const;
 export const CODEX_RESPONSES_ENDPOINT = 'https://chatgpt.com/backend-api/codex/responses' as const;
+export const CODEX_RESPONSES_COMPACT_ENDPOINT =
+  'https://chatgpt.com/backend-api/codex/responses/compact' as const;
 
 const MAXIMUM_REQUEST_BODY_LENGTH = 4 * 1024 * 1024;
 const MAXIMUM_PROVIDER_ERROR_BODY_LENGTH = 16 * 1024;
@@ -21,10 +23,10 @@ const GENERIC_PROVIDER_MESSAGE = 'The provider rejected the request.';
 const NON_RETRYABLE_PROVIDER_CODE =
   /(account|auth|billing|credit|forbidden|insufficient_quota|invalid|payment|permission|policy|quota_exceeded|restricted|unauthorized)/u;
 
-interface GenerateRequest {
+interface CodexPortRequest {
   readonly protocol: typeof CODEX_MODEL_TRANSPORT_PROTOCOL;
   readonly version: typeof CODEX_MODEL_TRANSPORT_VERSION;
-  readonly type: 'generate';
+  readonly type: 'generate' | 'compact';
   readonly requestId: string;
   readonly sessionId: string;
   readonly threadId: string;
@@ -249,7 +251,7 @@ function normalizedRequestBody(
   value: string,
   sessionId: string,
   threadId: string,
-  wireProtocol: GenerateRequest['wireProtocol'],
+  wireProtocol: CodexPortRequest['wireProtocol'],
 ): string {
   let body: unknown;
   try {
@@ -333,7 +335,60 @@ function normalizedRequestBody(
   });
 }
 
-function parseGenerateRequest(value: unknown): GenerateRequest {
+function normalizedCompactionBody(
+  value: string,
+  sessionId: string,
+  wireProtocol: CodexPortRequest['wireProtocol'],
+): string {
+  let body: unknown;
+  try {
+    body = JSON.parse(value);
+  } catch {
+    throw new Error('Invalid experimental compaction request.');
+  }
+  if (
+    !isRecord(body) ||
+    Object.keys(body).some(
+      (key) =>
+        ![
+          'model',
+          'input',
+          'instructions',
+          'tools',
+          'parallel_tool_calls',
+          'reasoning',
+          'text',
+        ].includes(key),
+    ) ||
+    !boundedString(body.model, 256) ||
+    !Array.isArray(body.input) ||
+    typeof body.instructions !== 'string' ||
+    !Array.isArray(body.tools) ||
+    typeof body.parallel_tool_calls !== 'boolean' ||
+    !isRecord(body.reasoning) ||
+    body.reasoning.effort !== 'medium' ||
+    !isRecord(body.text) ||
+    Object.keys(body.text).some((key) => key !== 'verbosity') ||
+    body.text.verbosity !== 'low'
+  ) {
+    throw new Error('Invalid experimental compaction request.');
+  }
+  if (
+    wireProtocol === 'classic'
+      ? !body.parallel_tool_calls || Object.keys(body.reasoning).some((key) => key !== 'effort')
+      : body.parallel_tool_calls ||
+        Object.keys(body.reasoning).some((key) => key !== 'effort' && key !== 'context') ||
+        body.reasoning.context !== 'all_turns'
+  ) {
+    throw new Error('Invalid experimental compaction request.');
+  }
+  return JSON.stringify({
+    ...body,
+    prompt_cache_key: sessionId,
+  });
+}
+
+function parseModelRequest(value: unknown): CodexPortRequest {
   if (
     !isRecord(value) ||
     Object.keys(value).some(
@@ -355,7 +410,7 @@ function parseGenerateRequest(value: unknown): GenerateRequest {
   if (
     value.protocol !== CODEX_MODEL_TRANSPORT_PROTOCOL ||
     value.version !== CODEX_MODEL_TRANSPORT_VERSION ||
-    value.type !== 'generate' ||
+    (value.type !== 'generate' && value.type !== 'compact') ||
     !headerIdentifier(value.requestId) ||
     !headerIdentifier(value.sessionId) ||
     !headerIdentifier(value.threadId) ||
@@ -364,12 +419,10 @@ function parseGenerateRequest(value: unknown): GenerateRequest {
   ) {
     throw new Error('Invalid experimental model request.');
   }
-  const body = normalizedRequestBody(
-    value.body,
-    value.sessionId,
-    value.threadId,
-    value.wireProtocol,
-  );
+  const body =
+    value.type === 'compact'
+      ? normalizedCompactionBody(value.body, value.sessionId, value.wireProtocol)
+      : normalizedRequestBody(value.body, value.sessionId, value.threadId, value.wireProtocol);
   const parsedBody: unknown = JSON.parse(body);
   if (!isRecord(parsedBody) || typeof parsedBody.model !== 'string') {
     throw new Error('Invalid experimental model request.');
@@ -377,7 +430,7 @@ function parseGenerateRequest(value: unknown): GenerateRequest {
   return Object.freeze({
     protocol: CODEX_MODEL_TRANSPORT_PROTOCOL,
     version: CODEX_MODEL_TRANSPORT_VERSION,
-    type: 'generate',
+    type: value.type,
     requestId: value.requestId,
     sessionId: value.sessionId,
     threadId: value.threadId,
@@ -437,7 +490,7 @@ export function createCodexModelPortListener(
           await authorizer.assertAuthorized(port.sender ?? {});
           report(options.diagnosticSink, { event: 'origin.authorized', stage });
           stage = 'validation';
-          const request = parseGenerateRequest(untrustedMessage);
+          const request = parseModelRequest(untrustedMessage);
           requestId = request.requestId;
           report(options.diagnosticSink, {
             event: 'request.validated',
@@ -463,31 +516,39 @@ export function createCodexModelPortListener(
             characters: request.body.length,
             method: 'POST',
             targetHost: 'chatgpt.com',
-            targetPath: '/backend-api/codex/responses',
+            targetPath:
+              request.type === 'compact'
+                ? '/backend-api/codex/responses/compact'
+                : '/backend-api/codex/responses',
             model: request.model,
           });
-          const response = await options.fetchRequest(CODEX_RESPONSES_ENDPOINT, {
-            method: 'POST',
-            headers: Object.freeze({
-              Authorization: `Bearer ${token.accessToken}`,
-              'ChatGPT-Account-ID': accountId,
-              Accept: 'text/event-stream',
-              'Content-Type': 'application/json',
-              originator: 'loom_extension_experiment',
-              'session-id': request.sessionId,
-              'thread-id': request.threadId,
-              'x-client-request-id': request.requestId,
-              version: 'loom.js/0.1.0',
-              ...(request.wireProtocol === 'responses-lite'
-                ? { 'x-openai-internal-codex-responses-lite': 'true' }
-                : {}),
-            }),
-            body: request.body,
-            cache: 'no-store',
-            credentials: 'omit',
-            redirect: 'error',
-            signal: abortController.signal,
-          });
+          const response = await options.fetchRequest(
+            request.type === 'compact'
+              ? CODEX_RESPONSES_COMPACT_ENDPOINT
+              : CODEX_RESPONSES_ENDPOINT,
+            {
+              method: 'POST',
+              headers: Object.freeze({
+                Authorization: `Bearer ${token.accessToken}`,
+                'ChatGPT-Account-ID': accountId,
+                Accept: request.type === 'compact' ? 'application/json' : 'text/event-stream',
+                'Content-Type': 'application/json',
+                originator: 'loom_extension_experiment',
+                'session-id': request.sessionId,
+                'thread-id': request.threadId,
+                'x-client-request-id': request.requestId,
+                version: 'loom.js/0.1.0',
+                ...(request.wireProtocol === 'responses-lite'
+                  ? { 'x-openai-internal-codex-responses-lite': 'true' }
+                  : {}),
+              }),
+              body: request.body,
+              cache: 'no-store',
+              credentials: 'omit',
+              redirect: 'error',
+              signal: abortController.signal,
+            },
+          );
           report(options.diagnosticSink, {
             event: 'provider.response.started',
             stage,

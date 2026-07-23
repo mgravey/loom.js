@@ -1,11 +1,15 @@
-import type { AuthProvider } from '@mgravey/loom-plugin-api';
-import type { CancellationSignal } from '@mgravey/loom-types';
+import type { CodexModel, CodexModelRequest } from '@mgravey/loom-agent-codex';
+import type { AuthProvider, OperationContext } from '@mgravey/loom-plugin-api';
+import type { CancellationSignal, JsonObject } from '@mgravey/loom-types';
 
 export type CodexResponsesWireProtocol = 'classic' | 'responses-lite';
+export type CodexResponsesOperation = 'generate' | 'compact';
 
 /** A credential-free request for a trusted transport such as an extension broker. */
 export interface CodexResponsesRequest {
   readonly body: string;
+  /** Defaults to generate for compatibility with existing injected transports. */
+  readonly operation?: CodexResponsesOperation;
   readonly wireProtocol: CodexResponsesWireProtocol;
   readonly signal?: CancellationSignal;
 }
@@ -14,6 +18,7 @@ export interface CodexResponsesRequest {
 export interface CodexResponsesHttpRequest {
   readonly method: 'POST';
   readonly url: string;
+  readonly operation?: CodexResponsesOperation;
   readonly headers: Readonly<Record<string, string>>;
   readonly body: string;
   readonly signal?: CancellationSignal;
@@ -48,6 +53,18 @@ export type CodexResponsesFetch = (
 export type AccessTokenSupplier = () => Promise<string>;
 export type AccountIdSupplier = () => Promise<string | undefined>;
 
+export interface CodexContextCompactionResult {
+  /** Opaque, validated provider items. Persist and replay these without inspecting their content. */
+  readonly items: readonly JsonObject[];
+}
+
+export interface CodexExperimentalModel extends CodexModel {
+  compact(
+    request: CodexModelRequest,
+    context?: OperationContext,
+  ): Promise<CodexContextCompactionResult>;
+}
+
 export interface CodexExperimentalModelOptions {
   readonly model: string;
   /** Defaults to classic. Responses Lite moves tools and instructions into input items. */
@@ -61,6 +78,8 @@ export interface CodexExperimentalDirectFetchOptions {
   readonly wireProtocol?: CodexResponsesWireProtocol;
   /** Experimental endpoint audited by the host; intentionally no provider URL is baked in. */
   readonly endpoint: string;
+  /** Defaults to `${endpoint}/compact`. */
+  readonly compactEndpoint?: string;
   readonly authentication: AuthProvider | AccessTokenSupplier;
   readonly fetch: CodexResponsesFetch;
   readonly accountId?: string | AccountIdSupplier;

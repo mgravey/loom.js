@@ -1,6 +1,6 @@
 {
   "name": "@mgravey/loom-agent-codex",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Provider-neutral streamed model and tool orchestration protocol for Loom.js coding agents.",
   "license": "MPL-2.0",
   "author": "Mathieu Gravey",

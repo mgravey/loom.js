@@ -7,6 +7,7 @@ import {
   CODEX_MODEL_PORT_NAME,
   CODEX_MODEL_TRANSPORT_PROTOCOL,
   CODEX_MODEL_TRANSPORT_VERSION,
+  CODEX_RESPONSES_COMPACT_ENDPOINT,
   CODEX_RESPONSES_ENDPOINT,
   createCodexModelPortListener,
   type CodexModelDiagnosticEvent,
@@ -92,6 +93,27 @@ function request(
       stream: true,
       store: false,
       include: ['reasoning.encrypted_content'],
+      text: { verbosity: 'low' },
+    }),
+  });
+}
+
+function compactRequest(): Readonly<Record<string, unknown>> {
+  return Object.freeze({
+    protocol: CODEX_MODEL_TRANSPORT_PROTOCOL,
+    version: CODEX_MODEL_TRANSPORT_VERSION,
+    type: 'compact',
+    requestId: 'request-compact',
+    sessionId: 'session-1',
+    threadId: 'thread-1',
+    wireProtocol: 'responses-lite',
+    body: JSON.stringify({
+      model: 'gpt-test',
+      input: [{ type: 'compaction', encrypted_content: 'opaque' }],
+      instructions: 'Preserve decisions.',
+      tools: [],
+      parallel_tool_calls: false,
+      reasoning: { effort: 'medium', context: 'all_turns' },
       text: { verbosity: 'low' },
     }),
   });
@@ -237,6 +259,58 @@ describe('experimental Codex extension model transport', () => {
         }),
       }),
     );
+  });
+
+  it('uses the isolated compact endpoint and a bounded JSON response stream', async () => {
+    const encoder = new TextEncoder();
+    const fetchRequest = vi.fn<CodexModelFetch>(() =>
+      Promise.resolve({
+        status: 200,
+        body: new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(
+              encoder.encode(
+                '{"output":[{"type":"compaction","encrypted_content":"replacement"}]}',
+              ),
+            );
+            controller.close();
+          },
+        }),
+      }),
+    );
+    const externalPort = port();
+    createCodexModelPortListener({
+      providerId: 'openai/codex-experimental',
+      tokenService: tokenService(),
+      accountRoutingStore: routingStore(),
+      fetchRequest,
+      authorizer: { assertAuthorized: vi.fn() },
+    })(externalPort.value);
+
+    externalPort.send(compactRequest());
+    await vi.waitFor(() =>
+      expect(externalPort.messages).toContainEqual({
+        type: 'end',
+        requestId: 'request-compact',
+      }),
+    );
+    expect(fetchRequest).toHaveBeenCalledWith(
+      CODEX_RESPONSES_COMPACT_ENDPOINT,
+      expect.objectContaining({
+        headers: expect.objectContaining({ Accept: 'application/json' }),
+      }),
+    );
+    const sentBody = JSON.parse(vi.mocked(fetchRequest).mock.calls[0]?.[1].body ?? '{}') as Record<
+      string,
+      unknown
+    >;
+    expect(sentBody).toMatchObject({ prompt_cache_key: 'session-1' });
+    expect(sentBody).not.toHaveProperty('client_metadata');
+    expect(externalPort.messages).toContainEqual({
+      type: 'chunk',
+      requestId: 'request-compact',
+      chunk: '{"output":[{"type":"compaction","encrypted_content":"replacement"}]}',
+    });
   });
 
   it('reports only sanitized provider metadata and Retry-After for rejected HTTP responses', async () => {

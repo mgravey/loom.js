@@ -35,6 +35,8 @@ packages/*/*.zip
 openai-response-dumps/
 # Raw provider-error captures are local security-debugging artifacts, never fixtures.
 provider-error-dumps/
+# Raw compact endpoint payloads can contain conversation context and must remain local.
+context-compaction-dumps/
 .DS_Store
 .env
 .env.*

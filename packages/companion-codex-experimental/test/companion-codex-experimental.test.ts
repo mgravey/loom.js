@@ -141,6 +141,44 @@ describe('experimental Loom.js Companion client', () => {
     expect(response.status).toBe(200);
   });
 
+  it('routes compaction as an explicit credential-free operation', async () => {
+    const harness = createPortHarness();
+    const runtime = {
+      connect: () => harness.port,
+      sendMessage: vi.fn(),
+    } as unknown as CodexCompanionRuntime;
+    const transport = createCodexExtensionTransport({
+      runtime,
+      sessionId: 'session-compact',
+      requestIdFactory: () => 'request-compact',
+    });
+
+    const responsePromise = transport.send({
+      body: '{"model":"gpt-5.6-sol","input":[],"instructions":""}',
+      operation: 'compact',
+      wireProtocol: 'responses-lite',
+    });
+    expect(harness.posted).toContainEqual(
+      expect.objectContaining({
+        type: 'compact',
+        requestId: 'request-compact',
+        sessionId: 'session-compact',
+      }),
+    );
+    harness.message({ type: 'start', requestId: 'request-compact', status: 200 });
+    const response = await responsePromise;
+    harness.message({
+      type: 'chunk',
+      requestId: 'request-compact',
+      chunk: '{"output":[{"type":"compaction","encrypted_content":"opaque"}]}',
+    });
+    harness.message({ type: 'end', requestId: 'request-compact' });
+
+    await expect(collect(response.body)).resolves.toEqual([
+      '{"output":[{"type":"compaction","encrypted_content":"opaque"}]}',
+    ]);
+  });
+
   it('maps extension failures to sanitized transport errors', async () => {
     const harness = createPortHarness();
     const runtime = {

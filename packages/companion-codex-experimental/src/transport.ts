@@ -135,10 +135,12 @@ function sendThroughPort(
 ): Promise<CodexResponsesHttpResponse> {
   request.signal?.throwIfCancelled();
   const wireProtocol: unknown = request.wireProtocol;
+  const operation: unknown = request.operation ?? 'generate';
   if (
     typeof request.body !== 'string' ||
     request.body.trim() === '' ||
     request.body.length > MAXIMUM_REQUEST_BODY_LENGTH ||
+    (operation !== 'generate' && operation !== 'compact') ||
     (wireProtocol !== 'classic' && wireProtocol !== 'responses-lite')
   ) {
     throw new CodexCompanionError(
@@ -360,7 +362,7 @@ function sendThroughPort(
         Object.freeze({
           protocol: CODEX_MODEL_TRANSPORT_PROTOCOL,
           version: CODEX_MODEL_TRANSPORT_VERSION,
-          type: 'generate',
+          type: operation,
           requestId,
           sessionId,
           threadId,
@@ -412,6 +414,7 @@ export function createCodexExtensionFetch(
   return (request) =>
     transport.send({
       body: request.body,
+      operation: request.operation ?? (request.url.endsWith('/compact') ? 'compact' : 'generate'),
       wireProtocol:
         request.headers['x-openai-internal-codex-responses-lite'] === 'true'
           ? 'responses-lite'

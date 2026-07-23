@@ -17,6 +17,7 @@ import type {
   CodexAgentEvent,
   CodexAssistantMessage,
   CodexAssistantToolCall,
+  CodexContextCompactableModel,
   CodexModel,
   CodexModelMessage,
   CodexModelRequest,
@@ -31,6 +32,8 @@ export const DEFAULT_CODEX_INSTRUCTIONS =
 
 export interface CodexAgentRequest {
   readonly prompt: string;
+  /** Opaque model-native context produced by a compatible context compactor. */
+  readonly contextItems?: readonly JsonObject[];
 }
 
 export interface CodexAgentConfiguration {
@@ -368,12 +371,103 @@ function validateDependencies(dependencies: CodexAgentDependencies): {
   });
 }
 
-function validateRequest(request: CodexAgentRequest): string {
+function validateRequest(request: CodexAgentRequest): {
+  readonly prompt: string;
+  readonly contextItems: readonly JsonObject[];
+} {
   if (!isRecord(request) || typeof request.prompt !== 'string' || request.prompt.trim() === '') {
     throw new CodexAgentError('INVALID_REQUEST', 'Codex agent request prompt must be non-empty.');
   }
-  exactKeys(request, ['prompt'], 'INVALID_REQUEST', 'Codex agent request');
-  return request.prompt;
+  exactKeys(request, ['prompt', 'contextItems'], 'INVALID_REQUEST', 'Codex agent request');
+  const contextItems: JsonObject[] = [];
+  if (request.contextItems !== undefined) {
+    if (!Array.isArray(request.contextItems) || request.contextItems.length > 2_000) {
+      throw new CodexAgentError(
+        'INVALID_REQUEST',
+        'Codex agent context must contain at most 2,000 items.',
+      );
+    }
+    for (const candidate of request.contextItems) {
+      let item: JsonValue;
+      try {
+        item = immutableJson(candidate);
+      } catch (error) {
+        throw new CodexAgentError('INVALID_REQUEST', 'Codex agent context items must be JSON.', {
+          cause: error,
+        });
+      }
+      if (!isRecord(item)) {
+        throw new CodexAgentError('INVALID_REQUEST', 'Codex agent context items must be objects.');
+      }
+      contextItems.push(item);
+    }
+  }
+  return Object.freeze({ prompt: request.prompt, contextItems: Object.freeze(contextItems) });
+}
+
+function compactableModel(model: CodexModel): CodexContextCompactableModel | undefined {
+  const candidate = model as CodexModel & { readonly compact?: unknown };
+  return typeof candidate.compact === 'function'
+    ? (candidate as CodexContextCompactableModel)
+    : undefined;
+}
+
+function requiresContextCompaction(error: unknown): boolean {
+  let candidate = error;
+  const visited = new Set<unknown>();
+  while (
+    (typeof candidate === 'object' || typeof candidate === 'function') &&
+    candidate !== null &&
+    !visited.has(candidate)
+  ) {
+    visited.add(candidate);
+    const record = candidate as {
+      readonly contextCompactionRequired?: unknown;
+      readonly cause?: unknown;
+    };
+    if (record.contextCompactionRequired === true) return true;
+    candidate = record.cause;
+  }
+  return false;
+}
+
+function validatedCompactedContext(value: unknown): readonly JsonObject[] {
+  if (!Array.isArray(value) || value.length === 0 || value.length > 2_000) {
+    throw new CodexAgentError(
+      'MODEL_FAILURE',
+      'Model context compaction returned an invalid item list.',
+    );
+  }
+  const items = value.map((candidate) => {
+    let item: JsonValue;
+    try {
+      item = immutableJson(candidate);
+    } catch (error) {
+      throw new CodexAgentError(
+        'MODEL_FAILURE',
+        'Model context compaction returned invalid JSON.',
+        {
+          cause: error,
+        },
+      );
+    }
+    if (!isRecord(item)) {
+      throw new CodexAgentError('MODEL_FAILURE', 'Model context compaction items must be objects.');
+    }
+    return item;
+  });
+  return Object.freeze(items);
+}
+
+function encodedCharacters(value: unknown): number {
+  try {
+    const encoded = JSON.stringify(value);
+    return encoded.length;
+  } catch (error) {
+    throw new CodexAgentError('MODEL_FAILURE', 'Model context could not be serialized.', {
+      cause: error,
+    });
+  }
 }
 
 function normalizedToolCall(
@@ -554,9 +648,11 @@ function modelRequest(
   messages: readonly CodexModelMessage[],
   instructions: string,
   tools: CodexToolSet,
+  contextItems: readonly JsonObject[],
 ): CodexModelRequest {
   return Object.freeze({
     instructions,
+    ...(contextItems.length === 0 ? {} : { contextItems }),
     messages: Object.freeze([...messages]),
     tools: Object.freeze([...tools.values()].map(({ definition }) => definition)),
   });
@@ -568,9 +664,11 @@ function createAgent(bindings: ReturnType<typeof validateDependencies>): CodexAg
       request: CodexAgentRequest,
       context?: OperationContext,
     ): AsyncIterable<CodexAgentEvent> {
-      const prompt = validateRequest(request);
+      const { prompt, contextItems } = validateRequest(request);
       const history: CodexModelMessage[] = [Object.freeze({ role: 'user', content: prompt })];
       const seenCallIds = new Set<string>();
+      let activeContextItems = contextItems;
+      const compactor = compactableModel(bindings.model);
 
       for (let turn = 1; turn <= bindings.maxTurns; turn += 1) {
         context?.signal?.throwIfCancelled();
@@ -579,45 +677,104 @@ function createAgent(bindings: ReturnType<typeof validateDependencies>): CodexAg
         let text = '';
         const calls: CodexAssistantToolCall[] = [];
         const continuationItems: JsonObject[] = [];
-        try {
-          const stream = bindings.model.generate(
-            modelRequest(history, bindings.instructions, bindings.tools),
-            context,
-          );
-          for await (const rawEvent of stream as AsyncIterable<unknown>) {
+        let compactedThisTurn = false;
+        for (;;) {
+          try {
+            const requestBeforeCompaction = modelRequest(
+              history,
+              bindings.instructions,
+              bindings.tools,
+              activeContextItems,
+            );
+            const stream = bindings.model.generate(requestBeforeCompaction, context);
+            for await (const rawEvent of stream as AsyncIterable<unknown>) {
+              context?.signal?.throwIfCancelled();
+              const event = normalizedModelEvent(rawEvent, bindings.tools);
+              if (event.type === 'completed') {
+                completed = true;
+                final = event.final;
+                break;
+              }
+              if (event.type === 'text') {
+                text += event.text;
+                yield Object.freeze({ type: 'text', text: event.text });
+                continue;
+              }
+              if (event.type === 'continuation') {
+                continuationItems.push(event.item);
+                continue;
+              }
+              if (seenCallIds.has(event.call.id)) {
+                throw new CodexAgentError(
+                  'MALFORMED_TOOL_CALL',
+                  `Model reused tool call id '${event.call.id}'.`,
+                  { details: { callId: event.call.id } },
+                );
+              }
+              seenCallIds.add(event.call.id);
+              calls.push(event.call);
+            }
+            break;
+          } catch (error) {
             context?.signal?.throwIfCancelled();
-            const event = normalizedModelEvent(rawEvent, bindings.tools);
-            if (event.type === 'completed') {
-              completed = true;
-              final = event.final;
-              break;
-            }
-            if (event.type === 'text') {
-              text += event.text;
-              yield Object.freeze({ type: 'text', text: event.text });
-              continue;
-            }
-            if (event.type === 'continuation') {
-              continuationItems.push(event.item);
-              continue;
-            }
-            if (seenCallIds.has(event.call.id)) {
-              throw new CodexAgentError(
-                'MALFORMED_TOOL_CALL',
-                `Model reused tool call id '${event.call.id}'.`,
-                { details: { callId: event.call.id } },
+            const canCompact =
+              !compactedThisTurn &&
+              compactor !== undefined &&
+              requiresContextCompaction(error) &&
+              text === '' &&
+              calls.length === 0 &&
+              continuationItems.length === 0;
+            if (canCompact) {
+              const compactionRequest = modelRequest(
+                history,
+                bindings.instructions,
+                bindings.tools,
+                activeContextItems,
               );
+              try {
+                const compacted = await compactor.compact(compactionRequest, context);
+                context?.signal?.throwIfCancelled();
+                const nextContextItems = validatedCompactedContext(compacted.items);
+                const inputCharacters = encodedCharacters(compactionRequest);
+                const outputCharacters = encodedCharacters(nextContextItems);
+                activeContextItems = nextContextItems;
+                history.splice(0);
+                compactedThisTurn = true;
+                yield Object.freeze({
+                  type: 'context-compacted',
+                  items: activeContextItems,
+                  inputCharacters,
+                  outputCharacters,
+                });
+                continue;
+              } catch (compactionError) {
+                context?.signal?.throwIfCancelled();
+                if (compactionError instanceof CodexAgentError) throw compactionError;
+                throw new CodexAgentError(
+                  'MODEL_FAILURE',
+                  `Model context compaction failed during turn ${String(turn)}.`,
+                  {
+                    cause: compactionError,
+                    details: { turn, contextCompactionRequired: true },
+                    contextCompactionRequired: true,
+                  },
+                );
+              }
             }
-            seenCallIds.add(event.call.id);
-            calls.push(event.call);
+            if (error instanceof CodexAgentError) throw error;
+            throw new CodexAgentError(
+              'MODEL_FAILURE',
+              `Model failed during turn ${String(turn)}.`,
+              {
+                cause: error,
+                details: {
+                  turn,
+                  ...(requiresContextCompaction(error) ? { contextCompactionRequired: true } : {}),
+                },
+                ...(requiresContextCompaction(error) ? { contextCompactionRequired: true } : {}),
+              },
+            );
           }
-        } catch (error) {
-          context?.signal?.throwIfCancelled();
-          if (error instanceof CodexAgentError) throw error;
-          throw new CodexAgentError('MODEL_FAILURE', `Model failed during turn ${String(turn)}.`, {
-            cause: error,
-            details: { turn },
-          });
         }
 
         if (!completed) {

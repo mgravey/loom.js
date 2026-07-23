@@ -1,16 +1,17 @@
 import type {
-  CodexModel,
   CodexModelEvent,
   CodexModelMessage,
   CodexModelRequest,
 } from '@mgravey/loom-agent-codex';
 import type { OperationContext } from '@mgravey/loom-plugin-api';
-import type { JsonObject, JsonValue } from '@mgravey/loom-types';
+import { immutableJson, type JsonObject, type JsonValue } from '@mgravey/loom-types';
 
 import type {
   AccessTokenSupplier,
   AccountIdSupplier,
   CodexExperimentalDirectFetchOptions,
+  CodexExperimentalModel,
+  CodexContextCompactionResult,
   CreateCodexExperimentalModelOptions,
   CodexResponsesFetch,
   CodexResponsesHttpRequest,
@@ -23,12 +24,15 @@ import type {
 import { CodexExperimentalModelError, type CodexProviderFailureDetails } from './errors.js';
 import {
   boundedCodexProviderString,
+  isCodexContextCompactionRequired,
   isRetryableProviderFailure,
   sanitizeCodexProviderMessage,
   validCodexRetryAfterMs,
 } from './provider-failure.js';
 
 const DEFAULT_ORIGINATOR = 'loom_js_experimental';
+const MAXIMUM_COMPACTION_ITEMS = 2_000;
+const MAXIMUM_COMPACTION_RESPONSE_CHARACTERS = 4 * 1024 * 1024;
 
 interface ValidatedBrokeredOptions {
   readonly kind: 'brokered';
@@ -40,6 +44,7 @@ interface ValidatedBrokeredOptions {
 interface ValidatedDirectOptions {
   readonly kind: 'direct';
   readonly endpoint: string;
+  readonly compactEndpoint: string;
   readonly model: string;
   readonly wireProtocol: CodexResponsesWireProtocol;
   readonly getAccessToken: AccessTokenSupplier;
@@ -164,6 +169,10 @@ function validateOptions(options: CreateCodexExperimentalModelOptions): Validate
   return Object.freeze({
     kind: 'direct',
     endpoint: requiredString(direct.endpoint, 'endpoint'),
+    compactEndpoint: requiredString(
+      direct.compactEndpoint ?? `${direct.endpoint.replace(/\/+$/u, '')}/compact`,
+      'compact endpoint',
+    ),
     model,
     wireProtocol,
     getAccessToken,
@@ -236,6 +245,9 @@ function encodeMessage(
       },
     ];
   }
+  if (message.continuationItems !== undefined && message.continuationItems.length > 0) {
+    return message.continuationItems;
+  }
   const items: JsonValue[] = [];
   if (message.content !== '') {
     items.push({
@@ -253,6 +265,39 @@ function encodeMessage(
     });
   }
   return items;
+}
+
+function validatedContextItems(request: CodexModelRequest): readonly JsonObject[] {
+  if (request.contextItems === undefined) return Object.freeze([]);
+  if (
+    !Array.isArray(request.contextItems) ||
+    request.contextItems.length > MAXIMUM_COMPACTION_ITEMS
+  ) {
+    throw new CodexExperimentalModelError(
+      'INVALID_REQUEST',
+      `Experimental Codex context must contain at most ${String(MAXIMUM_COMPACTION_ITEMS)} items.`,
+    );
+  }
+  return Object.freeze(
+    request.contextItems.map((candidate) => {
+      let value: JsonValue;
+      try {
+        value = immutableJson(candidate);
+      } catch {
+        throw new CodexExperimentalModelError(
+          'INVALID_REQUEST',
+          'Experimental Codex context items must be JSON objects.',
+        );
+      }
+      if (!isRecord(value)) {
+        throw new CodexExperimentalModelError(
+          'INVALID_REQUEST',
+          'Experimental Codex context items must be JSON objects.',
+        );
+      }
+      return value;
+    }),
+  );
 }
 
 export function createCodexResponsesRequestBody(
@@ -280,7 +325,10 @@ export function createCodexResponsesRequestBody(
     parameters: tool.inputSchema,
     strict: false,
   }));
-  const input = request.messages.flatMap((message) => encodeMessage(message, aliases));
+  const input = [
+    ...validatedContextItems(request),
+    ...request.messages.flatMap((message) => encodeMessage(message, aliases)),
+  ];
   const common = {
     model,
     tool_choice: 'auto',
@@ -309,6 +357,48 @@ export function createCodexResponsesRequestBody(
     };
   }
   return { ...common, instructions: request.instructions, input, tools };
+}
+
+export function createCodexCompactionRequestBody(
+  request: CodexModelRequest,
+  model: string,
+  wireProtocol: CodexResponsesWireProtocol = 'classic',
+): JsonObject {
+  const candidate: unknown = request;
+  if (
+    !isRecord(candidate) ||
+    typeof candidate.instructions !== 'string' ||
+    !Array.isArray(candidate.messages) ||
+    !Array.isArray(candidate.tools)
+  ) {
+    throw new CodexExperimentalModelError(
+      'INVALID_REQUEST',
+      'Experimental Codex model received an invalid compaction request.',
+    );
+  }
+  const aliases = operationAliases(request);
+  const tools = request.tools.map((tool) => ({
+    type: 'function',
+    name: providerOperation(aliases, tool.operation),
+    description: tool.description,
+    parameters: tool.inputSchema,
+    strict: false,
+  }));
+  return {
+    model,
+    input: [
+      ...validatedContextItems(request),
+      ...request.messages.flatMap((message) => encodeMessage(message, aliases)),
+    ],
+    instructions: request.instructions,
+    tools,
+    parallel_tool_calls: wireProtocol !== 'responses-lite',
+    reasoning:
+      wireProtocol === 'responses-lite'
+        ? { effort: 'medium', context: 'all_turns' }
+        : { effort: 'medium' },
+    text: { verbosity: 'low' },
+  };
 }
 
 async function accessToken(options: ValidatedDirectOptions): Promise<string> {
@@ -469,6 +559,25 @@ function updateCall(call: PendingCall, item: Readonly<Record<string, unknown>>):
   if (typeof item.arguments === 'string') call.arguments = item.arguments;
 }
 
+function continuationItem(item: Readonly<Record<string, unknown>>): JsonObject {
+  let value: JsonValue;
+  try {
+    value = immutableJson(item);
+  } catch {
+    throw new CodexExperimentalModelError(
+      'MALFORMED_RESPONSE',
+      'Experimental Codex continuation item must be JSON.',
+    );
+  }
+  if (!isRecord(value)) {
+    throw new CodexExperimentalModelError(
+      'MALFORMED_RESPONSE',
+      'Experimental Codex continuation item must be an object.',
+    );
+  }
+  return value;
+}
+
 function emitCall(
   call: PendingCall,
   providerOperations: ReadonlyMap<string, string>,
@@ -529,6 +638,7 @@ function providerFailure(
         : { providerMessage: sanitizeCodexProviderMessage(details.providerMessage) }),
       ...(incompleteReason === undefined ? {} : { incompleteReason }),
       retryable: isRetryableProviderFailure(status, providerCode),
+      contextCompactionRequired: isCodexContextCompactionRequired(providerCode),
       ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
     },
   );
@@ -630,8 +740,13 @@ async function* decodeEvents(
       if (key === undefined) throw providerFailure();
       const call = calls.get(key) ?? { key, arguments: '', emitted: false };
       updateCall(call, item);
+      yield { type: 'continuation', item: continuationItem(item) };
       if (!call.emitted) yield emitCall(call, providerOperations);
       calls.set(key, call);
+      continue;
+    }
+    if (type === 'response.output_item.done' && item !== undefined) {
+      yield { type: 'continuation', item: continuationItem(item) };
       continue;
     }
     if (type === 'response.completed') {
@@ -682,15 +797,131 @@ function httpFailureDetails(
     ...(providerCode === undefined ? {} : { providerCode }),
     ...(providerMessage === undefined ? {} : { providerMessage }),
     retryable: isRetryableProviderFailure(response.status, providerCode),
+    contextCompactionRequired: isCodexContextCompactionRequired(providerCode),
     ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
   };
 }
 
+async function decodeCompactionResponse(
+  body: AsyncIterable<string>,
+  context?: OperationContext,
+): Promise<CodexContextCompactionResult> {
+  let encoded = '';
+  for await (const chunk of body) {
+    context?.signal?.throwIfCancelled();
+    if (typeof chunk !== 'string') {
+      throw new CodexExperimentalModelError(
+        'MALFORMED_RESPONSE',
+        'Experimental Codex compaction returned a non-text body chunk.',
+      );
+    }
+    encoded += chunk;
+    if (encoded.length > MAXIMUM_COMPACTION_RESPONSE_CHARACTERS) {
+      throw new CodexExperimentalModelError(
+        'MALFORMED_RESPONSE',
+        'Experimental Codex compaction response exceeded the 4 MiB limit.',
+      );
+    }
+  }
+  let value: unknown;
+  try {
+    value = JSON.parse(encoded);
+  } catch {
+    throw new CodexExperimentalModelError(
+      'MALFORMED_RESPONSE',
+      'Experimental Codex compaction returned invalid JSON.',
+    );
+  }
+  if (
+    !isRecord(value) ||
+    !Array.isArray(value.output) ||
+    value.output.length === 0 ||
+    value.output.length > MAXIMUM_COMPACTION_ITEMS
+  ) {
+    throw new CodexExperimentalModelError(
+      'MALFORMED_RESPONSE',
+      'Experimental Codex compaction returned an invalid item list.',
+    );
+  }
+  const items = value.output.map((candidate) => {
+    let item: JsonValue;
+    try {
+      item = immutableJson(candidate);
+    } catch {
+      throw new CodexExperimentalModelError(
+        'MALFORMED_RESPONSE',
+        'Experimental Codex compaction returned a non-JSON item.',
+      );
+    }
+    if (!isRecord(item)) {
+      throw new CodexExperimentalModelError(
+        'MALFORMED_RESPONSE',
+        'Experimental Codex compaction items must be objects.',
+      );
+    }
+    return item;
+  });
+  return Object.freeze({ items: Object.freeze(items) });
+}
+
 export function createCodexExperimentalModel(
   options: CreateCodexExperimentalModelOptions,
-): CodexModel {
+): CodexExperimentalModel {
   const validated = validateOptions(options);
+  const compact = async (
+    request: CodexModelRequest,
+    context?: OperationContext,
+  ): Promise<CodexContextCompactionResult> => {
+    context?.signal?.throwIfCancelled();
+    const body = JSON.stringify(
+      createCodexCompactionRequestBody(request, validated.model, validated.wireProtocol),
+    );
+    let response: CodexResponsesHttpResponse;
+    if (validated.kind === 'brokered') {
+      const brokeredRequest: CodexResponsesRequest = {
+        body,
+        operation: 'compact',
+        wireProtocol: validated.wireProtocol,
+        ...(context?.signal === undefined ? {} : { signal: context.signal }),
+      };
+      response = await sendRequest(validated.send, Object.freeze(brokeredRequest), context?.signal);
+    } else {
+      const token = await accessToken(validated);
+      context?.signal?.throwIfCancelled();
+      const selectedAccountId = await accountId(validated);
+      context?.signal?.throwIfCancelled();
+      const headers: Record<string, string> = {
+        ...validated.headers,
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        originator: validated.originator,
+      };
+      if (validated.wireProtocol === 'responses-lite') {
+        headers['x-openai-internal-codex-responses-lite'] = 'true';
+      }
+      if (selectedAccountId !== undefined) headers['ChatGPT-Account-ID'] = selectedAccountId;
+      const httpRequest: CodexResponsesHttpRequest = {
+        method: 'POST',
+        url: validated.compactEndpoint,
+        operation: 'compact',
+        headers: Object.freeze(headers),
+        body,
+        ...(context?.signal === undefined ? {} : { signal: context.signal }),
+      };
+      response = await sendRequest(validated.send, Object.freeze(httpRequest), context?.signal);
+    }
+    if (!Number.isInteger(response.status) || response.status < 200 || response.status >= 300) {
+      throw new CodexExperimentalModelError(
+        'HTTP_ERROR',
+        'Experimental Codex compaction request was rejected.',
+        httpFailureDetails(response),
+      );
+    }
+    return decodeCompactionResponse(response.body, context);
+  };
   return Object.freeze({
+    compact,
     async *generate(request: CodexModelRequest, context?: OperationContext) {
       context?.signal?.throwIfCancelled();
       const aliases = operationAliases(request);
@@ -700,6 +931,7 @@ export function createCodexExperimentalModel(
       if (validated.kind === 'brokered') {
         const brokeredRequest: CodexResponsesRequest = {
           body,
+          operation: 'generate',
           wireProtocol: validated.wireProtocol,
           ...(context?.signal === undefined ? {} : { signal: context.signal }),
         };
@@ -736,6 +968,7 @@ export function createCodexExperimentalModel(
       const httpRequest: CodexResponsesHttpRequest = {
         method: 'POST',
         url: validated.endpoint,
+        operation: 'generate',
         headers: Object.freeze(headers),
         body,
         ...(context?.signal === undefined ? {} : { signal: context.signal }),

@@ -1,10 +1,12 @@
 import {
   CODEX_AGENT_FACTORY,
+  DEFAULT_CODEX_INSTRUCTIONS,
   type CodexAgentConfiguration,
   type CodexAgentEvent,
   type CodexAgentTool,
   type CodexAgent,
   type CodexModel,
+  type CodexModelRequest,
 } from '@mgravey/loom-agent-codex';
 import type { ExecutionRuntime, OperationContext } from '@mgravey/loom-plugin-api';
 import {
@@ -40,6 +42,20 @@ export interface CodingSessionTranscriptEvent {
   readonly entry: CodingTranscriptEntry;
 }
 
+export interface CodingContextCheckpoint {
+  /** Opaque model-native context. Persist and replay it without inspecting its content. */
+  readonly items: readonly JsonObject[];
+  /** Number of leading transcript entries represented by `items`. */
+  readonly coveredTranscriptEntries: number;
+}
+
+export interface CodingSessionContextCompactedEvent {
+  readonly type: 'context-compacted';
+  readonly checkpoint: CodingContextCheckpoint;
+  readonly inputCharacters: number;
+  readonly outputCharacters: number;
+}
+
 export interface CodingSessionErrorEvent {
   readonly type: 'error';
   readonly error: unknown;
@@ -49,6 +65,7 @@ export type CodingSessionEvent =
   | CodingSessionStateEvent
   | CodingSessionAgentEvent
   | CodingSessionTranscriptEvent
+  | CodingSessionContextCompactedEvent
   | CodingSessionErrorEvent;
 
 export interface CodingExecutionRequest {
@@ -64,6 +81,12 @@ export interface CreateCodingSessionOptions {
   readonly id?: SessionId;
   /** Optional prior user/assistant messages used to resume a persisted conversation. */
   readonly transcript?: readonly CodingTranscriptEntry[];
+  /** Optional provider-native checkpoint covering a leading portion of `transcript`. */
+  readonly contextCheckpoint?: CodingContextCheckpoint;
+  /** Opt in to provider-native compaction before the projected context reaches this size. */
+  readonly contextCompaction?: {
+    readonly maximumCharacters: number;
+  };
   readonly runtimes?: Readonly<Record<string, ExecutionRuntime<JsonValue, unknown>>>;
 }
 
@@ -71,12 +94,20 @@ export interface CodingSession {
   readonly id: SessionId;
   readonly state: CodingSessionState;
   readonly transcript: readonly CodingTranscriptEntry[];
+  readonly contextCheckpoint: CodingContextCheckpoint | undefined;
   submit(prompt: string): AsyncIterable<CodexAgentEvent>;
   followUp(prompt: string): AsyncIterable<CodexAgentEvent>;
   execute(request: CodingExecutionRequest): AsyncIterable<unknown>;
   cancel(reason?: unknown): void;
   subscribe(listener: (event: CodingSessionEvent) => void): () => void;
   dispose(): Promise<void>;
+}
+
+interface CompactableCodexModel extends CodexModel {
+  compact(
+    request: CodexModelRequest,
+    context?: OperationContext,
+  ): Promise<{ readonly items: readonly JsonObject[] }>;
 }
 
 function configuration(value: CodexAgentConfiguration | undefined): DeepReadonly<JsonObject> {
@@ -122,6 +153,87 @@ function initialTranscript(
   });
 }
 
+function contextCheckpoint(
+  value: CodingContextCheckpoint | undefined,
+  transcriptLength: number,
+): CodingContextCheckpoint | undefined {
+  if (value === undefined) return undefined;
+  const candidate: unknown = value;
+  if (
+    typeof candidate !== 'object' ||
+    candidate === null ||
+    !('items' in candidate) ||
+    !Array.isArray(candidate.items) ||
+    candidate.items.length === 0 ||
+    candidate.items.length > 2_000 ||
+    !('coveredTranscriptEntries' in candidate) ||
+    typeof candidate.coveredTranscriptEntries !== 'number' ||
+    !Number.isInteger(candidate.coveredTranscriptEntries) ||
+    candidate.coveredTranscriptEntries < 0 ||
+    candidate.coveredTranscriptEntries > transcriptLength
+  ) {
+    throw new TypeError('Coding context checkpoint is invalid for this transcript.');
+  }
+  const items = (candidate.items as readonly unknown[]).map((item) => {
+    const normalized = immutableJson(item);
+    if (typeof normalized !== 'object' || normalized === null || Array.isArray(normalized)) {
+      throw new TypeError('Coding context checkpoint items must be JSON objects.');
+    }
+    return normalized as JsonObject;
+  });
+  return Object.freeze({
+    items: Object.freeze(items),
+    coveredTranscriptEntries: candidate.coveredTranscriptEntries,
+  });
+}
+
+function maximumContextCharacters(
+  value: CreateCodingSessionOptions['contextCompaction'],
+): number | undefined {
+  if (value === undefined) return undefined;
+  if (
+    typeof value !== 'object' ||
+    !Number.isInteger(value.maximumCharacters) ||
+    value.maximumCharacters <= 0 ||
+    value.maximumCharacters > 16 * 1024 * 1024
+  ) {
+    throw new TypeError(
+      'Coding context compaction maximumCharacters must be an integer from 1 through 16 MiB.',
+    );
+  }
+  return value.maximumCharacters;
+}
+
+function compactableModel(model: CodexModel): CompactableCodexModel | undefined {
+  const candidate = model as CodexModel & { readonly compact?: unknown };
+  return typeof candidate.compact === 'function' ? (candidate as CompactableCodexModel) : undefined;
+}
+
+function encodedCharacters(value: unknown): number {
+  try {
+    const encoded = JSON.stringify(value);
+    return encoded.length;
+  } catch {
+    throw new TypeError('Coding context must be JSON serializable.');
+  }
+}
+
+function transcriptMessages(
+  entries: readonly CodingTranscriptEntry[],
+): CodexModelRequest['messages'] {
+  return Object.freeze(
+    entries.map((entry) =>
+      entry.role === 'user'
+        ? Object.freeze({ role: 'user' as const, content: entry.content })
+        : Object.freeze({
+            role: 'assistant' as const,
+            content: entry.content,
+            toolCalls: Object.freeze([]),
+          }),
+    ),
+  );
+}
+
 let nextCodingSession = 0;
 
 export function createCodingSession(options: CreateCodingSessionOptions): CodingSession {
@@ -131,6 +243,14 @@ export function createCodingSession(options: CreateCodingSessionOptions): Coding
   }
   const listeners = new Set<(event: CodingSessionEvent) => void>();
   const entries = initialTranscript(options.transcript);
+  let checkpoint = contextCheckpoint(options.contextCheckpoint, entries.length);
+  let coveredTranscriptEntries = checkpoint?.coveredTranscriptEntries ?? 0;
+  let contextItems = checkpoint?.items ?? Object.freeze([]);
+  const compactionThreshold = maximumContextCharacters(options.contextCompaction);
+  const compactor = compactableModel(options.model);
+  if (compactionThreshold !== undefined && compactor === undefined) {
+    throw new TypeError('Coding context compaction requires a model with compact().');
+  }
   const runtimes = Object.freeze({ ...(options.runtimes ?? {}) });
   nextCodingSession += 1;
   const id = options.id ?? sessionId(`coding-${String(nextCodingSession)}`);
@@ -159,20 +279,90 @@ export function createCodingSession(options: CreateCodingSessionOptions): Coding
     if (typeof prompt !== 'string' || prompt.trim() === '') {
       throw new TypeError('Coding prompt must be non-empty.');
     }
-    const requestPrompt = contextualPrompt(entries, prompt);
-    const userEntry = Object.freeze({ role: 'user' as const, content: prompt });
-    entries.push(userEntry);
-    emit(Object.freeze({ type: 'transcript', entry: userEntry }));
     const cancellation = createCancellationSource();
     active = cancellation;
     setState('running');
     let response = '';
     try {
+      const pendingEntries = entries.slice(coveredTranscriptEntries);
+      const inputCharacters = encodedCharacters({
+        contextItems,
+        messages: transcriptMessages(pendingEntries),
+        prompt,
+      });
+      if (
+        compactionThreshold !== undefined &&
+        compactor !== undefined &&
+        inputCharacters >= compactionThreshold &&
+        (contextItems.length > 0 || pendingEntries.length > 0)
+      ) {
+        const result = await compactor.compact(
+          {
+            instructions: options.configuration?.instructions ?? DEFAULT_CODEX_INSTRUCTIONS,
+            ...(contextItems.length === 0 ? {} : { contextItems }),
+            messages: transcriptMessages(pendingEntries),
+            tools: Object.freeze([]),
+          },
+          { sessionId: id, signal: cancellation.signal },
+        );
+        cancellation.signal.throwIfCancelled();
+        const nextCheckpoint = contextCheckpoint(
+          {
+            items: result.items,
+            coveredTranscriptEntries: entries.length,
+          },
+          entries.length,
+        );
+        if (nextCheckpoint === undefined) {
+          throw new TypeError('Coding context compactor returned no checkpoint.');
+        }
+        checkpoint = nextCheckpoint;
+        contextItems = checkpoint.items;
+        coveredTranscriptEntries = checkpoint.coveredTranscriptEntries;
+        emit(
+          Object.freeze({
+            type: 'context-compacted',
+            checkpoint,
+            inputCharacters,
+            outputCharacters: encodedCharacters(contextItems),
+          }),
+        );
+      }
+      const requestPrompt = contextualPrompt(entries.slice(coveredTranscriptEntries), prompt);
+      const userEntry = Object.freeze({ role: 'user' as const, content: prompt });
+      entries.push(userEntry);
+      emit(Object.freeze({ type: 'transcript', entry: userEntry }));
       for await (const event of agent.run(
-        { prompt: requestPrompt },
+        {
+          prompt: requestPrompt,
+          ...(contextItems.length === 0 ? {} : { contextItems }),
+        },
         { sessionId: id, signal: cancellation.signal },
       )) {
         if (event.type === 'text') response += event.text;
+        if (event.type === 'context-compacted') {
+          const nextCheckpoint = contextCheckpoint(
+            {
+              items: event.items,
+              coveredTranscriptEntries: entries.length,
+            },
+            entries.length,
+          );
+          if (nextCheckpoint === undefined) {
+            throw new TypeError('Coding agent returned no context checkpoint.');
+          }
+          checkpoint = nextCheckpoint;
+          contextItems = checkpoint.items;
+          coveredTranscriptEntries = checkpoint.coveredTranscriptEntries;
+          emit(
+            Object.freeze({
+              type: 'context-compacted',
+              checkpoint,
+              inputCharacters: event.inputCharacters,
+              outputCharacters: event.outputCharacters,
+            }),
+          );
+        }
         emit(Object.freeze({ type: 'agent', event }));
         yield event;
       }
@@ -214,6 +404,9 @@ export function createCodingSession(options: CreateCodingSessionOptions): Coding
     },
     get transcript() {
       return Object.freeze([...entries]);
+    },
+    get contextCheckpoint() {
+      return checkpoint;
     },
     submit,
     followUp: submit,

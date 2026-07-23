@@ -25,6 +25,12 @@ const RETRYABLE_PROVIDER_CODES = new Set([
   'service_unavailable',
 ]);
 
+const CONTEXT_COMPACTION_PROVIDER_CODES = new Set([
+  'context_length_exceeded',
+  'context_window_exceeded',
+  'max_context_length_exceeded',
+]);
+
 function withoutControlCharacters(value: string): string {
   let sanitized = '';
   for (const character of value) {
@@ -107,4 +113,9 @@ export function isRetryableProviderFailure(status?: number, providerCode?: strin
     return true;
   }
   return RETRYABLE_PROVIDER_CODES.has(normalizedCode ?? '');
+}
+
+/** True when retrying requires replacing accumulated input with a compacted context checkpoint. */
+export function isCodexContextCompactionRequired(providerCode?: string): boolean {
+  return CONTEXT_COMPACTION_PROVIDER_CODES.has(providerCode?.trim().toLowerCase() ?? '');
 }

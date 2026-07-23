@@ -77,6 +77,9 @@ function describeEvent(event: CodexAgentEvent): string {
   if (event.type === 'tool-finish') {
     return `Tool finished: ${event.operation} (${event.callId})`;
   }
+  if (event.type === 'context-compacted') {
+    return `Agent context compacted (${String(event.inputCharacters)} → ${String(event.outputCharacters)} characters).`;
+  }
   return `Agent completed after ${String(event.turns)} turns.`;
 }
 

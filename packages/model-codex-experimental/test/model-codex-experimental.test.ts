@@ -7,8 +7,10 @@ import {
   CodexExperimentalModelError,
   createCodexExperimentalModel,
   createCodexExperimentalModelPlugin,
+  createCodexCompactionRequestBody,
   createCodexResponsesRequestBody,
   decodeCodexResponsesEvents,
+  isCodexContextCompactionRequired,
   isRetryableProviderFailure,
   parseCodexResponsesSse,
   sanitizeCodexProviderMessage,
@@ -86,6 +88,16 @@ describe('experimental Codex Responses model', () => {
     expect(events).toEqual<readonly CodexModelEvent[]>([
       { type: 'text', text: 'Hello ' },
       { type: 'text', text: 'world' },
+      {
+        type: 'continuation',
+        item: {
+          type: 'function_call',
+          id: 'item-1',
+          call_id: 'call-1',
+          name: 'loom_0_workspace_read-file',
+          arguments: '{"path":"README.md"}',
+        },
+      },
       {
         type: 'tool-call',
         call: { id: 'call-1', operation: 'workspace/read-file', input: { path: 'README.md' } },
@@ -203,6 +215,59 @@ describe('experimental Codex Responses model', () => {
     });
     await collect(model.generate(REQUEST));
     expect(requests[0]?.wireProtocol).toBe('responses-lite');
+  });
+
+  it('compacts context through the distinct transport operation and validates opaque output', async () => {
+    const requests: CodexResponsesRequest[] = [];
+    const model = createCodexExperimentalModel({
+      model: 'gpt-5.6-sol',
+      wireProtocol: 'responses-lite',
+      transport: {
+        async send(request) {
+          requests.push(request);
+          return response(
+            '{"output":[{"type":"message","role":"user","content":[{"type":"input_text","text":"Keep this"}]},{"type":"compaction","encrypted_content":"opaque"}]}',
+          );
+        },
+      },
+    });
+
+    await expect(
+      model.compact({
+        ...REQUEST,
+        contextItems: [{ type: 'compaction', encrypted_content: 'older' }],
+      }),
+    ).resolves.toEqual({
+      items: [
+        {
+          type: 'message',
+          role: 'user',
+          content: [{ type: 'input_text', text: 'Keep this' }],
+        },
+        { type: 'compaction', encrypted_content: 'opaque' },
+      ],
+    });
+    expect(requests).toHaveLength(1);
+    expect(requests[0]).toMatchObject({
+      operation: 'compact',
+      wireProtocol: 'responses-lite',
+    });
+    const compactBody = JSON.parse(requests[0]?.body ?? '{}') as Record<string, unknown>;
+    expect(compactBody).toMatchObject({
+      model: 'gpt-5.6-sol',
+      instructions: 'Work carefully.',
+      parallel_tool_calls: false,
+      reasoning: { effort: 'medium', context: 'all_turns' },
+    });
+    expect(compactBody).not.toHaveProperty('stream');
+    expect(compactBody).not.toHaveProperty('store');
+    expect(compactBody.input).toEqual(
+      expect.arrayContaining([{ type: 'compaction', encrypted_content: 'older' }]),
+    );
+    expect(createCodexCompactionRequestBody(REQUEST, 'model')).toMatchObject({
+      model: 'model',
+      parallel_tool_calls: true,
+    });
   });
 
   it('honors cancellation before authentication and while consuming the stream', async () => {
@@ -350,9 +415,26 @@ describe('experimental Codex Responses model', () => {
       incompleteReason: 'content_filter',
       retryable: false,
     });
+
+    await expect(
+      collect(
+        decodeCodexResponsesEvents(
+          chunks(
+            'data: {"type":"response.failed","response":{"error":{"code":"context_length_exceeded","message":"Your input exceeds the context window."}}}\n\n',
+          ),
+        ),
+      ),
+    ).rejects.toMatchObject({
+      code: 'PROVIDER_ERROR',
+      providerCode: 'context_length_exceeded',
+      retryable: false,
+      contextCompactionRequired: true,
+    });
   });
 
   it('sanitizes provider messages and classifies only transient failures as retryable', () => {
+    expect(isCodexContextCompactionRequired('context_length_exceeded')).toBe(true);
+    expect(isCodexContextCompactionRequired('rate_limit_exceeded')).toBe(false);
     expect(
       sanitizeCodexProviderMessage(
         'Denied\u0000 api_key=private-key cookie=session-secret refresh_token=refresh-secret',

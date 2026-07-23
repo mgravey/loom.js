@@ -21,6 +21,7 @@ import {
   type CodexAgentDependencies,
   type CodexAgentEvent,
   type CodexAgentTool,
+  type CodexContextCompactableModel,
   type CodexModel,
   type CodexModelEvent,
   type CodexModelRequest,
@@ -491,6 +492,88 @@ describe('Codex agent orchestration', () => {
         ok: false,
         error: { code: 'TOOL_FAILURE', message: 'read failed' },
       },
+    });
+  });
+
+  it('reactively compacts a context overflow and retries only the failed model turn', async () => {
+    const requests: CodexModelRequest[] = [];
+    const compactRequests: CodexModelRequest[] = [];
+    let generation = 0;
+    const model: CodexContextCompactableModel = {
+      compact(request) {
+        compactRequests.push(request);
+        return Promise.resolve({
+          items: [{ type: 'compaction', encrypted_content: 'opaque-checkpoint' }],
+        });
+      },
+      async *generate(request) {
+        requests.push(request);
+        generation += 1;
+        if (generation === 1) {
+          yield {
+            type: 'tool-call',
+            call: {
+              id: 'list-before-compact',
+              operation: WORKSPACE_OPERATIONS.listFiles,
+              input: {},
+            },
+          };
+          yield { type: 'completed' };
+          return;
+        }
+        if (generation === 2) {
+          const overflow = Object.assign(new Error('input too large'), {
+            code: 'PROVIDER_ERROR',
+            providerCode: 'context_length_exceeded',
+            contextCompactionRequired: true,
+          });
+          throw overflow;
+        }
+        yield { type: 'text', text: 'Resumed after compaction.' };
+        yield { type: 'completed' };
+      },
+    };
+    const agent = createCodexAgentFactory().create(dependencies(model)) as CodexAgent;
+
+    const events = await collect(agent);
+
+    expect(events.map((event) => event.type)).toEqual([
+      'tool-start',
+      'tool-finish',
+      'context-compacted',
+      'text',
+      'completed',
+    ]);
+    expect(compactRequests).toHaveLength(1);
+    expect(compactRequests[0]?.messages.map((message) => message.role)).toEqual([
+      'user',
+      'assistant',
+      'tool',
+    ]);
+    expect(requests[2]).toMatchObject({
+      contextItems: [{ type: 'compaction', encrypted_content: 'opaque-checkpoint' }],
+      messages: [],
+    });
+  });
+
+  it('propagates the compaction signal when the model has no compactor', async () => {
+    const overflow = Object.assign(new Error('input too large'), {
+      providerCode: 'context_length_exceeded',
+      contextCompactionRequired: true,
+    });
+    const model: CodexModel = {
+      async *generate() {
+        yield* [] as CodexModelEvent[];
+        throw overflow;
+      },
+    };
+    const agent = createCodexAgentFactory().create(dependencies(model)) as CodexAgent;
+
+    await expect(collect(agent)).rejects.toMatchObject({
+      code: 'MODEL_FAILURE',
+      contextCompactionRequired: true,
+      details: { turn: 1, contextCompactionRequired: true },
+      cause: overflow,
     });
   });
 

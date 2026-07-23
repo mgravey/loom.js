@@ -1,4 +1,4 @@
-import type { Model, Tool } from '@mgravey/loom-plugin-api';
+import type { Model, OperationContext, Tool } from '@mgravey/loom-plugin-api';
 import type { JsonObject, JsonValue } from '@mgravey/loom-types';
 
 export type CodexToolCaller = 'direct' | 'programmatic';
@@ -61,6 +61,8 @@ export interface CodexModelToolDefinition {
 
 export interface CodexModelRequest {
   readonly instructions: string;
+  /** Opaque provider continuation items installed before this request's ordinary messages. */
+  readonly contextItems?: readonly JsonObject[];
   readonly messages: readonly CodexModelMessage[];
   readonly tools: readonly CodexModelToolDefinition[];
 }
@@ -100,6 +102,17 @@ export type CodexModelEvent =
 export type CodexModel = Model<CodexModelRequest, CodexModelEvent>;
 export type CodexAgentModel = CodexModel;
 
+export interface CodexModelContextCompactionResult {
+  readonly items: readonly JsonObject[];
+}
+
+export interface CodexContextCompactableModel extends CodexModel {
+  compact(
+    request: CodexModelRequest,
+    context?: OperationContext,
+  ): Promise<CodexModelContextCompactionResult>;
+}
+
 export interface CodexAgentTextEvent {
   readonly type: 'text';
   readonly text: string;
@@ -126,8 +139,16 @@ export interface CodexAgentCompletedEvent {
   readonly turns: number;
 }
 
+export interface CodexAgentContextCompactedEvent {
+  readonly type: 'context-compacted';
+  readonly items: readonly JsonObject[];
+  readonly inputCharacters: number;
+  readonly outputCharacters: number;
+}
+
 export type CodexAgentEvent =
   | CodexAgentTextEvent
   | CodexAgentToolStartEvent
   | CodexAgentToolFinishEvent
+  | CodexAgentContextCompactedEvent
   | CodexAgentCompletedEvent;

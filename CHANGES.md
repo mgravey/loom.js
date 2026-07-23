@@ -28,6 +28,17 @@ This project follows a milestone changelog alongside Changesets for public packa
   incomplete reasons, retryability, and Retry-After delays across streamed events and the Companion
   extension boundary without exposing response bodies or headers.
 
+## Unreleased — Provider-native context compaction
+
+- Added an explicit credential-free `compact` transport operation for the experimental Codex model,
+  routed only to `responses/compact` by the extension.
+- Added bounded validation and opaque replay for compacted provider items; ordinary generation now
+  preserves completed continuation items needed by later model turns.
+- Coding sessions can opt into automatic character-threshold compaction and expose a serializable
+  checkpoint that records both the opaque items and the covered transcript prefix.
+- Context-window provider codes now set `contextCompactionRequired`; the agent preserves completed
+  in-run tool history, compacts once before partial output, and retries only the failed model turn.
+
 ## Unreleased — Browser coding workbench
 
 ### Added

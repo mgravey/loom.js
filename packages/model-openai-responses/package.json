@@ -1,6 +1,6 @@
 {
   "name": "@mgravey/loom-model-openai-responses",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Credential-free OpenAI Platform Responses API model adapter with tool continuations for Loom.js.",
   "license": "MPL-2.0",
   "author": "Mathieu Gravey",

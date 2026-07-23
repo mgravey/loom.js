@@ -51,6 +51,7 @@ export function createCodexCompanion(options: CreateCodexCompanionOptions): Code
   const fetch: CodexResponsesFetch = (request) =>
     transport.send({
       body: request.body,
+      operation: request.operation ?? (request.url.endsWith('/compact') ? 'compact' : 'generate'),
       wireProtocol:
         request.headers['x-openai-internal-codex-responses-lite'] === 'true'
           ? 'responses-lite'

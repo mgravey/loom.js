@@ -360,6 +360,11 @@ The [OpenAI Platform Responses guide](./docs/openai-responses.md) covers the sup
 secure transport boundary, stateless continuation, Programmatic Tool Calling, and direct-only write
 policy. It is independent of the ChatGPT-authenticated Codex experiment.
 
+The [context-compaction guide](./docs/context-compaction.md) documents the experimental
+`responses/compact` path. Coding sessions can opt into a character threshold, receive a bounded
+opaque checkpoint, persist it beside the transcript, and replay only transcript entries that are
+newer than that checkpoint. Existing sessions do not compact unless explicitly configured.
+
 The [Phase 5.5 vertical-slice guide](./docs/phase-5-5-vertical-slice.md) explains how to build, load
 the unpacked extension, serve the browser application, authenticate from trusted extension UI, run
 an agent with a direct-first model fetch and extension fallback, inspect Network/Console

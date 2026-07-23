@@ -5,14 +5,15 @@ reason and resume from its existing checkpoint. It does not forward the provider
 
 `CodexExperimentalModelError` exposes these optional fields:
 
-| Field              | Meaning                                                              |
-| ------------------ | -------------------------------------------------------------------- |
-| `status`           | Valid HTTP or event status, when supplied                            |
-| `providerCode`     | Bounded provider identifier                                          |
-| `providerMessage`  | Display-safe message capped at 512 characters                        |
-| `incompleteReason` | Bounded reason from `response.incomplete`                            |
-| `retryable`        | Loom's transient-failure classification                              |
-| `retryAfterMs`     | Validated provider delay derived from `Retry-After`, capped at 24 hr |
+| Field                       | Meaning                                                              |
+| --------------------------- | -------------------------------------------------------------------- |
+| `status`                    | Valid HTTP or event status, when supplied                            |
+| `providerCode`              | Bounded provider identifier                                          |
+| `providerMessage`           | Display-safe message capped at 512 characters                        |
+| `incompleteReason`          | Bounded reason from `response.incomplete`                            |
+| `retryable`                 | Loom's transient-failure classification                              |
+| `retryAfterMs`              | Validated provider delay derived from `Retry-After`, capped at 24 hr |
+| `contextCompactionRequired` | `true` when a retry first requires context compaction                |
 
 ## Streamed events
 
@@ -26,6 +27,12 @@ HTTP 408, HTTP 429, HTTP 5xx, `rate_limit_exceeded`, `server_error`, and `servic
 transient by default. Codes indicating insufficient quota, billing or credit rejection,
 authentication, invalid requests, permissions, policy, or account restrictions override status-based
 retryability and remain non-retryable.
+
+`context_length_exceeded`, `context_window_exceeded`, and `max_context_length_exceeded` remain
+non-retryable as-is but set `contextCompactionRequired: true`. The Codex agent recognizes that
+signal. When the model implements `compact()` and the failed attempt emitted no partial output, the
+agent compacts its in-progress history once and retries only that failed model turn. Completed tool
+turns remain inside the compacted checkpoint.
 
 ## Companion boundary
 

@@ -13,6 +13,7 @@ export interface CodexProviderFailureDetails {
   readonly incompleteReason?: string;
   readonly retryable?: boolean;
   readonly retryAfterMs?: number;
+  readonly contextCompactionRequired?: boolean;
 }
 
 /** Sanitized failure: access tokens, endpoints, and provider response bodies are never exposed. */
@@ -24,6 +25,7 @@ export class CodexExperimentalModelError extends Error {
   public readonly incompleteReason: string | undefined;
   public readonly retryable: boolean | undefined;
   public readonly retryAfterMs: number | undefined;
+  public readonly contextCompactionRequired: boolean | undefined;
 
   public constructor(
     code: CodexExperimentalModelErrorCode,
@@ -39,5 +41,6 @@ export class CodexExperimentalModelError extends Error {
     this.incompleteReason = options.incompleteReason;
     this.retryable = options.retryable;
     this.retryAfterMs = options.retryAfterMs;
+    this.contextCompactionRequired = options.contextCompactionRequired;
   }
 }

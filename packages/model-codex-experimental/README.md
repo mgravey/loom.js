@@ -25,6 +25,17 @@ const model = createCodexExperimentalModel({
 });
 ```
 
+The returned model also exposes provider-native compaction:
+
+```ts
+const checkpoint = await model.compact(modelRequest);
+// Persist checkpoint.items as opaque JSON and replay them through request.contextItems.
+```
+
+Brokered compact calls use an explicit `operation: 'compact'`; direct mode defaults to
+`${endpoint}/compact` or accepts an audited `compactEndpoint`. Successful output is limited to 4 MiB
+and 2,000 JSON-object items before it can become model context.
+
 Provider rejections throw `CodexExperimentalModelError` with safe structured fields:
 
 ```ts
@@ -44,6 +55,8 @@ The parser supports top-level and nested `error`, `response.failed`, and `respon
 shapes. Messages are limited to 512 characters, stripped of control characters, and redacted for
 common bearer-token, API-key, cookie, and credential patterns. Authentication, billing, invalid
 request, policy, and account restrictions are never classified as automatically retryable.
+Context-window codes remain non-retryable without mutation but set
+`contextCompactionRequired: true`, allowing a compatible agent to compact and retry the failed turn.
 
 This package implements an unsupported compatibility experiment. It is not an official OpenAI
 authentication method or API client, and its upstream protocol may change without notice.

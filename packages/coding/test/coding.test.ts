@@ -73,6 +73,123 @@ describe('coding session', () => {
     expect(seed).toEqual([{ role: 'user', content: 'remember this decision' }]);
   });
 
+  it('compacts, replays, and restores a serializable model-native context checkpoint', async () => {
+    const generated: Parameters<CodexModel['generate']>[0][] = [];
+    const compacted: Parameters<CodexModel['generate']>[0][] = [];
+    const model: CodexModel & {
+      compact(request: Parameters<CodexModel['generate']>[0]): Promise<{
+        readonly items: readonly [{ readonly type: 'compaction'; readonly data: string }];
+      }>;
+    } = {
+      compact(request) {
+        compacted.push(request);
+        return Promise.resolve({
+          items: [{ type: 'compaction', data: 'opaque-checkpoint' }],
+        });
+      },
+      async *generate(request) {
+        generated.push(request);
+        yield { type: 'text', text: 'continued' };
+        yield { type: 'completed' };
+      },
+    };
+    const seed = [
+      { role: 'user' as const, content: 'an old decision' },
+      { role: 'assistant' as const, content: 'the old result' },
+    ];
+    const session = createCodingSession({
+      model,
+      tools,
+      transcript: seed,
+      contextCompaction: { maximumCharacters: 1 },
+    });
+    const events: unknown[] = [];
+    session.subscribe((event) => events.push(event));
+
+    await collect(session.followUp('continue'));
+
+    expect(compacted).toHaveLength(1);
+    expect(compacted[0]?.messages).toEqual([seed[0], { ...seed[1], toolCalls: [] }]);
+    expect(generated[0]?.contextItems).toEqual([{ type: 'compaction', data: 'opaque-checkpoint' }]);
+    expect(generated[0]?.messages[0]).toEqual({ role: 'user', content: 'continue' });
+    expect(session.contextCheckpoint).toEqual({
+      items: [{ type: 'compaction', data: 'opaque-checkpoint' }],
+      coveredTranscriptEntries: 2,
+    });
+    const savedCheckpoint = session.contextCheckpoint;
+    if (savedCheckpoint === undefined) throw new Error('Expected a saved context checkpoint.');
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'context-compacted',
+          checkpoint: expect.objectContaining({ coveredTranscriptEntries: 2 }),
+        }),
+      ]),
+    );
+
+    const restoredRequests: Parameters<CodexModel['generate']>[0][] = [];
+    const restoredModel: typeof model = {
+      compact: model.compact,
+      async *generate(request) {
+        restoredRequests.push(request);
+        yield { type: 'completed' };
+      },
+    };
+    const restored = createCodingSession({
+      model: restoredModel,
+      tools,
+      transcript: session.transcript,
+      contextCheckpoint: savedCheckpoint,
+      contextCompaction: { maximumCharacters: 1_000_000 },
+    });
+    await collect(restored.followUp('one more'));
+    expect(restoredRequests[0]?.contextItems).toEqual([
+      { type: 'compaction', data: 'opaque-checkpoint' },
+    ]);
+    const restoredPrompt =
+      restoredRequests[0]?.messages[0]?.role === 'user'
+        ? restoredRequests[0].messages[0].content
+        : '';
+    expect(restoredPrompt).toContain('User: continue');
+    expect(restoredPrompt).not.toContain('an old decision');
+  });
+
+  it('installs an agent-triggered overflow checkpoint without restarting completed work', async () => {
+    let attempts = 0;
+    const model: CodexModel & {
+      compact(request: Parameters<CodexModel['generate']>[0]): Promise<{
+        readonly items: readonly [{ readonly type: 'compaction'; readonly data: string }];
+      }>;
+    } = {
+      compact: () =>
+        Promise.resolve({ items: [{ type: 'compaction', data: 'reactive-checkpoint' }] }),
+      async *generate() {
+        attempts += 1;
+        if (attempts === 1) {
+          throw Object.assign(new Error('context full'), {
+            providerCode: 'context_length_exceeded',
+            contextCompactionRequired: true,
+          });
+        }
+        yield { type: 'text', text: 'finished' };
+        yield { type: 'completed' };
+      },
+    };
+    const session = createCodingSession({ model, tools });
+
+    await collect(session.submit('large request'));
+
+    expect(attempts).toBe(2);
+    expect(session.contextCheckpoint).toEqual({
+      items: [{ type: 'compaction', data: 'reactive-checkpoint' }],
+      coveredTranscriptEntries: 1,
+    });
+    expect(session.transcript).toEqual([
+      { role: 'user', content: 'large request' },
+      { role: 'assistant', content: 'finished' },
+    ]);
+  });
+
   it('runs an injected execution runtime and rejects overlapping work', async () => {
     const model: CodexModel = {
       async *generate() {

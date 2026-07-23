@@ -36,6 +36,10 @@ For rejected upstream responses, the extension sends only a validated status and
 and re-sanitizes every field before exposing it to the model adapter. It never exposes the complete
 provider body, response headers, credentials, or arbitrary error objects.
 
+The same credential-free transport accepts `operation: 'compact'`. The extension validates the
+separate compaction envelope and routes it only to `/backend-api/codex/responses/compact`; it never
+accepts a caller-provided endpoint.
+
 The default extension ID is `gdcebopdllcifgleoefgbobdopiaholg`. Production callers must use HTTPS,
 and the extension user must approve the exact website origin. Local development is limited to
 localhost and `127.0.0.1`. The extension protocol and Codex-compatible provider integration remain

@@ -1,6 +1,6 @@
 {
   "name": "@mgravey/loom-companion-codex-experimental",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Experimental website client for routing Loom Codex model requests through the Loom.js Companion Chrome extension.",
   "license": "MPL-2.0",
   "author": "Mathieu Gravey",

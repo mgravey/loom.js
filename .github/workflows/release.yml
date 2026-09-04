@@ -69,7 +69,7 @@ jobs:
         run: |
           LOOM_RELEASE_NAME=$(node -p "require('./packages/${LOOM_RELEASE_DIRECTORY}/package.json').name")
           LOOM_RELEASE_VERSION=$(node -p "require('./packages/${LOOM_RELEASE_DIRECTORY}/package.json').version")
-          LOOM_RELEASE_TARBALL="release-artifacts/mgravey-loom-${LOOM_RELEASE_DIRECTORY}-${LOOM_RELEASE_VERSION}.tgz"
+          LOOM_RELEASE_TARBALL="./release-artifacts/mgravey-loom-${LOOM_RELEASE_DIRECTORY}-${LOOM_RELEASE_VERSION}.tgz"
           test "${LOOM_RELEASE_NAME}" = "@mgravey/loom-${LOOM_RELEASE_DIRECTORY}"
           test -f "${LOOM_RELEASE_TARBALL}"
           npm publish "${LOOM_RELEASE_TARBALL}"

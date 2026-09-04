@@ -2,7 +2,7 @@
 
 This project follows a milestone changelog alongside Changesets for public package versioning.
 
-## Unreleased — Codex transport terminal handshake
+## 0.2.1 — Codex transport terminal handshake
 
 ### Fixed
 

@@ -1,5 +1,7 @@
 # `@mgravey/loom-companion-codex-experimental`
 
+The current npm release is `0.2.1`.
+
 Experimental website client for the published **Loom.js Companion** Chrome extension. It requests
 explicit approval for the calling website origin, exposes the extension-backed Loom authentication
 provider, and routes credential-free Codex model request bodies through an external Chrome port.

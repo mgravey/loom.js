@@ -26,6 +26,7 @@ packages/*/*.crx
 packages/*/*.pem
 packages/*/*.key
 packages/*/*.zip
+*.tgz
 *.tsbuildinfo
 *.log
 *.har

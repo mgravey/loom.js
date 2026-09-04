@@ -17,6 +17,8 @@ import {
 interface PortHarness {
   readonly port: CodexCompanionPort;
   readonly posted: unknown[];
+  readonly disconnectSpy: ReturnType<typeof vi.fn>;
+  listenerCount(): number;
   message(value: unknown): void;
   disconnect(): void;
 }
@@ -26,35 +28,49 @@ function createPortHarness(): PortHarness {
   const disconnectListeners: (() => void)[] = [];
   const posted: unknown[] = [];
   let disconnected = false;
+  const disconnectSpy = vi.fn();
+  const remove = <Listener>(listeners: Listener[], listener: Listener): void => {
+    const index = listeners.indexOf(listener);
+    if (index >= 0) listeners.splice(index, 1);
+  };
   return {
     posted,
+    disconnectSpy,
     port: {
       onMessage: {
         addListener(listener) {
           messageListeners.push(listener);
+        },
+        removeListener(listener) {
+          remove(messageListeners, listener);
         },
       },
       onDisconnect: {
         addListener(listener) {
           disconnectListeners.push(listener);
         },
+        removeListener(listener) {
+          remove(disconnectListeners, listener);
+        },
       },
       postMessage(message) {
         posted.push(message);
       },
       disconnect() {
+        disconnectSpy();
         if (disconnected) return;
         disconnected = true;
-        for (const listener of disconnectListeners) listener();
+        for (const listener of [...disconnectListeners]) listener();
       },
     },
+    listenerCount: () => messageListeners.length + disconnectListeners.length,
     message(value) {
-      for (const listener of messageListeners) listener(value);
+      for (const listener of [...messageListeners]) listener(value);
     },
     disconnect() {
       if (disconnected) return;
       disconnected = true;
-      for (const listener of disconnectListeners) listener();
+      for (const listener of [...disconnectListeners]) listener();
     },
   };
 }
@@ -63,6 +79,46 @@ async function collect(values: AsyncIterable<string>): Promise<readonly string[]
   const collected: string[] = [];
   for await (const value of values) collected.push(value);
   return collected;
+}
+
+function createTestCancellationSource(): {
+  readonly signal: {
+    readonly cancelled: boolean;
+    readonly reason: unknown;
+    throwIfCancelled(): void;
+    onCancel(listener: (reason: unknown) => void): () => void;
+  };
+  cancel(reason: unknown): void;
+} {
+  const listeners = new Set<(reason: unknown) => void>();
+  let cancelled = false;
+  let cancellationReason: unknown;
+  return {
+    signal: {
+      get cancelled() {
+        return cancelled;
+      },
+      get reason() {
+        return cancellationReason;
+      },
+      throwIfCancelled() {
+        if (cancelled) throw new Error('cancelled');
+      },
+      onCancel(listener) {
+        listeners.add(listener);
+        return () => {
+          listeners.delete(listener);
+        };
+      },
+    },
+    cancel(reason) {
+      if (cancelled) return;
+      cancelled = true;
+      cancellationReason = reason;
+      for (const listener of [...listeners]) listener(reason);
+      listeners.clear();
+    },
+  };
 }
 
 describe('experimental Loom.js Companion client', () => {
@@ -99,8 +155,9 @@ describe('experimental Loom.js Companion client', () => {
     expect(sendMessage).toHaveBeenCalledOnce();
   });
 
-  it('routes credential-free model bodies through a Chrome external port and streams text', async () => {
+  it('completes once, acknowledges end, and ignores a delayed disconnect', async () => {
     const harness = createPortHarness();
+    const diagnostics: unknown[] = [];
     const connect = vi.fn((extensionId: string, options: { readonly name: string }) => {
       expect(extensionId).toBe(LOOM_COMPANION_EXTENSION_ID);
       expect(options.name).toBe(CODEX_MODEL_PORT_NAME);
@@ -112,6 +169,7 @@ describe('experimental Loom.js Companion client', () => {
       sessionId: 'session-1',
       threadId: 'thread-1',
       requestIdFactory: () => 'request-1',
+      diagnosticSink: (event) => diagnostics.push(event),
     });
 
     const responsePromise = transport.send({
@@ -136,9 +194,28 @@ describe('experimental Loom.js Companion client', () => {
     harness.message({ type: 'chunk', requestId: 'request-1', chunk: 'data: first\n\n' });
     harness.message({ type: 'chunk', requestId: 'request-1', chunk: 'data: second\n\n' });
     harness.message({ type: 'end', requestId: 'request-1' });
+    harness.message({ type: 'end', requestId: 'request-1' });
+    harness.message({ type: 'error', requestId: 'request-1', code: 'late-error' });
+    harness.disconnect();
 
     await expect(collect(response.body)).resolves.toEqual(['data: first\n\n', 'data: second\n\n']);
     expect(response.status).toBe(200);
+    expect(harness.posted).toContainEqual({ type: 'end-ack', requestId: 'request-1' });
+    expect(
+      harness.posted.filter(
+        (message) =>
+          (message as Readonly<Record<string, unknown>>).type === 'end-ack' &&
+          (message as Readonly<Record<string, unknown>>).requestId === 'request-1',
+      ),
+    ).toHaveLength(1);
+    expect(harness.disconnectSpy).not.toHaveBeenCalled();
+    expect(harness.listenerCount()).toBe(0);
+    expect(
+      diagnostics.filter(
+        (event) =>
+          (event as Readonly<Record<string, unknown>>).event === 'model.response.completed',
+      ),
+    ).toHaveLength(1);
   });
 
   it('routes compaction as an explicit credential-free operation', async () => {
@@ -245,6 +322,7 @@ describe('experimental Loom.js Companion client', () => {
       error: { body: 'private response body' },
     });
     harness.message({ type: 'end', requestId: 'request-provider-error' });
+    harness.message({ type: 'provider-error', requestId: 'request-provider-error', status: 429 });
 
     await expect(responsePromise).resolves.toMatchObject({
       status: 429,
@@ -258,6 +336,16 @@ describe('experimental Loom.js Companion client', () => {
     expect(response).not.toHaveProperty('error');
     expect(JSON.stringify(response)).not.toContain('private response body');
     expect(JSON.stringify(diagnostics)).not.toContain('session-secret');
+    expect(harness.posted).toContainEqual({
+      type: 'end-ack',
+      requestId: 'request-provider-error',
+    });
+    expect(harness.listenerCount()).toBe(0);
+    expect(
+      diagnostics.filter(
+        (event) => (event as Readonly<Record<string, unknown>>).event === 'model.provider.rejected',
+      ),
+    ).toHaveLength(1);
   });
 
   it('falls back safely when extension provider metadata fails validation', async () => {
@@ -323,6 +411,92 @@ describe('experimental Loom.js Companion client', () => {
     await expect(collect(response.body)).rejects.toMatchObject({
       code: 'CONNECTION_FAILED',
     });
+    expect(harness.listenerCount()).toBe(0);
+  });
+
+  it('rejects malformed terminal messages instead of completing an incomplete response', async () => {
+    const harness = createPortHarness();
+    const diagnostics: unknown[] = [];
+    const runtime = {
+      connect: () => harness.port,
+      sendMessage: vi.fn(),
+    } as unknown as CodexCompanionRuntime;
+    const transport = createCodexExtensionTransport({
+      runtime,
+      sessionId: 'session-1',
+      requestIdFactory: () => 'request-malformed-end',
+      diagnosticSink: (event) => diagnostics.push(event),
+    });
+    const responsePromise = transport.send({
+      body: '{"model":"gpt-5.6-sol","input":[]}',
+      wireProtocol: 'responses-lite',
+    });
+    harness.message({ type: 'start', requestId: 'request-malformed-end', status: 200 });
+    const response = await responsePromise;
+    harness.message({
+      type: 'end',
+      requestId: 'request-malformed-end',
+      unexpected: true,
+    });
+
+    await expect(collect(response.body)).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
+    expect(harness.posted).not.toContainEqual({
+      type: 'end-ack',
+      requestId: 'request-malformed-end',
+    });
+    expect(harness.disconnectSpy).toHaveBeenCalledOnce();
+    expect(harness.listenerCount()).toBe(0);
+    expect(
+      diagnostics.filter(
+        (event) =>
+          (event as Readonly<Record<string, unknown>>).event === 'model.response.completed',
+      ),
+    ).toHaveLength(0);
+  });
+
+  it('preserves cancellation and removes its abort handler exactly once', async () => {
+    const harness = createPortHarness();
+    const diagnostics: unknown[] = [];
+    const cancellation = createTestCancellationSource();
+    const unsubscribe = vi.fn();
+    const signal = {
+      ...cancellation.signal,
+      onCancel(listener: (reason: unknown) => void) {
+        const remove = cancellation.signal.onCancel(listener);
+        return () => {
+          unsubscribe();
+          remove();
+        };
+      },
+    };
+    const runtime = {
+      connect: () => harness.port,
+      sendMessage: vi.fn(),
+    } as unknown as CodexCompanionRuntime;
+    const transport = createCodexExtensionTransport({
+      runtime,
+      sessionId: 'session-1',
+      requestIdFactory: () => 'request-cancelled',
+      diagnosticSink: (event) => diagnostics.push(event),
+    });
+    const responsePromise = transport.send({
+      body: '{"model":"gpt-5.6-sol","input":[]}',
+      wireProtocol: 'responses-lite',
+      signal,
+    });
+
+    cancellation.cancel(new Error('cancelled by user'));
+    cancellation.cancel(new Error('duplicate cancellation'));
+
+    await expect(responsePromise).rejects.toMatchObject({ code: 'CANCELLED' });
+    expect(harness.disconnectSpy).toHaveBeenCalledOnce();
+    expect(harness.listenerCount()).toBe(0);
+    expect(unsubscribe).toHaveBeenCalledOnce();
+    expect(
+      diagnostics.filter(
+        (event) => (event as Readonly<Record<string, unknown>>).event === 'model.request.cancelled',
+      ),
+    ).toHaveLength(1);
   });
 
   it('composes origin approval, extension authentication, and model transport', async () => {

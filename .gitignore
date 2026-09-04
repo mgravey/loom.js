@@ -31,6 +31,9 @@ packages/*/*.zip
 *.har
 *.trace.zip
 *.netlog
+# Port-protocol debug captures may contain streamed model responses and request identifiers.
+codex-transport-traces/
+*.codex-transport-trace.json
 *.openai-response.json
 openai-response-dumps/
 # Raw provider-error captures are local security-debugging artifacts, never fixtures.

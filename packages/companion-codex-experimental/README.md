@@ -40,6 +40,12 @@ The same credential-free transport accepts `operation: 'compact'`. The extension
 separate compaction envelope and routes it only to `/backend-api/codex/responses/compact`; it never
 accepts a caller-provided endpoint.
 
+Successful responses use a request-scoped terminal handshake. The Companion validates `end`, marks
+the request complete, finishes the response stream, and returns `end-ack`; the extension closes the
+Port only after that acknowledgement. A disconnect before `end` remains `CONNECTION_FAILED`, while a
+later cleanup disconnect cannot overwrite an already completed result. The additive handshake
+remains protocol-version-1 compatible with older extension and Companion releases.
+
 The default extension ID is `gdcebopdllcifgleoefgbobdopiaholg`. Production callers must use HTTPS,
 and the extension user must approve the exact website origin. Local development is limited to
 localhost and `127.0.0.1`. The extension protocol and Codex-compatible provider integration remain

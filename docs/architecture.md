@@ -63,8 +63,11 @@ provider request itself when browser CORS permits. A pre-response failure falls 
 credential-free request over an authorized extension Port. The reusable website side of that Port is
 published separately as `@mgravey/loom-companion-codex-experimental`; it owns origin-approval
 requests, the Chrome Port lifecycle, response validation, streaming, and cancellation without
-receiving credentials. The model path does not change Core, the generic credential broker, or the
-agent contract. See [the vertical-slice guide](./phase-5-5-vertical-slice.md),
+receiving credentials. A successful stream closes with a request-scoped `end`/`end-ack` handshake:
+the Companion finishes the response before acknowledging it, and the extension retains a bounded
+fallback timeout for older clients. Disconnect before `end` remains a transport failure. The model
+path does not change Core, the generic credential broker, or the agent contract. See
+[the vertical-slice guide](./phase-5-5-vertical-slice.md),
 [ADR-013](./adr/013-direct-experimental-model-fetch.md), and
 [ADR-015](./adr/015-cors-relay-fallback.md).
 

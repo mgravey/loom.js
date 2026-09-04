@@ -128,6 +128,10 @@ function safeDisconnect(port: CodexCompanionPort): void {
   }
 }
 
+function isValidEndMessage(message: Readonly<Record<string, unknown>>): boolean {
+  return Object.keys(message).length === 2 && message.type === 'end';
+}
+
 function sendThroughPort(
   options: CreateCodexExtensionTransportOptions,
   requestId: string,
@@ -169,8 +173,11 @@ function sendThroughPort(
   const stream = createChunkStream();
   let responseStarted = false;
   let responseStatus: number | undefined;
-  let ended = false;
+  let providerErrorReceived = false;
   let settled = false;
+  let terminal = false;
+  let cleanedUp = false;
+  let connectionClosedReported = false;
   let unsubscribe = (): void => undefined;
   report(options.diagnosticSink, {
     event: 'model.connection.opened',
@@ -179,14 +186,36 @@ function sendThroughPort(
   });
 
   return new Promise((resolve, reject) => {
-    const fail = (error: CodexCompanionError): void => {
+    const reportConnectionClosed = (code: 'COMPLETED' | 'DISCONNECTED'): void => {
+      if (connectionClosedReported) return;
+      connectionClosedReported = true;
+      report(options.diagnosticSink, {
+        event: 'model.connection.closed',
+        stage: 'cleanup',
+        requestId,
+        code,
+      });
+    };
+    const cleanup = (disconnect: boolean): void => {
+      if (cleanedUp) return;
+      cleanedUp = true;
       unsubscribe();
-      if (settled) stream.fail(error);
-      else {
+      unsubscribe = () => undefined;
+      port.onMessage.removeListener?.(onMessage);
+      port.onDisconnect.removeListener?.(onDisconnect);
+      if (disconnect) safeDisconnect(port);
+    };
+    const fail = (error: CodexCompanionError, disconnect = true): void => {
+      if (terminal) return;
+      terminal = true;
+      reportConnectionClosed('DISCONNECTED');
+      cleanup(disconnect);
+      if (settled) {
+        stream.fail(error);
+      } else {
         settled = true;
         reject(error);
       }
-      safeDisconnect(port);
     };
     const invalidResponse = (): void => {
       report(options.diagnosticSink, {
@@ -203,7 +232,7 @@ function sendThroughPort(
       );
     };
 
-    port.onMessage.addListener((message) => {
+    function onMessage(message: unknown): void {
       if (!isRecord(message) || message.requestId !== requestId) return;
       if (
         message.type === 'start' &&
@@ -244,7 +273,7 @@ function sendThroughPort(
         stream.push(message.chunk);
         return;
       }
-      if (message.type === 'provider-error' && responseStarted) {
+      if (message.type === 'provider-error' && responseStarted && !providerErrorReceived) {
         if (
           responseStatus === undefined ||
           (responseStatus >= 200 && responseStatus < 300) ||
@@ -266,6 +295,7 @@ function sendThroughPort(
           retryable: metadata.retryable,
           ...(metadata.retryAfterMs === undefined ? {} : { retryAfterMs: metadata.retryAfterMs }),
         });
+        providerErrorReceived = true;
         settled = true;
         resolve(
           Object.freeze({
@@ -276,9 +306,9 @@ function sendThroughPort(
         );
         return;
       }
-      if (message.type === 'end' && responseStarted) {
-        ended = true;
-        unsubscribe();
+      if (message.type === 'end' && responseStarted && isValidEndMessage(message)) {
+        terminal = true;
+        stream.finish();
         report(options.diagnosticSink, {
           event: 'model.response.completed',
           stage: 'stream',
@@ -295,7 +325,15 @@ function sendThroughPort(
             }),
           );
         }
-        stream.finish();
+        try {
+          port.postMessage(Object.freeze({ type: 'end-ack', requestId }));
+        } catch {
+          reportConnectionClosed('COMPLETED');
+          cleanup(true);
+          return;
+        }
+        reportConnectionClosed('COMPLETED');
+        cleanup(false);
         return;
       }
       if (message.type === 'error') {
@@ -319,25 +357,21 @@ function sendThroughPort(
         return;
       }
       invalidResponse();
-    });
+    }
 
-    port.onDisconnect.addListener(() => {
-      unsubscribe();
-      report(options.diagnosticSink, {
-        event: 'model.connection.closed',
-        stage: 'cleanup',
-        requestId,
-        code: ended ? 'COMPLETED' : 'DISCONNECTED',
-      });
-      if (!ended) {
-        fail(
-          transportError(
-            'CONNECTION_FAILED',
-            'The Loom.js Companion model relay disconnected before completion.',
-          ),
-        );
-      }
-    });
+    function onDisconnect(): void {
+      if (terminal) return;
+      fail(
+        transportError(
+          'CONNECTION_FAILED',
+          'The Loom.js Companion model relay disconnected before completion.',
+        ),
+        false,
+      );
+    }
+
+    port.onMessage.addListener(onMessage);
+    port.onDisconnect.addListener(onDisconnect);
 
     if (request.signal !== undefined) {
       unsubscribe = request.signal.onCancel(() => {
@@ -349,6 +383,11 @@ function sendThroughPort(
         });
         fail(transportError('CANCELLED', 'The Loom companion model request was cancelled.'));
       });
+      if (terminal) {
+        unsubscribe();
+        unsubscribe = () => undefined;
+        return;
+      }
     }
 
     report(options.diagnosticSink, {

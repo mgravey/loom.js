@@ -7,10 +7,12 @@ import type { LoomPlugin } from '@mgravey/loom-plugin-api';
 
 export interface ExternalPortMessageEvent {
   addListener(listener: (message: unknown) => void): void;
+  removeListener?(listener: (message: unknown) => void): void;
 }
 
 export interface ExternalPortDisconnectEvent {
   addListener(listener: () => void): void;
+  removeListener?(listener: () => void): void;
 }
 
 /** Minimal external Chrome port surface used by a normal website. */

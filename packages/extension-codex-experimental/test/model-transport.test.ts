@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { CodexAccountRoutingStore } from '../src/account-routing.js';
 import type { CodexExternalPort, CodexModelFetch } from '../src/chrome-contracts.js';
 import {
+  CODEX_MODEL_END_ACK_TIMEOUT_MS,
   CODEX_MODEL_PORT_NAME,
   CODEX_MODEL_TRANSPORT_PROTOCOL,
   CODEX_MODEL_TRANSPORT_VERSION,
@@ -36,23 +37,44 @@ function routingStore(): CodexAccountRoutingStore {
 function port(): {
   readonly value: CodexExternalPort;
   readonly messages: unknown[];
+  readonly disconnect: ReturnType<typeof vi.fn>;
+  listenerCount(): number;
   send(message: unknown): void;
+  disconnectExternally(): void;
 } {
   const messageListeners: ((message: unknown) => void)[] = [];
   const disconnectListeners: (() => void)[] = [];
   const messages: unknown[] = [];
+  const disconnect = vi.fn();
   return {
     messages,
+    disconnect,
     value: {
       name: CODEX_MODEL_PORT_NAME,
       sender: { origin: 'http://localhost:4173', url: 'http://localhost:4173/app' },
-      onMessage: { addListener: (listener) => messageListeners.push(listener) },
-      onDisconnect: { addListener: (listener) => disconnectListeners.push(listener) },
+      onMessage: {
+        addListener: (listener) => messageListeners.push(listener),
+        removeListener: (listener) => {
+          const index = messageListeners.indexOf(listener);
+          if (index >= 0) messageListeners.splice(index, 1);
+        },
+      },
+      onDisconnect: {
+        addListener: (listener) => disconnectListeners.push(listener),
+        removeListener: (listener) => {
+          const index = disconnectListeners.indexOf(listener);
+          if (index >= 0) disconnectListeners.splice(index, 1);
+        },
+      },
       postMessage: (message) => messages.push(message),
-      disconnect: () => undefined,
+      disconnect,
     },
+    listenerCount: () => messageListeners.length + disconnectListeners.length,
     send(message) {
-      for (const listener of messageListeners) listener(message);
+      for (const listener of [...messageListeners]) listener(message);
+    },
+    disconnectExternally() {
+      for (const listener of [...disconnectListeners]) listener();
     },
   };
 }
@@ -119,6 +141,17 @@ function compactRequest(): Readonly<Record<string, unknown>> {
   });
 }
 
+async function waitForMessage(
+  messages: readonly unknown[],
+  expected: Readonly<Record<string, unknown>>,
+): Promise<void> {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (messages.some((message) => JSON.stringify(message) === JSON.stringify(expected))) return;
+    await Promise.resolve();
+  }
+  throw new Error(`Message was not posted: ${JSON.stringify(expected)}`);
+}
+
 describe('experimental Codex extension model transport', () => {
   it('keeps credentials extension-side and streams provider bytes over an authorized port', async () => {
     const diagnostics: CodexModelDiagnosticEvent[] = [];
@@ -149,6 +182,12 @@ describe('experimental Codex extension model transport', () => {
     await vi.waitFor(() =>
       expect(externalPort.messages).toContainEqual({ type: 'end', requestId: 'request-1' }),
     );
+    externalPort.send({ type: 'end-ack', requestId: 'request-other' });
+    externalPort.send({ type: 'end-ack', requestId: 'request-1', unexpected: true });
+    expect(externalPort.disconnect).not.toHaveBeenCalled();
+    externalPort.send({ type: 'end-ack', requestId: 'request-1' });
+    expect(externalPort.disconnect).toHaveBeenCalledOnce();
+    expect(externalPort.listenerCount()).toBe(0);
 
     expect(fetchRequest).toHaveBeenCalledWith(
       CODEX_RESPONSES_ENDPOINT,
@@ -250,7 +289,10 @@ describe('experimental Codex extension model transport', () => {
     })(externalPort.value);
 
     externalPort.send(request('responses-lite'));
-    await vi.waitFor(() => expect(fetchRequest).toHaveBeenCalledOnce());
+    await vi.waitFor(() =>
+      expect(externalPort.messages).toContainEqual({ type: 'end', requestId: 'request-1' }),
+    );
+    externalPort.send({ type: 'end-ack', requestId: 'request-1' });
     expect(fetchRequest).toHaveBeenCalledWith(
       CODEX_RESPONSES_ENDPOINT,
       expect.objectContaining({
@@ -294,6 +336,7 @@ describe('experimental Codex extension model transport', () => {
         requestId: 'request-compact',
       }),
     );
+    externalPort.send({ type: 'end-ack', requestId: 'request-compact' });
     expect(fetchRequest).toHaveBeenCalledWith(
       CODEX_RESPONSES_COMPACT_ENDPOINT,
       expect.objectContaining({
@@ -356,6 +399,7 @@ describe('experimental Codex extension model transport', () => {
     await vi.waitFor(() =>
       expect(externalPort.messages).toContainEqual({ type: 'end', requestId: 'request-1' }),
     );
+    externalPort.send({ type: 'end-ack', requestId: 'request-1' });
 
     expect(externalPort.messages).toContainEqual({
       type: 'provider-error',
@@ -377,6 +421,112 @@ describe('experimental Codex extension model transport', () => {
     );
     expect(JSON.stringify(externalPort.messages)).not.toContain('sk-private-secret');
     expect(JSON.stringify(diagnostics)).not.toContain('sk-private-secret');
+  });
+
+  it('bounds cleanup when an older companion does not acknowledge a completed response', async () => {
+    vi.useFakeTimers();
+    try {
+      const diagnostics: CodexModelDiagnosticEvent[] = [];
+      const encoder = new TextEncoder();
+      const externalPort = port();
+      createCodexModelPortListener({
+        providerId: 'openai/codex-experimental',
+        tokenService: tokenService(),
+        accountRoutingStore: routingStore(),
+        fetchRequest: vi.fn<CodexModelFetch>(() =>
+          Promise.resolve({
+            status: 200,
+            body: new ReadableStream<Uint8Array>({
+              start(controller) {
+                controller.enqueue(encoder.encode('data: {"type":"response.completed"}\n\n'));
+                controller.close();
+              },
+            }),
+          }),
+        ),
+        authorizer: { assertAuthorized: vi.fn() },
+        diagnosticSink: (event) => diagnostics.push(event),
+      })(externalPort.value);
+
+      externalPort.send(request());
+      await waitForMessage(externalPort.messages, { type: 'end', requestId: 'request-1' });
+      expect(externalPort.disconnect).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(CODEX_MODEL_END_ACK_TIMEOUT_MS - 1);
+      expect(externalPort.disconnect).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+
+      expect(externalPort.disconnect).toHaveBeenCalledOnce();
+      expect(externalPort.listenerCount()).toBe(0);
+      expect(
+        diagnostics.filter((event) => event.event === 'provider.response.completed'),
+      ).toHaveLength(1);
+      externalPort.send({ type: 'end-ack', requestId: 'request-1' });
+      expect(externalPort.disconnect).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('cleans up provider-fetch failures once without waiting for an acknowledgement', async () => {
+    const diagnostics: CodexModelDiagnosticEvent[] = [];
+    const externalPort = port();
+    createCodexModelPortListener({
+      providerId: 'openai/codex-experimental',
+      tokenService: tokenService(),
+      accountRoutingStore: routingStore(),
+      fetchRequest: vi.fn<CodexModelFetch>(() => Promise.reject(new Error('provider unavailable'))),
+      authorizer: { assertAuthorized: vi.fn() },
+      diagnosticSink: (event) => diagnostics.push(event),
+    })(externalPort.value);
+
+    externalPort.send(request());
+    await vi.waitFor(() =>
+      expect(externalPort.messages).toContainEqual(
+        expect.objectContaining({ type: 'error', requestId: 'request-1' }),
+      ),
+    );
+
+    expect(externalPort.disconnect).toHaveBeenCalledOnce();
+    expect(externalPort.listenerCount()).toBe(0);
+    expect(diagnostics.filter((event) => event.event === 'request.failed')).toHaveLength(1);
+  });
+
+  it('aborts provider work and cleans up once when the caller disconnects', async () => {
+    const diagnostics: CodexModelDiagnosticEvent[] = [];
+    let providerSignal: AbortSignal | undefined;
+    const externalPort = port();
+    const fetchRequest = vi.fn<CodexModelFetch>(
+      (_input, init) =>
+        new Promise((_resolve, reject) => {
+          providerSignal = init.signal;
+          init.signal.addEventListener('abort', () => reject(new Error('aborted')));
+        }),
+    );
+    createCodexModelPortListener({
+      providerId: 'openai/codex-experimental',
+      tokenService: tokenService(),
+      accountRoutingStore: routingStore(),
+      fetchRequest,
+      authorizer: { assertAuthorized: vi.fn() },
+      diagnosticSink: (event) => diagnostics.push(event),
+    })(externalPort.value);
+
+    externalPort.send(request());
+    await vi.waitFor(() => expect(fetchRequest).toHaveBeenCalledOnce());
+    externalPort.disconnectExternally();
+    externalPort.disconnectExternally();
+    await vi.waitFor(() =>
+      expect(diagnostics).toContainEqual(
+        expect.objectContaining({ event: 'request.failed', code: 'CANCELLED' }),
+      ),
+    );
+
+    expect(providerSignal?.aborted).toBe(true);
+    expect(externalPort.disconnect).not.toHaveBeenCalled();
+    expect(externalPort.listenerCount()).toBe(0);
+    expect(diagnostics.filter((event) => event.event === 'port.disconnected')).toHaveLength(1);
+    expect(diagnostics.filter((event) => event.event === 'request.failed')).toHaveLength(1);
   });
 
   it('rejects bodies that could retain a provider response', async () => {

@@ -2,6 +2,17 @@
 
 This project follows a milestone changelog alongside Changesets for public package versioning.
 
+## Unreleased — Codex transport terminal handshake
+
+### Fixed
+
+- The experimental Companion transport now acknowledges a validated, request-scoped `end` message
+  before the extension closes its Chrome Port, preventing a completed response from being
+  misreported as a connection failure.
+- Terminal cleanup is idempotent across completion, provider failure, cancellation, malformed
+  messages, and disconnects. An acknowledgement timeout keeps older Companion versions compatible
+  without leaving extension ports open indefinitely.
+
 ## Public package releases
 
 - Renamed workspace packages to the search-friendly `@mgravey/loom-*` scope and marked the stable

@@ -47,8 +47,14 @@ export interface ChromeDeclarativeNetRequestApi {
 export interface CodexExternalPort {
   readonly name: string;
   readonly sender?: ChromeMessageSender;
-  readonly onMessage: { addListener(listener: (message: unknown) => void): void };
-  readonly onDisconnect: { addListener(listener: () => void): void };
+  readonly onMessage: {
+    addListener(listener: (message: unknown) => void): void;
+    removeListener?(listener: (message: unknown) => void): void;
+  };
+  readonly onDisconnect: {
+    addListener(listener: () => void): void;
+    removeListener?(listener: () => void): void;
+  };
   postMessage(message: unknown): void;
   disconnect(): void;
 }

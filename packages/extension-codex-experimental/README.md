@@ -11,6 +11,11 @@ Rejected provider responses are reduced to a bounded code, sanitized 512-charact
 retryability classification, and a capped millisecond delay parsed from `Retry-After`; complete
 bodies and response headers never cross the extension port.
 
+After forwarding the complete response, the extension sends a request-scoped `end` and waits for a
+strictly matching Companion `end-ack` before disconnecting the Port. A one-second fallback closes
+the Port for compatibility with older Companion versions. Disconnect before `end` still cancels the
+provider request; the fallback runs only after the response has already been delivered as complete.
+
 The current Chrome extension release version is `0.2.0`.
 
 It remains an unsupported ChatGPT/Codex compatibility experiment. Chrome Web Store packaging does

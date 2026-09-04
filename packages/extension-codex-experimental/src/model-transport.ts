@@ -11,6 +11,7 @@ import { DEVELOPMENT_ALLOWED_ORIGINS } from './composition.js';
 export const CODEX_MODEL_PORT_NAME = 'loom/codex-model-experimental/v1' as const;
 export const CODEX_MODEL_TRANSPORT_PROTOCOL = 'loom/codex-model-experimental' as const;
 export const CODEX_MODEL_TRANSPORT_VERSION = 1 as const;
+export const CODEX_MODEL_END_ACK_TIMEOUT_MS = 1_000 as const;
 export const CODEX_RESPONSES_ENDPOINT = 'https://chatgpt.com/backend-api/codex/responses' as const;
 export const CODEX_RESPONSES_COMPACT_ENDPOINT =
   'https://chatgpt.com/backend-api/codex/responses/compact' as const;
@@ -449,6 +450,15 @@ function post(port: CodexExternalPort, message: unknown): boolean {
   }
 }
 
+function isMatchingEndAcknowledgement(value: unknown, requestId: string): boolean {
+  return (
+    isRecord(value) &&
+    Object.keys(value).length === 2 &&
+    value.type === 'end-ack' &&
+    value.requestId === requestId
+  );
+}
+
 async function* decodedBody(body: ReadableStream<Uint8Array>): AsyncIterable<string> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
@@ -474,15 +484,62 @@ export function createCodexModelPortListener(
     if (port.name !== CODEX_MODEL_PORT_NAME) return;
     report(options.diagnosticSink, { event: 'port.connected', stage: 'port' });
     const abortController = new AbortController();
-    let started = false;
-    port.onDisconnect.addListener(() => {
+    let state: 'accepting' | 'running' | 'awaiting-end-ack' | 'closed' = 'accepting';
+    let activeRequestId: string | undefined;
+    let endAckTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const cleanup = (abort: boolean, disconnect: boolean): void => {
+      if (state === 'closed') return;
+      state = 'closed';
+      if (endAckTimer !== undefined) {
+        clearTimeout(endAckTimer);
+        endAckTimer = undefined;
+      }
+      port.onMessage.removeListener?.(onMessage);
+      port.onDisconnect.removeListener?.(onDisconnect);
+      activeRequestId = undefined;
+      if (abort) abortController.abort();
+      if (!disconnect) return;
+      try {
+        port.disconnect();
+      } catch {
+        // The caller may already have disconnected.
+      }
+    };
+
+    const finishWithEndHandshake = (requestId: string): boolean => {
+      if (state !== 'running') return false;
+      activeRequestId = requestId;
+      state = 'awaiting-end-ack';
+      endAckTimer = setTimeout(() => {
+        cleanup(false, true);
+      }, CODEX_MODEL_END_ACK_TIMEOUT_MS);
+      if (!post(port, { type: 'end', requestId })) {
+        cleanup(false, true);
+      }
+      return true;
+    };
+
+    function onDisconnect(): void {
+      if (state === 'closed') return;
       report(options.diagnosticSink, { event: 'port.disconnected', stage: 'port' });
-      abortController.abort();
-    });
-    port.onMessage.addListener((untrustedMessage) => {
-      if (started) return;
-      started = true;
+      cleanup(true, false);
+    }
+
+    function onMessage(untrustedMessage: unknown): void {
+      if (state === 'awaiting-end-ack') {
+        if (
+          activeRequestId !== undefined &&
+          isMatchingEndAcknowledgement(untrustedMessage, activeRequestId)
+        ) {
+          cleanup(false, true);
+        }
+        return;
+      }
+      if (state !== 'accepting') return;
+      state = 'running';
       void (async () => {
+        let awaitingEndAcknowledgement = false;
         let requestId = 'invalid-request';
         let stage: CodexModelDiagnosticStage = 'authorization';
         try {
@@ -571,7 +628,7 @@ export function createCodexModelPortListener(
               ...metadata,
             });
             post(port, { type: 'provider-error', requestId, status: response.status, ...metadata });
-            post(port, { type: 'end', requestId });
+            awaitingEndAcknowledgement = finishWithEndHandshake(requestId);
             return;
           }
           stage = 'stream';
@@ -602,7 +659,7 @@ export function createCodexModelPortListener(
             chunks,
             characters,
           });
-          post(port, { type: 'end', requestId });
+          awaitingEndAcknowledgement = finishWithEndHandshake(requestId);
         } catch (error) {
           const code = failureCode(stage, abortController.signal.aborted);
           report(options.diagnosticSink, {
@@ -622,13 +679,12 @@ export function createCodexModelPortListener(
               : 'Experimental Codex model transport failed.',
           });
         } finally {
-          try {
-            port.disconnect();
-          } catch {
-            // The caller may already have disconnected.
-          }
+          if (!awaitingEndAcknowledgement) cleanup(true, true);
         }
       })();
-    });
+    }
+
+    port.onDisconnect.addListener(onDisconnect);
+    port.onMessage.addListener(onMessage);
   };
 }

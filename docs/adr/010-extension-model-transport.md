@@ -29,6 +29,14 @@ honest Loom origin/session/request headers, performs the fetch, and relays only 
 chunks. Port disconnect cancels the request. Errors are sanitized and provider response bodies are
 not returned for rejected HTTP statuses.
 
+Completion uses an additive protocol-version-1 terminal handshake. After all provider bytes have
+been forwarded, the extension posts a request-scoped `end` and keeps the Port open. The Companion
+strictly validates that message, marks the request ended, finishes the response stream, and posts a
+matching `end-ack`; only then does the extension disconnect. A short extension-owned timeout closes
+the Port when an older Companion does not acknowledge `end`. Because the Companion has already
+finished the response before acknowledging it, that delayed fallback disconnect cannot convert a
+valid completion into `CONNECTION_FAILED`; disconnect before a valid `end` still does.
+
 Parse the initial ID token in trusted extension code and persist only the non-bearer account routing
 ID in trusted storage. Do not retain or expose the raw ID token for inference routing. Keep the
 model port protocol separate from `@mgravey/loom-credential-broker-api`; do not change Core or the

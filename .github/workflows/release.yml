@@ -2,6 +2,30 @@ name: Publish npm packages
 
 on:
   workflow_dispatch:
+    inputs:
+      package:
+        description: Public package directory to publish
+        required: true
+        default: companion-codex-experimental
+        type: choice
+        options:
+          - agent-codex
+          - auth-extension
+          - coding
+          - companion-codex-experimental
+          - core
+          - credential-broker-api
+          - credential-provider-api
+          - execution-browser
+          - extension
+          - model-codex-experimental
+          - model-openai-responses
+          - platform-browser
+          - plugin-api
+          - storage-indexeddb
+          - tool-workspace
+          - types
+          - workspace-fsa
 
 permissions:
   contents: read
@@ -14,7 +38,7 @@ jobs:
     environment: npm
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -22,11 +46,10 @@ jobs:
           run_install: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
-          registry-url: https://registry.npmjs.org
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -40,7 +63,13 @@ jobs:
       - name: Verify release and package tarballs
         run: pnpm release:check && pnpm release:pack
 
-      - name: Publish unpublished versions
-        run: pnpm changeset publish
+      - name: Publish selected package
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          LOOM_RELEASE_DIRECTORY: ${{ inputs.package }}
+        run: |
+          LOOM_RELEASE_NAME=$(node -p "require('./packages/${LOOM_RELEASE_DIRECTORY}/package.json').name")
+          LOOM_RELEASE_VERSION=$(node -p "require('./packages/${LOOM_RELEASE_DIRECTORY}/package.json').version")
+          LOOM_RELEASE_TARBALL="release-artifacts/mgravey-loom-${LOOM_RELEASE_DIRECTORY}-${LOOM_RELEASE_VERSION}.tgz"
+          test "${LOOM_RELEASE_NAME}" = "@mgravey/loom-${LOOM_RELEASE_DIRECTORY}"
+          test -f "${LOOM_RELEASE_TARBALL}"
+          npm publish "${LOOM_RELEASE_TARBALL}"

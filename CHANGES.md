@@ -12,6 +12,8 @@ This project follows a milestone changelog alongside Changesets for public packa
 - Terminal cleanup is idempotent across completion, provider failure, cancellation, malformed
   messages, and disconnects. An acknowledgement timeout keeps older Companion versions compatible
   without leaving extension ports open indefinitely.
+- Corrected the trusted-publishing workflow to publish one explicitly selected, validated package
+  tarball without an empty classic-auth token shadowing NPM's OIDC exchange.
 
 ## Public package releases
 

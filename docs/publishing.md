@@ -114,9 +114,13 @@ After each first release, configure the package on npmjs.com with this trusted p
 
 Create a protected GitHub `npm` environment that requires maintainer approval. Once every package
 uses trusted publishing, remove any `NPM_TOKEN` repository secret. The manual **Publish npm
-packages** workflow has `id-token: write`, reruns the complete verification and tarball smoke test,
-installs an npm CLI with trusted-publishing support, and invokes `changeset publish` with
-short-lived OIDC credentials and automatic provenance.
+packages** workflow requires selecting one public package directory, has `id-token: write`, reruns
+the complete verification and tarball smoke test, and publishes that package's validated pnpm
+tarball with an npm CLI that supports short-lived OIDC credentials and automatic provenance.
+Publishing one explicit tarball prevents packages awaiting their deliberate first release from being
+created as a side effect. The workflow intentionally leaves `NODE_AUTH_TOKEN` unset and does not ask
+`setup-node` to write registry credentials, so an empty classic-auth entry cannot suppress NPM's
+OIDC exchange.
 
 For the initial CI-based publication instead of a local first publish, create a narrowly scoped npm
 automation token as the `NPM_TOKEN` GitHub secret, run the protected workflow once, configure

@@ -4,7 +4,8 @@ This package contains three deliberately separate browser surfaces:
 
 - `index.html` introduces the provider-neutral Loom.js library and its potential;
 - `docs.html` provides step-by-step onboarding from repository setup through custom capabilities;
-- `workbench.html` runs the experimental ChatGPT-backed composition.
+- `workbench.html` runs either the experimental ChatGPT-backed composition or a direct
+  OpenAI-compatible Responses server.
 - `install.html`, `privacy.html`, `terms.html`, `legal.html`, and `support.html` provide the
   unpacked installation and future Store-facing policy/support surfaces.
 
@@ -23,6 +24,12 @@ tokens remain extension-only.
 
 This is an unsupported interoperability experiment, not a public OpenAI OAuth integration. Never
 paste tokens into this page, configuration, source files, logs, or test fixtures.
+
+The separate **OpenAI-compatible server** connection needs no extension. It explicitly connects to a
+user-entered `/v1` base URL, discovers models when available, and persists the endpoint, selected
+model, and API key in this browser origin. Use **Clear API key** to remove it. See
+[Local and LAN models](../../docs/local-models.md) for Ollama, LM Studio, CORS, LAN, HTTPS, and tool
+compatibility requirements.
 
 The current checkout's observed unpacked ID is `foofdcgdelahbdgdfgocoeajdodhjbjo`. The site reads it
 from the development `deployment-config.js`. Another checkout may receive a different unpacked ID,

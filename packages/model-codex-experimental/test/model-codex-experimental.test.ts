@@ -607,3 +607,14 @@ describe('experimental Codex Responses model', () => {
     });
   });
 });
+
+it('applies selected reasoning effort to generation and compaction in both protocols', () => {
+  for (const protocol of ['classic', 'responses-lite'] as const) {
+    expect(
+      createCodexResponsesRequestBody(REQUEST, 'test-model', protocol, 'high').reasoning,
+    ).toMatchObject({ effort: 'high' });
+    expect(
+      createCodexCompactionRequestBody(REQUEST, 'test-model', protocol, 'low').reasoning,
+    ).toMatchObject({ effort: 'low' });
+  }
+});

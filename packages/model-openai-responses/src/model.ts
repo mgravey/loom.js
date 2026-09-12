@@ -62,6 +62,9 @@ export interface OpenAIResponsesRequestBodyOptions {
   readonly programmaticToolCalling?: boolean;
   readonly reasoningEffort?: OpenAIReasoningEffort;
   readonly textVerbosity?: OpenAITextVerbosity;
+  /** Emits only the portable OpenAI-compatible Responses subset. */
+  readonly portable?: boolean;
+  readonly stream?: boolean;
 }
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
@@ -103,7 +106,9 @@ function validateHeaders(
 
 function validateCommon(options: CreateOpenAIResponsesModelOptions): ValidatedCommonOptions {
   const reasoningEffort = options.reasoningEffort ?? DEFAULT_REASONING_EFFORT;
-  if (!['none', 'low', 'medium', 'high', 'xhigh', 'max'].includes(reasoningEffort)) {
+  if (
+    !['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'].includes(reasoningEffort)
+  ) {
     throw new OpenAIResponsesModelError(
       'INVALID_CONFIGURATION',
       'OpenAI Responses reasoning effort is invalid.',
@@ -287,7 +292,8 @@ export function createOpenAIResponsesRequestBody(
     );
   }
   const aliases = operationAliases(request);
-  const programmaticToolCalling = options.programmaticToolCalling ?? true;
+  const portable = options.portable ?? false;
+  const programmaticToolCalling = portable ? false : (options.programmaticToolCalling ?? true);
   const functionTools: JsonObject[] = request.tools.map((tool) => {
     const allowedCallers = programmaticToolCalling
       ? (tool.allowedCallers ?? ['direct'])
@@ -297,24 +303,34 @@ export function createOpenAIResponsesRequestBody(
       name: providerOperation(aliases, tool.operation),
       description: tool.description,
       parameters: tool.inputSchema,
-      ...(tool.outputSchema === undefined ? {} : { output_schema: tool.outputSchema }),
-      allowed_callers: allowedCallers,
+      ...(portable || tool.outputSchema === undefined ? {} : { output_schema: tool.outputSchema }),
+      ...(portable ? {} : { allowed_callers: allowedCallers }),
       strict: false,
     };
   });
   const tools: JsonObject[] = programmaticToolCalling
     ? [...functionTools, { type: 'programmatic_tool_calling' }]
     : functionTools;
-  return {
+  const base = {
     model: requiredString(model, 'model'),
     instructions: programmaticToolCalling
       ? `${request.instructions}\n\n${PROGRAMMATIC_INSTRUCTIONS}`
       : request.instructions,
     input: request.messages.flatMap((message) => encodeMessage(message, aliases)),
     tools,
+    stream: options.stream ?? false,
+  };
+  if (portable)
+    return {
+      ...base,
+      ...(options.reasoningEffort === undefined
+        ? {}
+        : { reasoning: { effort: options.reasoningEffort } }),
+    };
+  return {
+    ...base,
     tool_choice: 'auto',
     parallel_tool_calls: true,
-    stream: false,
     reasoning: { effort: options.reasoningEffort ?? DEFAULT_REASONING_EFFORT },
     store: false,
     include: ['reasoning.encrypted_content'],

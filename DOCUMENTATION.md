@@ -17,6 +17,8 @@ phases.
 - [Minimal coding agent](./docs/minimal-agent.md) — Phase 2 composition and protocol boundaries
 - [OpenAI Platform Responses](./docs/openai-responses.md) — supported Responses API adapter,
   Programmatic Tool Calling, continuation, and API-key trust boundary
+- [Local and LAN models](./docs/local-models.md) — direct OpenAI-compatible Responses setup,
+  streaming/JSON behavior, model discovery, CORS, persisted keys, Ollama, and LM Studio
 - [Provider failure handling](./docs/provider-failures.md) — sanitized Codex failure fields, retry
   classification, Retry-After propagation, and transport validation
 - [Context compaction](./docs/context-compaction.md) — provider-native compact requests, opaque
@@ -42,8 +44,8 @@ phases.
 - [Architecture decision records](./docs/adr/README.md) — rationale behind the stable contracts
 - [Changes](./CHANGES.md) — milestone-level release notes
 
-The documented OpenAI Platform adapter is a provider leaf and does not enter Core. The coding
-orchestrator, project workspaces, and browser execution adapters are independently replaceable
-packages. The generic extension still has only a mock provider; the separate Codex experiment is
-disabled by default and does not establish a supported OpenAI authentication or ChatGPT inference
-contract.
+The Platform and portable OpenAI-compatible adapters are provider leaves and do not enter Core. The
+coding orchestrator, project workspaces, and browser execution adapters are independently
+replaceable packages. The generic extension still has only a mock provider; the separate Codex
+experiment is disabled by default and does not establish a supported OpenAI authentication or
+ChatGPT inference contract.

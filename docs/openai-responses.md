@@ -26,6 +26,27 @@ package never reads environment variables or a global `fetch`.
 
 Tests use deterministic local transports and do not contact OpenAI.
 
+## OpenAI-compatible servers
+
+The same package exposes a separate, opt-in portable factory without changing the Platform factory's
+defaults:
+
+```ts
+import { createOpenAICompatibleResponsesModel } from '@mgravey/loom-model-openai-responses';
+
+const model = createOpenAICompatibleResponsesModel({
+  model: 'qwen3:8b',
+  endpoint: 'http://localhost:11434/v1/responses',
+  authentication: async () => localServerApiKey,
+  fetch: compatibleHostFetch,
+});
+```
+
+The host fetch may return decoded SSE chunks or a complete JSON body. Streaming is requested by
+default, optional Bearer authentication is omitted when no supplier is provided, and the request
+contains no Platform-only hosted-program fields. Endpoint selection, CORS, persistence, and browser
+network policy remain application responsibilities. See [Local and LAN models](./local-models.md).
+
 ## Composition
 
 ```ts

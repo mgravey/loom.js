@@ -78,6 +78,13 @@ preferred transport is credential-free from Loom's perspective and implemented b
 application backend. See [the Platform Responses guide](./openai-responses.md) and
 [ADR-011](./adr/011-platform-responses-programs.md).
 
+The package also exposes a separately identified OpenAI-compatible Responses capability. It uses
+only portable stateless input/function items, optional injected Bearer authentication, and bounded
+SSE-or-JSON decoding. The browser workbench owns explicit endpoint selection, model discovery, CORS
+fetch, and origin-scoped settings. No local-network authority enters Core or Companion. See
+[the local-model guide](./local-models.md) and
+[ADR-016](./adr/016-direct-openai-compatible-responses.md).
+
 The browser workbench adds two more removable layers. `@mgravey/loom-coding` owns application-level
 coding session lifecycle and composes the existing model, agent, and tool contracts without entering
 Core. `@mgravey/loom-execution-browser` owns credential-free QuickJS, WebContainer, and Pyodide

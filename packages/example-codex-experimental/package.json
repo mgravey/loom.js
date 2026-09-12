@@ -15,6 +15,7 @@
     "@mgravey/loom-companion-codex-experimental": "workspace:^",
     "@mgravey/loom-execution-browser": "workspace:^",
     "@mgravey/loom-model-codex-experimental": "workspace:^",
+    "@mgravey/loom-model-openai-responses": "workspace:^",
     "@mgravey/loom-tool-workspace": "workspace:^",
     "@mgravey/loom-types": "workspace:^",
     "@mgravey/loom-workspace-fsa": "workspace:^",

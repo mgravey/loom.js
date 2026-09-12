@@ -37,6 +37,9 @@ codex-transport-traces/
 *.codex-transport-trace.json
 *.openai-response.json
 openai-response-dumps/
+# Direct local/LAN model captures can contain prompts, tool results, and private endpoints.
+local-model-response-dumps/
+*.local-model-response.json
 # Raw provider-error captures are local security-debugging artifacts, never fixtures.
 provider-error-dumps/
 # Raw compact endpoint payloads can contain conversation context and must remain local.
@@ -72,3 +75,6 @@ scripts/after-effects/renders/
 after-effects-reference-animation/*.aep
 after-effects-reference-animation/*.aepx
 after-effects-reference-animation/renders/
+
+# Local model catalogue captures may contain account-specific metadata.
+model-catalogue-dumps/

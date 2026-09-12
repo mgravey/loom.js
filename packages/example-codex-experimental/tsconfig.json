@@ -16,6 +16,7 @@
     { "path": "../companion-codex-experimental" },
     { "path": "../execution-browser" },
     { "path": "../model-codex-experimental" },
+    { "path": "../model-openai-responses" },
     { "path": "../tool-workspace" },
     { "path": "../workspace-fsa" }
   ]

@@ -15,6 +15,30 @@ This project follows a milestone changelog alongside Changesets for public packa
 - Corrected the trusted-publishing workflow to publish one explicitly selected, validated package
   tarball without an empty classic-auth token shadowing NPM's OIDC exchange.
 
+## Unreleased — Local and LAN Responses
+
+### Added
+
+- Added `createOpenAICompatibleResponsesModel` and a separate plugin capability alongside the
+  unchanged OpenAI Platform adapter. The compatible path emits a portable request subset, supports
+  optional Bearer authentication, and decodes bounded Responses SSE or complete JSON.
+- Added an explicit OpenAI-compatible workbench connection with `/v1/models` discovery, manual model
+  fallback, direct `/v1/responses` requests, persisted endpoint/model/API-key settings, and no
+  dependency on Companion authentication.
+- Versioned workspace conversation records now retain their model-provider kind while migrating
+  existing version-one records to the experimental ChatGPT provider.
+- Added unit and browser coverage for streamed text, split tool calls, JSON fallback, credentials,
+  discovery, storage, migration, cancellation, limits, and preservation of the existing extension
+  path.
+
+### Security
+
+- Local server URLs require explicit connection, safe HTTP(S) URL structure, no redirects or
+  cookies, and server-provided CORS. Companion receives no generic localhost or LAN permission.
+- Persisted API keys remain origin-scoped browser data and never enter workspaces, conversation
+  records, browser runtimes, or diagnostics; the workbench provides explicit deletion and warns that
+  browser storage is not an encrypted vault.
+
 ## Public package releases
 
 - Renamed workspace packages to the search-friendly `@mgravey/loom-*` scope and marked the stable
@@ -353,3 +377,7 @@ This project follows a milestone changelog alongside Changesets for public packa
 - Hot plugin installation/removal, lifecycle restart, dependency version ranges, configuration
   mutation, persistence, and conversation history.
 - Package publication, license selection, Changesets, and multi-browser CI.
+
+Added model catalogue selection/refresh and a persisted thinking-level control. Both model adapters
+accept `reasoningEffort`; Codex uses it for generation and compaction, and compatible requests
+include it only when explicitly configured.

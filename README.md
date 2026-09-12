@@ -35,7 +35,9 @@ workspaces with safe ZIP transfer, and isolated QuickJS, WebContainer, and Pyodi
 multi-mode browser workbench. Core and the agent packages remain free of provider, browser, and
 extension APIs. Loom now also includes a separate adapter for the documented OpenAI Platform
 Responses API; applications must still supply a secure transport or trusted-host credential source.
-Loom contains no supported OpenAI OAuth product or built-in API-key host.
+The same package now has a separate portable Responses factory for CORS-enabled localhost and LAN
+servers, and the workbench exposes it as an explicit direct connection. Loom contains no supported
+OpenAI OAuth product or built-in server-side API-key host.
 
 The project now includes a browser-readable front page and onboarding manual. After serving the
 `packages` directory, open `http://localhost:4173/example-codex-experimental/` to learn what the
@@ -127,7 +129,7 @@ reduced-motion and loading fallback.
 | `@mgravey/loom-agent-codex`                  | Minimal streamed model/tool orchestration; no provider integration                  |
 | `@mgravey/loom-coding`                       | Coding sessions, follow-ups, cancellation, transcripts, and runtime dispatch        |
 | `@mgravey/loom-execution-browser`            | Credential-free QuickJS, WebContainer, and Pyodide execution adapters               |
-| `@mgravey/loom-model-openai-responses`       | Documented Platform Responses adapter with programmatic tool continuations          |
+| `@mgravey/loom-model-openai-responses`       | Platform and portable OpenAI-compatible Responses model adapters                    |
 | `@mgravey/loom-platform-browser`             | Explicitly supplied browser host capability                                         |
 | `@mgravey/loom-storage-indexeddb`            | Namespaced byte storage implemented with IndexedDB                                  |
 | `@mgravey/loom-workspace-fsa`                | File System Access and OPFS implementation of binary project workspaces             |
@@ -193,6 +195,11 @@ sanitized metadata (`providerCode`, `providerMessage`, `retryable`, and `retryAf
 response bodies and headers remain extension-owned. Streamed `error`, `response.failed`, and
 `response.incomplete` events produce the same structured model-error fields. See
 [Provider failure handling](./docs/provider-failures.md).
+
+The workbench can instead select a direct OpenAI-compatible server. That path discovers models from
+`GET /v1/models`, sends the portable tool-capable request subset to `POST /v1/responses`, and
+accepts either SSE or complete JSON. It uses no Companion permission or authentication state;
+browser CORS and mixed-content rules apply. See [Local and LAN models](./docs/local-models.md).
 
 ## Install as a library
 
@@ -438,3 +445,9 @@ milestone history.
 
 Loom.js source and public package artifacts are available under the
 [Mozilla Public License 2.0](./LICENSE).
+
+The workbench provides an **Available models** selector and **Refresh models** action. Local
+connections discover `/models`; experimental Codex discovery uses its authenticated backend
+catalogue and retains manual model entry if unavailable. **Thinking level** persists in this browser
+and applies to new requests; Default preserves provider behavior (medium for Codex, omitted for
+compatible servers). Supported levels depend on the selected server/model.

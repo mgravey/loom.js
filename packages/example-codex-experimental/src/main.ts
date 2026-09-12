@@ -18,9 +18,15 @@ import {
 } from '@mgravey/loom-execution-browser';
 import {
   createCodexExperimentalModel,
+  type CodexReasoningEffort,
   type CodexResponsesFetch,
   type CodexResponsesHttpResponse,
 } from '@mgravey/loom-model-codex-experimental';
+import {
+  OpenAIResponsesModelError,
+  createOpenAICompatibleResponsesModel,
+  type OpenAICompatibleResponsesFetch,
+} from '@mgravey/loom-model-openai-responses';
 import {
   createMemoryProjectWorkspace,
   createProjectWorkspaceTools,
@@ -53,6 +59,17 @@ import {
   updateWorkspaceConversation,
   type WorkspaceConversation,
 } from './conversation-store.js';
+import {
+  clearLocalModelApiKey,
+  loadLocalModelConnection,
+  loadWorkbenchProvider,
+  openAICompatibleBaseUrl,
+  openAICompatibleEndpoint,
+  openAICompatibleModelIds,
+  saveLocalModelConnection,
+  saveWorkbenchProvider,
+  type WorkbenchModelProvider,
+} from './local-model-connection.js';
 
 const PROVIDER_ID = 'openai/codex-experimental';
 const CODEX_RESPONSES_ENDPOINT = 'https://chatgpt.com/backend-api/codex/responses';
@@ -100,7 +117,33 @@ function requiredElement<ElementType extends HTMLElement>(
 }
 
 const extensionIdInput = requiredElement('#extension-id', HTMLInputElement);
+const thinkingLevelSelect = requiredElement('#thinking-level', HTMLSelectElement);
+const refreshModelsButton = requiredElement('#refresh-models', HTMLButtonElement);
+const availableModelsSelect = requiredElement('#available-models', HTMLSelectElement);
+const savedThinkingLevel = globalThis.localStorage.getItem('loom.thinking-level') ?? '';
+if (
+  ['', 'none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'].includes(
+    savedThinkingLevel,
+  )
+)
+  thinkingLevelSelect.value = savedThinkingLevel;
+
 const modelInput = requiredElement('#model', HTMLInputElement);
+const modelProviderSelect = requiredElement('#model-provider', HTMLSelectElement);
+const codexConnectionSettings = requiredElement('#codex-connection-settings', HTMLDivElement);
+const localModelConnectionSettings = requiredElement(
+  '#local-model-connection-settings',
+  HTMLDivElement,
+);
+const localModelBaseUrlInput = requiredElement('#local-model-base-url', HTMLInputElement);
+const localModelApiKeyInput = requiredElement('#local-model-api-key', HTMLInputElement);
+const connectLocalModelButton = requiredElement('#connect-local-model', HTMLButtonElement);
+const clearLocalModelKeyButton = requiredElement('#clear-local-model-key', HTMLButtonElement);
+const localModelConnectionStatus = requiredElement(
+  '#local-model-connection-status',
+  HTMLParagraphElement,
+);
+const localModelList = requiredElement('#local-model-list', HTMLDataListElement);
 const promptInput = requiredElement('#prompt', HTMLTextAreaElement);
 const checkAuthButton = requiredElement('#check-auth', HTMLButtonElement);
 const runButton = requiredElement('#run', HTMLButtonElement);
@@ -181,6 +224,15 @@ function initialExtensionId(): string {
 }
 
 extensionIdInput.value = initialExtensionId();
+const storedLocalModelConnection = loadLocalModelConnection(globalThis.localStorage);
+localModelBaseUrlInput.value = storedLocalModelConnection.baseUrl;
+localModelApiKeyInput.value = storedLocalModelConnection.apiKey;
+modelProviderSelect.value = loadWorkbenchProvider(globalThis.localStorage);
+if (modelProviderSelect.value === 'openai-compatible-responses') {
+  modelInput.value = storedLocalModelConnection.model;
+}
+let codexModelSelection =
+  modelProviderSelect.value === 'codex-experimental' ? modelInput.value : 'gpt-5.6-sol';
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -349,6 +401,29 @@ function appendRuntimeOutput(chunk: string): void {
 }
 
 function errorMessage(error: unknown): string {
+  if (error instanceof OpenAIResponsesModelError) {
+    if (error.code === 'TRANSPORT_FAILED') {
+      return 'The model server could not be reached. Check its address, CORS allowlist, network binding, and browser mixed-content policy.';
+    }
+    if (error.code === 'AUTHENTICATION_FAILED' || error.status === 401 || error.status === 403) {
+      return 'The model server rejected authentication. Check or clear the configured API key.';
+    }
+    if (error.status === 404) {
+      return 'The model server does not expose the expected /v1/responses endpoint.';
+    }
+    if (error.code === 'HTTP_ERROR') {
+      return `The model server rejected the request${error.status === undefined ? '.' : ` with HTTP ${String(error.status)}.`}`;
+    }
+    if (error.code === 'MALFORMED_RESPONSE') {
+      return 'The model server returned an invalid Responses JSON or SSE payload.';
+    }
+    if (error.code === 'INCOMPLETE_RESPONSE') {
+      return 'The model server ended the response before it completed.';
+    }
+    if (error.code === 'PROVIDER_ERROR') {
+      return 'The model server reported a response failure.';
+    }
+  }
   return error instanceof Error ? error.message : String(error);
 }
 
@@ -414,6 +489,11 @@ let modelTransportMode: 'direct' | 'relay' = 'direct';
 
 function setTransportMode(mode: 'direct' | 'relay'): void {
   modelTransportMode = mode;
+  if (selectedModelProvider() === 'openai-compatible-responses') {
+    transportStatusElement.textContent = 'Direct model server';
+    transportStatusElement.dataset.mode = 'local';
+    return;
+  }
   transportStatusElement.textContent = mode === 'direct' ? 'Direct preferred' : 'Extension relay';
   transportStatusElement.dataset.mode = mode;
   const extensionId = extensionIdInput.value.trim();
@@ -690,6 +770,192 @@ const directFirstModelFetch: CodexResponsesFetch = async (request) => {
   }
 };
 
+function assertLocalEndpointUsable(baseUrl: string): string {
+  const normalized = openAICompatibleBaseUrl(baseUrl);
+  if (globalThis.location.protocol === 'https:' && new URL(normalized).protocol === 'http:') {
+    throw new Error(
+      'An HTTPS workbench cannot connect to an HTTP model server. Use the locally served HTTP workbench or enable HTTPS on the model server.',
+    );
+  }
+  return normalized;
+}
+
+function currentLocalModelSettings() {
+  return Object.freeze({
+    baseUrl: assertLocalEndpointUsable(localModelBaseUrlInput.value),
+    model: modelInput.value.trim(),
+    apiKey: localModelApiKeyInput.value,
+  });
+}
+
+function persistLocalModelSettings(): ReturnType<typeof currentLocalModelSettings> {
+  const settings = currentLocalModelSettings();
+  saveLocalModelConnection(globalThis.localStorage, settings);
+  localModelBaseUrlInput.value = settings.baseUrl;
+  return settings;
+}
+
+function renderDiscoveredModels(models: readonly string[]): void {
+  availableModelsSelect.replaceChildren(
+    new Option('Select a model', ''),
+    ...models.map((model) => new Option(model, model)),
+  );
+  localModelList.replaceChildren(
+    ...models.map((model) => {
+      const option = globalThis.document.createElement('option');
+      option.value = model;
+      return option;
+    }),
+  );
+}
+
+async function refreshModels(): Promise<void> {
+  refreshModelsButton.disabled = true;
+  const provider = selectedModelProvider();
+  renderDiscoveredModels([]);
+  try {
+    if (provider === 'openai-compatible-responses') {
+      await discoverLocalModels();
+      return;
+    }
+    const credentials = await directCredentials();
+    const response = await globalThis.fetch(
+      'https://chatgpt.com/backend-api/codex/models?client_version=0.1.0',
+      {
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${credentials.accessToken}`,
+          'ChatGPT-Account-Id': credentials.accountId,
+        },
+        cache: 'no-store',
+        credentials: 'omit',
+        redirect: 'error',
+        mode: 'cors',
+        signal: AbortSignal.timeout(15_000),
+      },
+    );
+    if (!response.ok) throw new Error(`Model discovery returned HTTP ${String(response.status)}.`);
+    const value: unknown = await response.json();
+    if (!isRecord(value) || !Array.isArray(value.models))
+      throw new Error('Invalid Codex model list.');
+    const models = openAICompatibleModelIds({
+      data: value.models.map((entry: unknown) => ({
+        id: isRecord(entry) ? entry.slug : undefined,
+      })),
+    });
+    if (selectedModelProvider() !== provider) return;
+    renderDiscoveredModels(models);
+    setStatus(`Discovered ${String(models.length)} Codex models.`);
+  } catch {
+    setStatus('Model discovery unavailable. Check the connection or enter a model ID manually.');
+  } finally {
+    refreshModelsButton.disabled = false;
+  }
+}
+
+async function discoverLocalModels(): Promise<void> {
+  localModelConnected = false;
+  connectLocalModelButton.disabled = true;
+  localModelConnectionStatus.textContent = 'Connecting and discovering models…';
+  setActivityStatus('working', 'Connecting model server');
+  const settings = persistLocalModelSettings();
+  const headers: Record<string, string> = { Accept: 'application/json' };
+  if (settings.apiKey !== '') headers.Authorization = `Bearer ${settings.apiKey}`;
+  let response: Response;
+  try {
+    response = await globalThis.fetch(openAICompatibleEndpoint(settings.baseUrl, 'models'), {
+      method: 'GET',
+      headers,
+      cache: 'no-store',
+      credentials: 'omit',
+      redirect: 'error',
+      mode: 'cors',
+    });
+  } catch {
+    localModelConnected = true;
+    localModelConnectionStatus.textContent =
+      'Model discovery was unavailable. Enter the exact model ID; the first run will test the Responses endpoint.';
+    setStatus('Connected configuration saved; model discovery was unavailable.');
+    setActivityStatus('idle', 'Manual model ID');
+    return;
+  } finally {
+    connectLocalModelButton.disabled = false;
+    updateControls();
+  }
+  localModelConnected = true;
+  if (!response.ok) {
+    localModelConnectionStatus.textContent = `Model discovery returned HTTP ${String(response.status)}. Enter the exact model ID to continue.`;
+    setStatus('Connected configuration saved; enter a model ID manually.');
+    setActivityStatus('idle', 'Manual model ID');
+    updateControls();
+    return;
+  }
+  const source = await response.text();
+  if (source.length > 1024 * 1024) {
+    localModelConnected = false;
+    throw new Error('Model discovery response is too large.');
+  }
+  let value: unknown;
+  try {
+    value = JSON.parse(source);
+  } catch {
+    localModelConnected = false;
+    throw new Error('Model discovery returned invalid JSON.');
+  }
+  const models = openAICompatibleModelIds(value);
+  renderDiscoveredModels(models);
+  if (modelInput.value.trim() === '' && models[0] !== undefined) modelInput.value = models[0];
+  persistLocalModelSettings();
+  localModelConnectionStatus.textContent =
+    models.length === 0
+      ? 'Connected. No models were listed; enter the exact model ID.'
+      : `Connected. Discovered ${String(models.length)} model${models.length === 1 ? '' : 's'}.`;
+  setStatus('OpenAI-compatible model server connected.');
+  setActivityStatus('idle', 'Ready');
+  updateControls();
+}
+
+const openAICompatibleModelFetch: OpenAICompatibleResponsesFetch = async (request) => {
+  const controller = new AbortController();
+  const unsubscribe = request.signal?.onCancel(() => controller.abort()) ?? (() => undefined);
+  pageDiagnostic('local-model.fetch.started', { direct: true });
+  let response: Response;
+  try {
+    response = await globalThis.fetch(request.url, {
+      method: request.method,
+      headers: request.headers,
+      body: request.body,
+      cache: 'no-store',
+      credentials: 'omit',
+      redirect: 'error',
+      mode: 'cors',
+      signal: controller.signal,
+    });
+  } catch (error) {
+    unsubscribe();
+    throw error;
+  }
+  pageDiagnostic('local-model.fetch.response', { status: response.status, direct: true });
+  const contentType = response.headers.get('content-type') ?? undefined;
+  if (!response.ok) {
+    unsubscribe();
+    return Object.freeze({
+      status: response.status,
+      ...(contentType === undefined ? {} : { contentType }),
+      body: '',
+    });
+  }
+  if (response.body === null) {
+    unsubscribe();
+    throw new Error('Model server response body is unavailable.');
+  }
+  return Object.freeze({
+    status: response.status,
+    ...(contentType === undefined ? {} : { contentType }),
+    body: decodedResponseBody(response.body, unsubscribe),
+  });
+};
+
 function authProvider() {
   const broker = createExternalCredentialBroker({
     extensionId: selectedExtensionId(),
@@ -699,6 +965,7 @@ function authProvider() {
 }
 
 let authenticated = false;
+let localModelConnected = false;
 let activeWorkspace: ProjectWorkspace | undefined;
 let activeWorkspaceMode: 'direct' | 'memory' | 'opfs' | undefined;
 let codingSession: CodingSession | undefined;
@@ -712,6 +979,18 @@ function currentRunSessionId() {
     : sessionId(`loom-${activeConversation.id}`);
 }
 let runtimeCancellation: CancellationSource | undefined;
+
+function selectedModelProvider(): WorkbenchModelProvider {
+  return modelProviderSelect.value === 'openai-compatible-responses'
+    ? 'openai-compatible-responses'
+    : 'codex-experimental';
+}
+
+function modelConnectionReady(): boolean {
+  return selectedModelProvider() === 'openai-compatible-responses'
+    ? localModelConnected && modelInput.value.trim() !== ''
+    : authenticated;
+}
 
 const executionRuntimes: Readonly<Record<WebsiteRuntimeId, BrowserExecutionRuntime>> =
   Object.freeze({
@@ -727,8 +1006,10 @@ function updateControls(): void {
   const readable = canReadWorkspace();
   const writable = canWriteWorkspace();
   const busy = codingSession?.state === 'running' || runtimeCancellation !== undefined;
-  runButton.disabled = !authenticated || !readable;
-  logoutButton.disabled = !authenticated;
+  thinkingLevelSelect.disabled = busy;
+  availableModelsSelect.disabled = busy;
+  runButton.disabled = !modelConnectionReady() || !readable;
+  logoutButton.disabled = selectedModelProvider() !== 'codex-experimental' || !authenticated;
   openWorkspaceButton.disabled = !readable || busy;
   importFolderButton.disabled = !writable;
   importZipButton.disabled = !writable;
@@ -749,6 +1030,28 @@ function updateControls(): void {
     'aria-label',
     hasWorkspace ? 'Send coding request' : 'Choose directory and send',
   );
+}
+
+function updateModelProviderView(): void {
+  const local = selectedModelProvider() === 'openai-compatible-responses';
+  codexConnectionSettings.hidden = local;
+  localModelConnectionSettings.hidden = !local;
+  extensionIdInput.required = !local;
+  if (local) {
+    transportStatusElement.textContent = 'Direct model server';
+    transportStatusElement.dataset.mode = 'local';
+    setActivityStatus(
+      localModelConnected ? 'idle' : 'error',
+      localModelConnected ? 'Ready' : 'Connect server',
+    );
+  } else {
+    setTransportMode(modelTransportMode);
+    setActivityStatus(
+      authenticated ? 'idle' : 'error',
+      authenticated ? 'Ready' : 'Sign-in required',
+    );
+  }
+  updateControls();
 }
 
 async function refreshAuthenticationStatus(updateStatus = true): Promise<boolean> {
@@ -1001,7 +1304,10 @@ function renderConversationHistory(): void {
   activeAssistantMessage = undefined;
   activeAssistantText = '';
   if (activeConversation === undefined) return;
+  modelProviderSelect.value = activeConversation.modelProvider;
   modelInput.value = activeConversation.model;
+  saveWorkbenchProvider(globalThis.localStorage, activeConversation.modelProvider);
+  updateModelProviderView();
   for (const entry of activeConversation.transcript) {
     if (entry.role === 'user') appendUserMessage(entry.content);
     else appendLog(entry.content, 'assistant');
@@ -1075,7 +1381,10 @@ async function createNewConversation(): Promise<void> {
   if (workspace === undefined) throw new Error('Open a workspace first.');
   if (!canWriteWorkspace()) throw new Error('Enable workspace write access to save conversations.');
   await disposeCodingSession();
-  const conversation = createWorkspaceConversation({ model: modelInput.value.trim() });
+  const conversation = createWorkspaceConversation({
+    model: modelInput.value.trim(),
+    modelProvider: selectedModelProvider(),
+  });
   await saveWorkspaceConversation(workspace, conversation);
   replaceConversation(conversation);
   renderConversationHistory();
@@ -1093,6 +1402,7 @@ async function persistActiveConversation(): Promise<void> {
     conversation,
     session.transcript,
     modelInput.value.trim(),
+    selectedModelProvider(),
   );
   replaceConversation(updated);
   if (canWriteWorkspace()) await saveWorkspaceConversation(workspace, updated);
@@ -1272,24 +1582,46 @@ function sessionFor(workspace: ProjectWorkspace): CodingSession {
   if (codingSession !== undefined) return codingSession;
   const model = modelInput.value.trim();
   if (model === '') throw new Error('Model is required.');
+  const reasoningOptions =
+    thinkingLevelSelect.value === ''
+      ? {}
+      : { reasoningEffort: thinkingLevelSelect.value as CodexReasoningEffort };
   const runSessionId = currentRunSessionId();
+  const provider = selectedModelProvider();
+  const selectedModel =
+    provider === 'openai-compatible-responses'
+      ? (() => {
+          if (!localModelConnected) throw new Error('Connect the model server before running.');
+          const settings = persistLocalModelSettings();
+          return createOpenAICompatibleResponsesModel({
+            ...reasoningOptions,
+            model,
+            endpoint: openAICompatibleEndpoint(settings.baseUrl, 'responses'),
+            fetch: openAICompatibleModelFetch,
+            ...(settings.apiKey === ''
+              ? {}
+              : { authentication: () => Promise.resolve(settings.apiKey) }),
+          });
+        })()
+      : createCodexExperimentalModel({
+          ...reasoningOptions,
+          model,
+          wireProtocol: model.startsWith('gpt-5.6') ? 'responses-lite' : 'classic',
+          endpoint: CODEX_RESPONSES_ENDPOINT,
+          authentication: async () => (await directCredentials()).accessToken,
+          accountId: async () => (await directCredentials()).accountId,
+          fetch: directFirstModelFetch,
+          originator: 'loom_page_experiment',
+          headers: {
+            'session-id': runSessionId,
+            'thread-id': runSessionId,
+            version: 'loom.js/0.1.0',
+          },
+        });
   codingSession = createCodingSession({
     id: runSessionId,
     transcript: activeConversation?.transcript ?? [],
-    model: createCodexExperimentalModel({
-      model,
-      wireProtocol: model.startsWith('gpt-5.6') ? 'responses-lite' : 'classic',
-      endpoint: CODEX_RESPONSES_ENDPOINT,
-      authentication: async () => (await directCredentials()).accessToken,
-      accountId: async () => (await directCredentials()).accountId,
-      fetch: directFirstModelFetch,
-      originator: 'loom_page_experiment',
-      headers: {
-        'session-id': runSessionId,
-        'thread-id': runSessionId,
-        version: 'loom.js/0.1.0',
-      },
-    }),
+    model: selectedModel,
     tools: workspaceTools(workspace),
     configuration: {
       maxTurns: 12,
@@ -1303,6 +1635,8 @@ function sessionFor(workspace: ProjectWorkspace): CodingSession {
 async function runAgent(): Promise<void> {
   runButton.disabled = true;
   checkAuthButton.disabled = true;
+  thinkingLevelSelect.disabled = true;
+  availableModelsSelect.disabled = true;
   cancelRunButton.disabled = false;
   allowReadInput.disabled = true;
   allowWriteInput.disabled = true;
@@ -1311,7 +1645,10 @@ async function runAgent(): Promise<void> {
     const prompt = promptInput.value.trim();
     if (prompt === '') throw new Error('Agent request is required.');
     if (activeConversation === undefined) {
-      const conversation = createWorkspaceConversation({ model: modelInput.value.trim() });
+      const conversation = createWorkspaceConversation({
+        model: modelInput.value.trim(),
+        modelProvider: selectedModelProvider(),
+      });
       replaceConversation(conversation);
       if (canWriteWorkspace()) await saveWorkspaceConversation(workspace, conversation);
       renderConversationList();
@@ -1371,6 +1708,8 @@ async function runCommand(): Promise<void> {
   runtimeCancellation = createCancellationSource();
   setActivityStatus('working', `Running ${runtime.kind}`);
   runCommandButton.disabled = true;
+  thinkingLevelSelect.disabled = true;
+  availableModelsSelect.disabled = true;
   cancelRunButton.disabled = false;
   allowReadInput.disabled = true;
   allowWriteInput.disabled = true;
@@ -1561,7 +1900,83 @@ runtimeSelect.addEventListener('change', () => {
         ? 'node index.js'
         : 'quickjs main.js';
 });
-modelInput.addEventListener('change', () => void disposeCodingSession());
+refreshModelsButton.addEventListener('click', () => {
+  void refreshModels();
+});
+thinkingLevelSelect.addEventListener('change', () => {
+  globalThis.localStorage.setItem('loom.thinking-level', thinkingLevelSelect.value);
+  void disposeCodingSession();
+});
+availableModelsSelect.addEventListener('change', () => {
+  if (availableModelsSelect.value === '') return;
+  modelInput.value = availableModelsSelect.value;
+  modelInput.dispatchEvent(new Event('change'));
+});
+modelInput.addEventListener('change', () => {
+  if (selectedModelProvider() === 'openai-compatible-responses') {
+    try {
+      saveLocalModelConnection(globalThis.localStorage, {
+        baseUrl: localModelBaseUrlInput.value,
+        model: modelInput.value,
+        apiKey: localModelApiKeyInput.value,
+      });
+    } catch {
+      // Base URL validation and its actionable error are presented by the explicit Connect action.
+    }
+  } else {
+    codexModelSelection = modelInput.value;
+  }
+  updateControls();
+  void disposeCodingSession();
+});
+modelProviderSelect.addEventListener('change', () => {
+  renderDiscoveredModels([]);
+  const provider = selectedModelProvider();
+  if (provider === 'openai-compatible-responses') {
+    codexModelSelection = modelInput.value;
+    const settings = loadLocalModelConnection(globalThis.localStorage);
+    modelInput.value = settings.model;
+    localModelBaseUrlInput.value = settings.baseUrl;
+    localModelApiKeyInput.value = settings.apiKey;
+    setStatus('Click Connect before sending a request to this model server.');
+  } else {
+    modelInput.value = codexModelSelection;
+    setStatus(
+      authenticated
+        ? 'Authenticated. Open a workspace or run the agent to choose one.'
+        : 'Not authenticated. Complete sign-in from the extension options page.',
+    );
+  }
+  saveWorkbenchProvider(globalThis.localStorage, provider);
+  updateModelProviderView();
+  void disposeCodingSession();
+});
+connectLocalModelButton.addEventListener('click', () => {
+  void discoverLocalModels().catch((error: unknown) => {
+    localModelConnected = false;
+    updateControls();
+    localModelConnectionStatus.textContent = errorMessage(error);
+    setStatus(`Model connection failed: ${errorMessage(error)}`);
+    setActivityStatus('error', 'Connection failed');
+  });
+});
+clearLocalModelKeyButton.addEventListener('click', () => {
+  localModelApiKeyInput.value = '';
+  clearLocalModelApiKey(globalThis.localStorage);
+  localModelConnected = false;
+  localModelConnectionStatus.textContent = 'API key cleared. Connect again to apply the change.';
+  setStatus('Local model API key cleared from browser storage.');
+  updateControls();
+  void disposeCodingSession();
+});
+for (const input of [localModelBaseUrlInput, localModelApiKeyInput]) {
+  input.addEventListener('input', () => {
+    localModelConnected = false;
+    localModelConnectionStatus.textContent = 'Connection settings changed. Connect again.';
+    updateControls();
+    void disposeCodingSession();
+  });
+}
 extensionIdInput.addEventListener('change', () => {
   cachedDirectCredentials = undefined;
   setTransportMode(storedTransportMode());
@@ -1579,8 +1994,12 @@ extensionIdInput.addEventListener('change', () => {
 
 setTransportMode(storedTransportMode());
 setActivityStatus('idle', 'Ready');
+updateModelProviderView();
 updateControls();
-if (EXTENSION_ID_PATTERN.test(extensionIdInput.value.trim())) {
+if (
+  selectedModelProvider() === 'codex-experimental' &&
+  EXTENSION_ID_PATTERN.test(extensionIdInput.value.trim())
+) {
   setStatus('Connecting to extension…');
   void refreshAuthenticationStatus().catch((error: unknown) => {
     authenticated = false;
@@ -1588,4 +2007,7 @@ if (EXTENSION_ID_PATTERN.test(extensionIdInput.value.trim())) {
     setStatus(`Connection failed: ${errorMessage(error)}`);
     setActivityStatus('error', 'Connection failed');
   });
+} else if (selectedModelProvider() === 'openai-compatible-responses') {
+  setStatus('Click Connect before sending a request to this model server.');
+  setActivityStatus('error', 'Connect server');
 }

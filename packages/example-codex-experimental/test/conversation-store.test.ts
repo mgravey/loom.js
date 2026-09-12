@@ -66,4 +66,25 @@ describe('workspace conversation storage', () => {
     expect(conversationTitle('  Run\n the   tests  ')).toBe('Run the tests');
     expect(conversationTitle('x'.repeat(80))).toBe(`${'x'.repeat(55)}…`);
   });
+
+  it('migrates version-one conversations to the experimental provider', async () => {
+    const workspace = createMemoryProjectWorkspace();
+    await workspace.createDirectory(workspacePath('.loom/conversations'), { recursive: true });
+    await workspace.writeFile(
+      workspacePath('.loom/conversations/conversation-legacy.json'),
+      JSON.stringify({
+        version: 1,
+        id: 'conversation-legacy',
+        title: 'Legacy',
+        model: 'gpt-5.6-sol',
+        createdAt: 1,
+        updatedAt: 2,
+        transcript: [],
+      }),
+    );
+
+    await expect(loadWorkspaceConversations(workspace)).resolves.toMatchObject([
+      { version: 2, id: 'conversation-legacy', modelProvider: 'codex-experimental' },
+    ]);
+  });
 });

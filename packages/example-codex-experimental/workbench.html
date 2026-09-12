@@ -747,17 +747,48 @@
           <summary>Connection settings</summary>
           <div class="settings-body">
             <label
-              >Experimental extension ID
-              <input id="extension-id" required autocomplete="off" spellcheck="false" />
+              >Model connection
+              <select id="model-provider">
+                <option value="codex-experimental">Experimental ChatGPT</option>
+                <option value="openai-compatible-responses">OpenAI-compatible server</option>
+              </select>
             </label>
-            <div class="actions">
-              <button id="check-auth" type="button">Reconnect</button>
-              <button id="logout" type="button" disabled>Log out</button>
+            <div id="codex-connection-settings" class="settings-body">
+              <label
+                >Experimental extension ID
+                <input id="extension-id" required autocomplete="off" spellcheck="false" />
+              </label>
+              <div class="actions">
+                <button id="check-auth" type="button">Reconnect</button>
+                <button id="logout" type="button" disabled>Log out</button>
+              </div>
+              <p class="warning">
+                The extension keeps long-lived credentials and relays model traffic only after
+                direct browser access fails.
+              </p>
             </div>
-            <p class="warning">
-              The extension keeps long-lived credentials and relays model traffic only after direct
-              browser access fails.
-            </p>
+            <div id="local-model-connection-settings" class="settings-body" hidden>
+              <label
+                >API base URL
+                <input
+                  id="local-model-base-url"
+                  value="http://localhost:11434/v1"
+                  autocomplete="off"
+                  spellcheck="false"
+                />
+              </label>
+              <label
+                >API key
+                <input id="local-model-api-key" type="password" autocomplete="off" />
+              </label>
+              <div class="actions">
+                <button id="connect-local-model" type="button">Connect</button>
+                <button id="clear-local-model-key" type="button">Clear API key</button>
+              </div>
+              <p id="local-model-connection-status" class="warning">
+                Connect explicitly to discover models. The API key is stored in this browser.
+              </p>
+            </div>
           </div>
         </details>
         <section class="sidebar-section">
@@ -873,10 +904,33 @@
               <input
                 id="model"
                 value="gpt-5.6-sol"
+                list="local-model-list"
                 required
                 autocomplete="off"
                 spellcheck="false"
               />
+              <datalist id="local-model-list"></datalist>
+            </label>
+            <label
+              >Available models
+              <select id="available-models">
+                <option value="">Connect to list models</option>
+              </select>
+            </label>
+            <button id="refresh-models" type="button">Refresh models</button>
+            <label
+              >Thinking level
+              <select id="thinking-level">
+                <option value="">Default</option>
+                <option value="none">None</option>
+                <option value="minimal">Minimal</option>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="xhigh">Extra high</option>
+                <option value="max">Maximum</option>
+                <option value="ultra">Ultra</option>
+              </select>
             </label>
             <div class="composer-actions">
               <button id="cancel-run" type="button" disabled>Cancel</button>

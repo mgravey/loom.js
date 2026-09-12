@@ -4,8 +4,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   OPENAI_RESPONSES_ENDPOINT,
+  OPENAI_COMPATIBLE_RESPONSES_MODEL_CAPABILITY_ID,
   OPENAI_RESPONSES_MODEL_CAPABILITY_ID,
   OpenAIResponsesModelError,
+  createOpenAICompatibleResponsesModel,
+  createOpenAICompatibleResponsesModelPlugin,
   createOpenAIResponsesModel,
   createOpenAIResponsesModelPlugin,
   createOpenAIResponsesRequestBody,
@@ -13,6 +16,7 @@ import {
   type OpenAIResponsesHttpRequest,
   type OpenAIResponsesHttpResponse,
   type OpenAIResponsesRequest,
+  type OpenAICompatibleResponsesHttpRequest,
 } from '../src/index.js';
 
 const CALLER = { type: 'program', caller_id: 'call-program-1' } as const;
@@ -78,6 +82,14 @@ async function collect(
   const events: CodexModelEvent[] = [];
   for await (const event of values) events.push(event);
   return events;
+}
+
+function chunks(...values: readonly string[]): AsyncIterable<string> {
+  return Object.freeze({
+    async *[Symbol.asyncIterator]() {
+      for (const value of values) yield value;
+    },
+  });
 }
 
 describe('OpenAI Platform Responses model', () => {
@@ -491,5 +503,337 @@ describe('OpenAI Platform Responses model', () => {
       kind: 'model',
       id: OPENAI_RESPONSES_MODEL_CAPABILITY_ID,
     });
+  });
+});
+
+describe('OpenAI-compatible Responses model', () => {
+  it('emits the portable request subset and supports an unauthenticated JSON fallback', async () => {
+    const requests: OpenAICompatibleResponsesHttpRequest[] = [];
+    const model = createOpenAICompatibleResponsesModel({
+      model: 'qwen3:8b',
+      endpoint: 'http://localhost:11434/v1/responses',
+      async fetch(request) {
+        requests.push(request);
+        return {
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            status: 'completed',
+            output: [
+              {
+                type: 'message',
+                role: 'assistant',
+                content: [{ type: 'output_text', text: 'Local answer.' }],
+              },
+            ],
+          }),
+        };
+      },
+    });
+
+    await expect(collect(model.generate(REQUEST))).resolves.toEqual(
+      expect.arrayContaining([{ type: 'text', text: 'Local answer.' }]),
+    );
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.headers).not.toHaveProperty('Authorization');
+    const body = JSON.parse(requests[0]?.body ?? '{}') as Readonly<Record<string, unknown>>;
+    expect(body).toMatchObject({
+      model: 'qwen3:8b',
+      instructions: REQUEST.instructions,
+      stream: true,
+    });
+    expect(body).not.toHaveProperty('reasoning');
+    expect(body).not.toHaveProperty('text');
+    expect(body).not.toHaveProperty('include');
+    expect(body).not.toHaveProperty('store');
+    expect(body).not.toHaveProperty('parallel_tool_calls');
+    expect(body.tools).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'function',
+          name: 'loom_0_workspace_list-files',
+          parameters: REQUEST.tools[0]?.inputSchema,
+        }),
+      ]),
+    );
+    expect(JSON.stringify(body.tools)).not.toContain('allowed_callers');
+    expect(JSON.stringify(body.tools)).not.toContain('output_schema');
+    expect(JSON.stringify(body.tools)).not.toContain('programmatic_tool_calling');
+  });
+
+  it('streams text and reconstructs a split function call', async () => {
+    const model = createOpenAICompatibleResponsesModel({
+      model: 'local-tools',
+      endpoint: 'http://localhost:1234/v1/responses',
+      authentication: async () => 'local-secret',
+      fetch: async (request) => {
+        expect(request.headers.Authorization).toBe('Bearer local-secret');
+        return {
+          status: 200,
+          contentType: 'text/event-stream; charset=utf-8',
+          body: chunks(
+            'event: response.output_text.delta\ndata: {"type":"response.output_text.delta","delta":"Hel',
+            'lo "}\n\ndata: {"type":"response.output_text.delta","delta":"there"}\n\n',
+            'data: {"type":"response.output_item.added","output_index":0,"item":{"type":"function_call","id":"item-1","call_id":"call-1","name":"loom_0_workspace_list-files","arguments":""}}\n\n',
+            'data: {"type":"response.function_call_arguments.delta","output_index":0,"delta":"{\\"path\\":"}\n\n',
+            'data: {"type":"response.function_call_arguments.done","output_index":0,"arguments":"{\\"path\\":\\"src\\"}"}\n\n',
+            'data: {"type":"response.output_item.done","output_index":0,"item":{"type":"function_call","id":"item-1","call_id":"call-1","name":"loom_0_workspace_list-files","arguments":"{\\"path\\":\\"src\\"}"}}\n\n',
+            'data: {"type":"response.completed"}\n\ndata: [DONE]\n\n',
+          ),
+        };
+      },
+    });
+
+    await expect(collect(model.generate(REQUEST))).resolves.toEqual([
+      { type: 'text', text: 'Hello ' },
+      { type: 'text', text: 'there' },
+      {
+        type: 'continuation',
+        item: {
+          type: 'function_call',
+          id: 'item-1',
+          call_id: 'call-1',
+          name: 'loom_0_workspace_list-files',
+          arguments: '{"path":"src"}',
+        },
+      },
+      {
+        type: 'tool-call',
+        call: {
+          id: 'call-1',
+          operation: 'workspace/list-files',
+          input: { path: 'src' },
+        },
+      },
+      { type: 'completed', final: false },
+    ]);
+  });
+
+  it('accepts a complete output on the terminal event without duplicating streamed text', async () => {
+    const message = {
+      type: 'message',
+      id: 'message-local',
+      role: 'assistant',
+      content: [{ type: 'output_text', text: 'Done.' }],
+    } as const;
+    const model = createOpenAICompatibleResponsesModel({
+      model: 'local',
+      endpoint: 'http://localhost/v1/responses',
+      fetch: async () => ({
+        status: 200,
+        body: chunks(
+          'data: {"type":"response.output_text.delta","delta":"Done."}\n\n',
+          `data: ${JSON.stringify({
+            type: 'response.completed',
+            response: { status: 'completed', output: [message] },
+          })}\n\n`,
+        ),
+      }),
+    });
+
+    await expect(collect(model.generate(REQUEST))).resolves.toEqual([
+      { type: 'text', text: 'Done.' },
+      { type: 'continuation', item: message },
+      { type: 'completed', final: true },
+    ]);
+  });
+
+  it('sanitizes authentication, transport, HTTP, malformed, incomplete, and oversized failures', async () => {
+    const options = {
+      model: 'local',
+      endpoint: 'http://localhost/v1/responses',
+    } as const;
+    const invalidKey = createOpenAICompatibleResponsesModel({
+      ...options,
+      authentication: async () => '',
+      fetch: async () => ({ status: 200, body: '{}' }),
+    });
+    await expect(collect(invalidKey.generate(REQUEST))).rejects.toMatchObject({
+      code: 'AUTHENTICATION_FAILED',
+    });
+
+    const transport = createOpenAICompatibleResponsesModel({
+      ...options,
+      fetch: async () => {
+        throw new Error('private transport details');
+      },
+    });
+    const transportError = await collect(transport.generate(REQUEST)).catch(
+      (error: unknown) => error,
+    );
+    expect(transportError).toMatchObject({ code: 'TRANSPORT_FAILED' });
+    expect(String(transportError)).not.toContain('private transport details');
+
+    for (const fixture of [
+      { status: 401, body: 'secret rejection' },
+      { status: 200, body: 'data: not-json\n\n' },
+      { status: 200, body: 'data: {"type":"response.incomplete"}\n\n' },
+      { status: 200, body: `data: ${'x'.repeat(1024 * 1024 + 1)}\n\n` },
+    ]) {
+      const model = createOpenAICompatibleResponsesModel({
+        ...options,
+        fetch: async () => ({ ...fixture, contentType: 'text/event-stream' }),
+      });
+      await expect(collect(model.generate(REQUEST))).rejects.toBeInstanceOf(
+        OpenAIResponsesModelError,
+      );
+    }
+  });
+
+  it('validates compatible configuration, cancellation, and plugin registration', async () => {
+    const validFetch = async () => ({ status: 200, body: '{}' });
+    for (const invalid of [
+      undefined,
+      {},
+      { model: '', endpoint: 'http://localhost/v1/responses', fetch: validFetch },
+      { model: 'local', endpoint: '', fetch: validFetch },
+      {
+        model: 'local',
+        endpoint: 'http://localhost/v1/responses',
+        fetch: validFetch,
+        stream: 'yes',
+      },
+      {
+        model: 'local',
+        endpoint: 'http://localhost/v1/responses',
+        fetch: validFetch,
+        authentication: {},
+      },
+      {
+        model: 'local',
+        endpoint: 'http://localhost/v1/responses',
+        fetch: validFetch,
+        headers: { '': 'value' },
+      },
+      {
+        model: 'local',
+        endpoint: 'http://localhost/v1/responses',
+        fetch: validFetch,
+        headers: { 'X-Trace': '' },
+      },
+      {
+        model: 'local',
+        endpoint: 'http://localhost/v1/responses',
+        fetch: validFetch,
+        headers: { Authorization: 'forbidden' },
+      },
+      {
+        model: 'local',
+        endpoint: 'http://localhost/v1/responses',
+        fetch: validFetch,
+        headers: { 'Content-Type': 'forbidden' },
+      },
+    ]) {
+      expect(() => createOpenAICompatibleResponsesModel(invalid as never)).toThrow(
+        OpenAIResponsesModelError,
+      );
+    }
+
+    const cancellation = createCancellationSource();
+    const fetch = vi.fn(async () => ({ status: 200, body: '{}' }));
+    cancellation.cancel('stop');
+    const model = createOpenAICompatibleResponsesModel({
+      model: 'local',
+      endpoint: 'http://localhost/v1/responses',
+      fetch,
+    });
+    await expect(collect(model.generate(REQUEST, { signal: cancellation.signal }))).rejects.toThrow(
+      'Operation cancelled',
+    );
+    expect(fetch).not.toHaveBeenCalled();
+
+    const register = vi.fn();
+    const plugin = createOpenAICompatibleResponsesModelPlugin({
+      model: 'local',
+      endpoint: 'http://localhost/v1/responses',
+      fetch: async () => ({ status: 200, body: '{}' }),
+    });
+    await plugin.initialize?.({ capabilities: { register } } as never);
+    expect(register.mock.calls[0]?.[0]).toMatchObject({
+      kind: 'model',
+      id: OPENAI_COMPATIBLE_RESPONSES_MODEL_CAPABILITY_ID,
+    });
+  });
+
+  it('handles compatible SSE framing variants and iterable JSON bodies', async () => {
+    const message = {
+      type: 'message',
+      id: 'message-framed',
+      role: 'assistant',
+      content: [{ type: 'output_text', text: 'Framed response.' }],
+    } as const;
+    const framed = createOpenAICompatibleResponsesModel({
+      model: 'local',
+      endpoint: 'http://localhost/v1/responses',
+      stream: false,
+      fetch: async (request) => {
+        expect(JSON.parse(request.body)).toMatchObject({ stream: false });
+        return {
+          status: 200,
+          body:
+            ': keepalive\r\nevent: response.output_item.done\r\n' +
+            `data: ${JSON.stringify({
+              type: 'response.output_item.done',
+              item_id: 'message-framed',
+              item: message,
+            })}\r\n\r\n` +
+            'data: [DONE]',
+        };
+      },
+    });
+    await expect(collect(framed.generate(REQUEST))).resolves.toEqual([
+      { type: 'continuation', item: message },
+      { type: 'text', text: 'Framed response.' },
+      { type: 'completed', final: true },
+    ]);
+
+    const json = JSON.stringify({ status: 'completed', output: [message] });
+    const iterableJson = createOpenAICompatibleResponsesModel({
+      model: 'local',
+      endpoint: 'http://localhost/v1/responses',
+      fetch: async () => ({
+        status: 200,
+        contentType: 'application/json',
+        body: chunks(json.slice(0, 20), json.slice(20)),
+      }),
+    });
+    await expect(collect(iterableJson.generate(REQUEST))).resolves.toEqual([
+      { type: 'continuation', item: message },
+      { type: 'text', text: 'Framed response.' },
+      { type: 'completed', final: true },
+    ]);
+  });
+
+  it('rejects invalid transport envelopes and non-terminal or failed streams', async () => {
+    const base = { model: 'local', endpoint: 'http://localhost/v1/responses' } as const;
+    for (const responseValue of [
+      null,
+      { status: '200', body: '{}' },
+      { status: 200, body: [] },
+      { status: 200, body: '{}', contentType: 1 },
+    ]) {
+      const model = createOpenAICompatibleResponsesModel({
+        ...base,
+        fetch: async () => responseValue as never,
+      });
+      await expect(collect(model.generate(REQUEST))).rejects.toMatchObject({
+        code: 'TRANSPORT_FAILED',
+      });
+    }
+
+    for (const body of [
+      'data: {"type":"response.failed"}\n\n',
+      'data: {"type":"response.output_text.delta","delta":"partial"}\n\n',
+      'data: {"type":"response.output_text.delta","delta":1}\n\n',
+      'data: {"type":"response.output_item.done","item":null}\n\n',
+    ]) {
+      const model = createOpenAICompatibleResponsesModel({
+        ...base,
+        fetch: async () => ({ status: 200, contentType: 'text/event-stream', body }),
+      });
+      await expect(collect(model.generate(REQUEST))).rejects.toBeInstanceOf(
+        OpenAIResponsesModelError,
+      );
+    }
   });
 });

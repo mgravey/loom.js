@@ -249,6 +249,9 @@ importers:
       '@mgravey/loom-model-codex-experimental':
         specifier: workspace:^
         version: link:../model-codex-experimental
+      '@mgravey/loom-model-openai-responses':
+        specifier: workspace:^
+        version: link:../model-openai-responses
       '@mgravey/loom-tool-workspace':
         specifier: workspace:^
         version: link:../tool-workspace

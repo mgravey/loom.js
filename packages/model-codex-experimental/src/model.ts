@@ -7,6 +7,7 @@ import type { OperationContext } from '@mgravey/loom-plugin-api';
 import { immutableJson, type JsonObject, type JsonValue } from '@mgravey/loom-types';
 
 import type {
+  CodexReasoningEffort,
   AccessTokenSupplier,
   AccountIdSupplier,
   CodexExperimentalDirectFetchOptions,
@@ -37,6 +38,7 @@ const MAXIMUM_COMPACTION_RESPONSE_CHARACTERS = 4 * 1024 * 1024;
 interface ValidatedBrokeredOptions {
   readonly kind: 'brokered';
   readonly model: string;
+  readonly reasoningEffort: CodexReasoningEffort;
   readonly wireProtocol: CodexResponsesWireProtocol;
   readonly send: CodexResponsesTransport['send'];
 }
@@ -46,6 +48,7 @@ interface ValidatedDirectOptions {
   readonly endpoint: string;
   readonly compactEndpoint: string;
   readonly model: string;
+  readonly reasoningEffort: CodexReasoningEffort;
   readonly wireProtocol: CodexResponsesWireProtocol;
   readonly getAccessToken: AccessTokenSupplier;
   readonly send: CodexResponsesFetch;
@@ -115,6 +118,12 @@ function validateOptions(options: CreateCodexExperimentalModelOptions): Validate
     );
   }
   const model = requiredString(options.model, 'model');
+  const reasoningEffort = options.reasoningEffort ?? 'medium';
+  if (
+    !['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'].includes(reasoningEffort)
+  ) {
+    throw new CodexExperimentalModelError('INVALID_CONFIGURATION', 'Invalid reasoning effort.');
+  }
   const wireProtocolCandidate: unknown = options.wireProtocol ?? 'classic';
   if (wireProtocolCandidate !== 'classic' && wireProtocolCandidate !== 'responses-lite') {
     throw new CodexExperimentalModelError(
@@ -134,6 +143,7 @@ function validateOptions(options: CreateCodexExperimentalModelOptions): Validate
     return Object.freeze({
       kind: 'brokered',
       model,
+      reasoningEffort,
       wireProtocol,
       send: (request: CodexResponsesRequest) => transport.send(request),
     });
@@ -174,6 +184,7 @@ function validateOptions(options: CreateCodexExperimentalModelOptions): Validate
       'compact endpoint',
     ),
     model,
+    reasoningEffort,
     wireProtocol,
     getAccessToken,
     send: direct.fetch,
@@ -304,6 +315,7 @@ export function createCodexResponsesRequestBody(
   request: CodexModelRequest,
   model: string,
   wireProtocol: CodexResponsesWireProtocol = 'classic',
+  reasoningEffort: CodexReasoningEffort = 'medium',
 ): JsonObject {
   const candidate: unknown = request;
   if (
@@ -335,8 +347,8 @@ export function createCodexResponsesRequestBody(
     parallel_tool_calls: wireProtocol !== 'responses-lite',
     reasoning:
       wireProtocol === 'responses-lite'
-        ? { effort: 'medium', context: 'all_turns' }
-        : { effort: 'medium' },
+        ? { effort: reasoningEffort, context: 'all_turns' }
+        : { effort: reasoningEffort },
     stream: true,
     store: false,
     include: ['reasoning.encrypted_content'],
@@ -363,6 +375,7 @@ export function createCodexCompactionRequestBody(
   request: CodexModelRequest,
   model: string,
   wireProtocol: CodexResponsesWireProtocol = 'classic',
+  reasoningEffort: CodexReasoningEffort = 'medium',
 ): JsonObject {
   const candidate: unknown = request;
   if (
@@ -395,8 +408,8 @@ export function createCodexCompactionRequestBody(
     parallel_tool_calls: wireProtocol !== 'responses-lite',
     reasoning:
       wireProtocol === 'responses-lite'
-        ? { effort: 'medium', context: 'all_turns' }
-        : { effort: 'medium' },
+        ? { effort: reasoningEffort, context: 'all_turns' }
+        : { effort: reasoningEffort },
     text: { verbosity: 'low' },
   };
 }
@@ -874,7 +887,12 @@ export function createCodexExperimentalModel(
   ): Promise<CodexContextCompactionResult> => {
     context?.signal?.throwIfCancelled();
     const body = JSON.stringify(
-      createCodexCompactionRequestBody(request, validated.model, validated.wireProtocol),
+      createCodexCompactionRequestBody(
+        request,
+        validated.model,
+        validated.wireProtocol,
+        validated.reasoningEffort,
+      ),
     );
     let response: CodexResponsesHttpResponse;
     if (validated.kind === 'brokered') {
@@ -926,7 +944,12 @@ export function createCodexExperimentalModel(
       context?.signal?.throwIfCancelled();
       const aliases = operationAliases(request);
       const body = JSON.stringify(
-        createCodexResponsesRequestBody(request, validated.model, validated.wireProtocol),
+        createCodexResponsesRequestBody(
+          request,
+          validated.model,
+          validated.wireProtocol,
+          validated.reasoningEffort,
+        ),
       );
       if (validated.kind === 'brokered') {
         const brokeredRequest: CodexResponsesRequest = {

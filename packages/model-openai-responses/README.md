@@ -1,15 +1,22 @@
 # `@mgravey/loom-model-openai-responses`
 
-Adapter from the Loom.js coding-agent protocol to the documented OpenAI Platform Responses API,
-including streamed events and programmatic tool continuations.
+Adapters from the Loom.js coding-agent protocol to the documented OpenAI Platform Responses API and
+to the portable subset implemented by local or network OpenAI-compatible servers.
 
 ```sh
 pnpm add @mgravey/loom-model-openai-responses
 ```
 
-The package is credential-free. Applications must inject a secure transport or trusted-host
-credential source; browser code must not embed a secret API key.
+`createOpenAIResponsesModel` retains the Platform request, secure-transport preference, and
+programmatic tool continuations. `createOpenAICompatibleResponsesModel` targets an explicit
+endpoint, supports optional Bearer authentication, requests SSE, accepts complete JSON fallback, and
+omits Platform-only fields.
 
-See the [OpenAI Responses guide](../../docs/openai-responses.md).
+The package reads neither environment variables nor global `fetch`. Applications must inject a
+transport or host fetch adapter. Do not persist Platform keys in browser pages; local-server key
+storage and CORS policy remain application decisions.
+
+See the [OpenAI Responses guide](../../docs/openai-responses.md) and
+[local/LAN setup guide](../../docs/local-models.md).
 
 Licensed under MPL-2.0.

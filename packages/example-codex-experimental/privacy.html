@@ -81,6 +81,11 @@
               <strong>Deployment metadata:</strong> the non-secret Chrome extension ID remembered by
               the companion website.
             </li>
+            <li>
+              <strong>Direct model-server settings:</strong> when the user selects an
+              OpenAI-compatible server, the website stores its API base URL, selected model,
+              connection type, and user-supplied Bearer API key in origin-scoped browser storage.
+            </li>
           </ul>
           <p>
             The extension does not request browsing-history, cookies, geolocation, advertising,
@@ -91,9 +96,10 @@
         <section class="doc-section" id="use">
           <h2>3. Why information is used and where it goes</h2>
           <p>
-            Information is used only to authenticate a user-initiated Loom session and let the
-            authorized workbench perform a direct-first model request with a short-lived credential
-            and relay it through the extension only after a pre-response browser failure.
+            Information is used only to authenticate a user-initiated Loom session and perform the
+            requested model operation. The workbench either uses the disclosed direct-first ChatGPT
+            path with extension fallback or directly contacts the OpenAI-compatible server that the
+            user explicitly configured.
           </p>
           <table class="package-table">
             <thead>
@@ -129,6 +135,13 @@
                 </td>
                 <td>Display and control the user-requested coding session</td>
               </tr>
+              <tr>
+                <td>User-configured OpenAI-compatible server</td>
+                <td>
+                  Prompt/model request, selected project context, tool schemas/results, and API key
+                </td>
+                <td>Produce the direct local or network model response requested by the user</td>
+              </tr>
             </tbody>
           </table>
           <p>
@@ -141,7 +154,9 @@
             No user data is sent to a server operated by the publisher. Authentication data is
             exchanged directly with OpenAI authentication services. During fallback relay only,
             model requests and responses pass transiently through the extension between the approved
-            workbench and OpenAI/ChatGPT and are not retained by the extension.
+            workbench and OpenAI/ChatGPT and are not retained by the extension. Direct compatible
+            requests go from the browser to the exact server configured by the user and do not pass
+            through the publisher or Companion extension.
           </p>
           <div class="callout">
             <strong>Chrome Web Store Limited Use</strong>
@@ -180,8 +195,10 @@
               session-only. A manifest match alone does not authorize credential delivery.
             </li>
             <li>
-              Provider network traffic uses HTTPS. Credentials are never intentionally written to
-              website storage, workspaces, browser runtimes, logs, or diagnostic errors.
+              OpenAI/ChatGPT traffic uses HTTPS. A user-configured compatible server may use HTTP
+              from the local HTTP workbench or HTTPS. Its API key is intentionally retained in
+              origin-scoped website storage until cleared, but is never written to workspaces,
+              conversation records, browser runtimes, logs, or diagnostic errors.
             </li>
             <li>
               Authentication state remains until logout, disable, provider revocation, credential
@@ -192,6 +209,11 @@
             <li>
               The companion website may retain the non-secret extension ID and OPFS project selected
               by the user; these can be removed through browser site-data controls.
+            </li>
+            <li>
+              The compatible-server API key, base URL, model, and provider selection remain until
+              the user selects <strong>Clear API key</strong>, changes them, or removes this
+              website's browser data. Website storage is not an encrypted credential vault.
             </li>
           </ul>
           <p>
@@ -216,6 +238,10 @@
               copy and keeps any current authorization only until Chrome exits.
             </li>
             <li>Uninstalling the extension removes its Chrome storage.</li>
+            <li>
+              <strong>Clear API key</strong> removes the compatible-server key from website storage;
+              browser site-data controls remove all compatible connection settings.
+            </li>
             <li>
               The user chooses which project directory or uploaded archive the website may access.
             </li>

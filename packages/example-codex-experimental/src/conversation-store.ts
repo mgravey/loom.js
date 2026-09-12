@@ -5,9 +5,11 @@ import {
   type WorkspacePath,
 } from '@mgravey/loom-tool-workspace';
 
+import type { WorkbenchModelProvider } from './local-model-connection.js';
+
 export const LOOM_DIRECTORY = workspacePath('.loom');
 export const CONVERSATION_DIRECTORY = workspacePath('.loom/conversations');
-const CONVERSATION_VERSION = 1;
+const CONVERSATION_VERSION = 2;
 const CONVERSATION_ID = /^conversation-[a-z0-9-]+$/u;
 const MAX_CONVERSATIONS = 500;
 const MAX_TRANSCRIPT_ENTRIES = 2_000;
@@ -18,6 +20,7 @@ export interface WorkspaceConversation {
   readonly id: string;
   readonly title: string;
   readonly model: string;
+  readonly modelProvider: WorkbenchModelProvider;
   readonly createdAt: number;
   readonly updatedAt: number;
   readonly transcript: readonly CodingTranscriptEntry[];
@@ -25,6 +28,7 @@ export interface WorkspaceConversation {
 
 export interface CreateWorkspaceConversationOptions {
   readonly model: string;
+  readonly modelProvider?: WorkbenchModelProvider;
   readonly now?: () => number;
   readonly randomId?: () => string;
 }
@@ -66,7 +70,7 @@ function parsedConversation(value: unknown, expectedId: string): WorkspaceConver
   if (!isRecord(value)) return undefined;
   const entries = transcript(value.transcript);
   if (
-    value.version !== CONVERSATION_VERSION ||
+    (value.version !== 1 && value.version !== CONVERSATION_VERSION) ||
     value.id !== expectedId ||
     !CONVERSATION_ID.test(expectedId) ||
     typeof value.title !== 'string' ||
@@ -83,11 +87,20 @@ function parsedConversation(value: unknown, expectedId: string): WorkspaceConver
   ) {
     return undefined;
   }
+  const modelProvider =
+    value.version === 1
+      ? 'codex-experimental'
+      : value.modelProvider === 'codex-experimental' ||
+          value.modelProvider === 'openai-compatible-responses'
+        ? value.modelProvider
+        : undefined;
+  if (modelProvider === undefined) return undefined;
   return Object.freeze({
     version: CONVERSATION_VERSION,
     id: expectedId,
     title: value.title,
     model: value.model,
+    modelProvider,
     createdAt: value.createdAt,
     updatedAt: value.updatedAt,
     transcript: entries,
@@ -113,6 +126,7 @@ export function createWorkspaceConversation(
     id: `conversation-${randomId}`,
     title: 'New conversation',
     model: options.model,
+    modelProvider: options.modelProvider ?? 'codex-experimental',
     createdAt: now,
     updatedAt: now,
     transcript: Object.freeze([]),
@@ -123,12 +137,16 @@ export function updateWorkspaceConversation(
   conversation: WorkspaceConversation,
   transcriptEntries: readonly CodingTranscriptEntry[],
   model: string,
+  modelProviderOrNow: WorkbenchModelProvider | number = conversation.modelProvider,
   now = Date.now(),
 ): WorkspaceConversation {
   const entries = transcript(transcriptEntries);
   if (entries === undefined)
     throw new TypeError('Conversation transcript is invalid or too large.');
   const firstPrompt = entries.find((entry) => entry.role === 'user')?.content ?? '';
+  const modelProvider =
+    typeof modelProviderOrNow === 'number' ? conversation.modelProvider : modelProviderOrNow;
+  const updatedAt = typeof modelProviderOrNow === 'number' ? modelProviderOrNow : now;
   return Object.freeze({
     ...conversation,
     title:
@@ -136,7 +154,8 @@ export function updateWorkspaceConversation(
         ? conversationTitle(firstPrompt)
         : conversation.title,
     model,
-    updatedAt: now,
+    modelProvider,
+    updatedAt,
     transcript: entries,
   });
 }

@@ -22,6 +22,28 @@ export interface OpenAIResponsesHttpResponse {
   readonly body: string;
 }
 
+/** A complete JSON body or decoded UTF-8 chunks from a Responses SSE stream. */
+export type OpenAICompatibleResponsesBody = string | AsyncIterable<string>;
+
+export interface OpenAICompatibleResponsesHttpResponse {
+  readonly status: number;
+  readonly body: OpenAICompatibleResponsesBody;
+  /** Used to distinguish a JSON fallback from an SSE response when body is a string. */
+  readonly contentType?: string;
+}
+
+export interface OpenAICompatibleResponsesHttpRequest {
+  readonly method: 'POST';
+  readonly url: string;
+  readonly headers: Readonly<Record<string, string>>;
+  readonly body: string;
+  readonly signal?: CancellationSignal;
+}
+
+export type OpenAICompatibleResponsesFetch = (
+  request: OpenAICompatibleResponsesHttpRequest,
+) => Promise<OpenAICompatibleResponsesHttpResponse>;
+
 /** Preferred secure-host boundary: the Loom caller never receives an API key. */
 export interface OpenAIResponsesTransport {
   send(request: OpenAIResponsesRequest): Promise<OpenAIResponsesHttpResponse>;
@@ -32,7 +54,8 @@ export type OpenAIResponsesFetch = (
 ) => Promise<OpenAIResponsesHttpResponse>;
 
 export type OpenAIApiKeySupplier = () => Promise<string>;
-export type OpenAIReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+export type OpenAIReasoningEffort =
+  'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra';
 export type OpenAITextVerbosity = 'low' | 'medium' | 'high';
 
 interface OpenAIResponsesCommonOptions {
@@ -57,3 +80,19 @@ export interface OpenAIResponsesDirectOptions extends OpenAIResponsesCommonOptio
 
 export type CreateOpenAIResponsesModelOptions =
   OpenAIResponsesTransportOptions | OpenAIResponsesDirectOptions;
+
+/**
+ * Portable OpenAI-compatible Responses mode. The endpoint is explicit so omitting authentication
+ * can never accidentally target the default OpenAI Platform URL.
+ */
+export interface OpenAICompatibleResponsesModelOptions {
+  /** Omitted by default so the server chooses its own reasoning behavior. */
+  readonly reasoningEffort?: OpenAIReasoningEffort;
+  readonly model: string;
+  readonly endpoint: string;
+  readonly fetch: OpenAICompatibleResponsesFetch;
+  readonly authentication?: AuthProvider | OpenAIApiKeySupplier;
+  readonly headers?: Readonly<Record<string, string>>;
+  /** Defaults to true. A JSON response is still accepted when a server ignores streaming. */
+  readonly stream?: boolean;
+}

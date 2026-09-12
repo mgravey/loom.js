@@ -2,6 +2,9 @@ import type { CodexModel, CodexModelRequest } from '@mgravey/loom-agent-codex';
 import type { AuthProvider, OperationContext } from '@mgravey/loom-plugin-api';
 import type { CancellationSignal, JsonObject } from '@mgravey/loom-types';
 
+export type CodexReasoningEffort =
+  'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra';
+
 export type CodexResponsesWireProtocol = 'classic' | 'responses-lite';
 export type CodexResponsesOperation = 'generate' | 'compact';
 
@@ -67,6 +70,7 @@ export interface CodexExperimentalModel extends CodexModel {
 
 export interface CodexExperimentalModelOptions {
   readonly model: string;
+  readonly reasoningEffort?: CodexReasoningEffort;
   /** Defaults to classic. Responses Lite moves tools and instructions into input items. */
   readonly wireProtocol?: CodexResponsesWireProtocol;
   /** Preferred brokered mode: no access token is made available to the model or calling page. */
@@ -75,6 +79,7 @@ export interface CodexExperimentalModelOptions {
 
 export interface CodexExperimentalDirectFetchOptions {
   readonly model: string;
+  readonly reasoningEffort?: CodexReasoningEffort;
   readonly wireProtocol?: CodexResponsesWireProtocol;
   /** Experimental endpoint audited by the host; intentionally no provider URL is baked in. */
   readonly endpoint: string;

@@ -219,6 +219,7 @@ describe('package architecture', () => {
         '@mgravey/loom-companion-codex-experimental',
         '@mgravey/loom-execution-browser',
         '@mgravey/loom-model-codex-experimental',
+        '@mgravey/loom-model-openai-responses',
         '@mgravey/loom-tool-workspace',
         '@mgravey/loom-types',
         '@mgravey/loom-workspace-fsa',

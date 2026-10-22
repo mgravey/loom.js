@@ -8,9 +8,11 @@ pnpm add @mgravey/loom-model-openai-responses
 ```
 
 `createOpenAIResponsesModel` retains the Platform request, secure-transport preference, and
-programmatic tool continuations. `createOpenAICompatibleResponsesModel` targets an explicit
-endpoint, supports optional Bearer authentication, requests SSE, accepts complete JSON fallback, and
-omits Platform-only fields.
+programmatic tool continuations. `createOpenAICompatibleResponsesModel` targets an explicit endpoint
+or injected `OpenAICompatibleResponsesTransport`, requests SSE, accepts complete JSON fallback, and
+omits Platform-only fields. Injected transports receive the prepared request and return its HTTP
+response, allowing browser-held OAuth sessions without an API-key configuration. Direct
+endpoint/fetch options continue to support optional Bearer authentication.
 
 The package reads neither environment variables nor global `fetch`. Applications must inject a
 transport or host fetch adapter. Do not persist Platform keys in browser pages; local-server key

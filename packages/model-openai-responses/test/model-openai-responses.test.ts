@@ -837,3 +837,69 @@ describe('OpenAI-compatible Responses model', () => {
     }
   });
 });
+
+describe('compatible brokered transport', () => {
+  it('generates through an injected transport without a URL or key supplier', async () => {
+    const send = vi.fn<
+      (request: { body: string }) => Promise<{ status: number; contentType: string; body: string }>
+    >(async () => ({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        status: 'completed',
+        output: [
+          {
+            type: 'message',
+            role: 'assistant',
+            content: [{ type: 'output_text', text: 'Brokered answer.' }],
+          },
+        ],
+      }),
+    }));
+    const model = createOpenAICompatibleResponsesModel({ model: 'local', transport: { send } });
+    const events = await collect(model.generate(REQUEST));
+    expect(events).toContainEqual({ type: 'text', text: 'Brokered answer.' });
+    expect(send).toHaveBeenCalledOnce();
+    expect(send.mock.calls[0]?.[0]).not.toHaveProperty('url');
+    for (const extra of [
+      { endpoint: 'https://evil.example/v1/responses' },
+      { authentication: { getApiKey: () => 'key' } },
+      { headers: {} },
+      { fetch: vi.fn() },
+    ]) {
+      expect(() =>
+        createOpenAICompatibleResponsesModel({
+          model: 'local',
+          transport: { send },
+          ...extra,
+        } as never),
+      ).toThrow(OpenAIResponsesModelError);
+    }
+  });
+});
+
+it('does not duplicate a tool when the terminal snapshot uses output indices and handles split CRLF', async () => {
+  const item = {
+    type: 'function_call',
+    id: 'function-1',
+    call_id: 'call-list-1',
+    name: 'loom_0_workspace_list-files',
+    arguments: '{}',
+  };
+  const wire =
+    `data: ${JSON.stringify({ type: 'response.output_item.done', item })}\r\n\r\n` +
+    `data: ${JSON.stringify({ type: 'response.completed', response: { output: [item] } })}\r\n\r\n`;
+  const model = createOpenAICompatibleResponsesModel({
+    model: 'local',
+    transport: {
+      send: async () => ({
+        status: 200,
+        contentType: 'text/event-stream',
+        body: chunks(...wire.split('')),
+      }),
+    },
+  });
+  const events = await collect(model.generate(REQUEST));
+  expect(events.filter((event) => event.type === 'tool-call')).toHaveLength(1);
+  expect(events.filter((event) => event.type === 'continuation')).toHaveLength(1);
+});

@@ -27,6 +27,138 @@ A user-reported manual device-code run on 2026-07-16 observed successful token i
 justifies retaining the fallback, but it is not provider support and does not remove the need to
 re-audit undocumented endpoints. No live token payload is retained in this repository.
 
+## Extension-free Sign in with ChatGPT
+
+As checked on 2026-10-22, OpenAI documents a newer
+[Sign in with ChatGPT integration](https://developers.openai.com/siwc/quickstart) for external apps.
+The workbench's sole **ChatGPT** connection is a browser-only local interoperability test of that
+protocol. It uses no extension, API key, client secret, model relay, or token backend. The old
+extension's "direct-first" integration remains in the library, outside this workbench.
+
+### Start the browser-only test
+
+```sh
+pnpm install --frozen-lockfile
+pnpm build
+pnpm dev:chatgpt
+```
+
+Open the printed URL: <http://127.0.0.1:4174/example-codex-experimental/workbench.html>. Use
+`127.0.0.1`, not `localhost`: the new OpenAI registration contract specifies that exact host. If
+port 4174 is busy, use `LOOM_BROWSER_PORT=4175 pnpm dev:chatgpt`. Keep the same origin between tests
+to reuse the browser's non-secret registration metadata.
+
+1. In the **ChatGPT** account card, click **Continue with ChatGPT**. Allow the sign-in popup if your
+   browser blocks it.
+2. Sign in on OpenAI's page, choose the account/workspace, and consent to ChatGPT plan usage for
+   Loom.js. The popup returns to `/auth/callback`; the original tab completes verification.
+3. Check the displayed account and plan status. A verified identity without the plan permission
+   cannot run models. Keep that account selected and click **Continue with ChatGPT** again to reopen
+   plan consent. The model picker uses the account's advertised catalogue.
+4. Choose **Temporary browser project**, click **Open workspace**, and send
+   `Reply with exactly: Loom login test OK. Do not use tools.` Login and a completed model response
+   are separate checks; stop on any provider rejection and record only its sanitized error.
+5. Use **Manage usage** to open <https://chatgpt.com/settings/usage>. OpenAI's
+   [UI guidance](https://developers.openai.com/siwc/ui-ux-guidelines) identifies this as the place
+   to manage plan/app usage. The old Codex device-code Security toggle is not required by this flow.
+6. Sign out when finished. Reloading or closing the workbench also discards its in-memory tokens; it
+   does not prove the remote grant was revoked. Saved public registration metadata supports
+   returning sign-in without registering a new client each time.
+
+Temporary refresh failures retain the in-memory session so you can retry. A confirmed expired,
+revoked, or reused refresh grant clears the session and requires signing in again. The UI shows
+sanitized recovery instructions without displaying OpenAI's raw error bodies.
+
+### ChatGPT Business workspace denial
+
+On 2026-10-22, an administrator testing a ChatGPT Business workspace observed
+`3p_delegated_access_policy_denied` on OpenAI's hosted authorization page, despite the
+organization's External access identity default showing Allowed. This happens before Loom can
+receive and verify the callback, and is separate from the browser public-metadata CORS failure.
+
+The
+[Admin Console guide](https://help.openai.com/en/articles/12289294-managing-your-tenant-in-admin-console)
+documents identity, connected-app, and Ads permissions, but does not identify a Business control for
+`dynamic_agent_client` and `chatgpt.tokens.use.direct`. Enabling connected-app sharing is not an
+established remedy. The [developer quickstart](https://developers.openai.com/siwc/quickstart)
+describes eligible Plus/Pro users, while the
+[Help Center](https://help.openai.com/en/articles/20001542-using-your-chatgpt-plan-in-other-apps-and-sites)
+says supported open-source tools remain available to all users. These statements do not establish
+Business eligibility or explain this particular denial. A personal Free-account test separately
+showed the requested permission unavailable and an upgrade prompt; do not infer successful Free
+inference from the broad Help Center wording.
+
+[Pi issue 10953](https://github.com/earendil-works/pi/issues/10953) contains a matching firsthand
+Business report and an inability to locate the relevant admin control. It corroborates the observed
+failure but is not an official eligibility determination.
+
+Request OpenAI Support to confirm whether Business supports the exact OSS flow and, if so, identify
+the required role and control or investigate the workspace's policy/rollout state. Include the
+workspace/organization identifiers privately, error code, request ID, timestamp/time zone, and
+screenshots of saved settings. Do not send callback codes or tokens. This project does not
+substitute another application's client ID or relax validation to work around the policy denial.
+
+### Where authentication runs
+
+The static server binds only to `127.0.0.1`, accepts only GET/HEAD, and maps `/auth/callback` to a
+static HTML page. It never exchanges authorization codes, stores credentials, forwards model calls,
+or logs requests. As with any query-based OAuth callback, the browser requests the callback URL with
+its one-time code; the static handler discards the query and sends the same file. The popup passes
+that code to the original tab, which holds the PKCE verifier and exchanges it directly with OpenAI.
+Access, refresh, and ID tokens never go to the file server.
+
+The browser generates state, nonce, and PKCE values; validates the callback origin/source and the ID
+token's signature, issuer, audience, expiry, and nonce; and requires the granted
+`chatgpt.tokens.use.direct` scope. All tokens and active login transactions stay in memory. Web
+Storage contains only non-secret host/account-registration metadata and UI preferences. Losing the
+tab means signing in again. Keep runtime browser diagnostics private; do not export token responses
+or callback query strings into issues.
+
+Model discovery and streaming go directly to `https://api.openai.com/v1` with the user's OAuth
+token. Requests use `store: false`, `stream: true`, and full input history. The integration must
+observe `response.completed`; an interrupted stream or `[DONE]` alone is not successful inference.
+See
+[models and inference](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference)
+and
+[preview limits](https://developers.openai.com/siwc/token-sharing-open-source/preview-limitations).
+
+### Evidence and public deployment limits
+
+Live credential-free GET checks on 2026-10-22 from `http://127.0.0.1:50412` failed in Chromium for
+both `https://auth.openai.com/.well-known/openid-configuration` and
+`https://auth.openai.com/.well-known/jwks.json`. The console explicitly reported missing
+`Access-Control-Allow-Origin`. Direct HTTP checks returned 200 with no such header for both. This
+blocks the current browser-only identity verification even if authorization returns a client
+registration. It is independent of the organization-policy denial seen for a different login. No
+live token response was inspected, and successful authenticated token/API CORS remains unverified.
+
+The popup closes on both successful and failed attempts. The workbench now retains sanitized errors
+next to the login button. An unverified registration in the account picker is public client
+metadata, not a signed-in session; retrying uses that registration instead of creating a new one.
+Signature verification remains mandatory. This prototype does not proxy credentials or disable
+browser security to bypass the missing public-metadata CORS support.
+
+Credential-free OPTIONS checks on 2026-10-22 returned HTTP 200 and CORS permission for the token,
+models, and Responses endpoints from `http://127.0.0.1:4173` and `https://mgravey.com`. Preflight
+success does not verify authenticated response headers, account eligibility, callback acceptance, or
+successful live inference. Automated fixtures also cannot establish those facts.
+
+OpenAI's
+[open-source registration guide](https://developers.openai.com/siwc/token-sharing-open-source/sign-in)
+documents dynamic registration with an HTTP `127.0.0.1` callback and a trusted local runtime. Its
+[session guidance](https://developers.openai.com/siwc/token-sharing-open-source/profiles-and-sessions)
+describes protected runtime credential storage. It does not establish official support for this
+browser-only adaptation, which deliberately keeps credentials out of persistent browser storage.
+This is a local compatibility test, not a claim that a fully static production website is approved.
+
+The intended product remains public static hosting with all credentials and inference in the user's
+browser. The [website integration guide](https://developers.openai.com/siwc/website) currently
+describes an approved client, registered callback, and backend, so it is not that architecture.
+Before enabling the direct provider on an HTTPS website, obtain confirmation of a public browser
+client with an HTTPS callback, ChatGPT plan scopes, and browser token/refresh/revocation/JWKS/API
+access. Publishing the source on GitHub does not itself register that callback. Do not substitute an
+unregistered public URL in the dynamic loopback flow or add a credential proxy as a workaround.
+
 ## Evidence snapshot
 
 This analysis pins behavior to OpenAI Codex commit

@@ -4,6 +4,9 @@ import { immutableJson, type JsonObject } from '@mgravey/loom-types';
 
 import type {
   OpenAIApiKeySupplier,
+  OpenAIResponsesRequest,
+  OpenAICompatibleResponsesTransport,
+  OpenAICompatibleResponsesFetch,
   OpenAICompatibleResponsesBody,
   OpenAICompatibleResponsesHttpRequest,
   OpenAICompatibleResponsesHttpResponse,
@@ -15,15 +18,25 @@ import { createOpenAIResponsesRequestBody, decodeOpenAIResponses } from './model
 const MAXIMUM_STREAM_CHARACTERS = 8 * 1024 * 1024;
 const MAXIMUM_EVENT_CHARACTERS = 1024 * 1024;
 
-interface ValidatedOptions {
+interface CommonOptions {
   readonly reasoningEffort?: OpenAICompatibleResponsesModelOptions['reasoningEffort'];
   readonly model: string;
-  readonly endpoint: string;
-  readonly send: OpenAICompatibleResponsesModelOptions['fetch'];
-  readonly getApiKey?: OpenAIApiKeySupplier;
-  readonly headers: Readonly<Record<string, string>>;
   readonly stream: boolean;
 }
+type ValidatedOptions = CommonOptions &
+  (
+    | {
+        readonly kind: 'brokered';
+        readonly send: OpenAICompatibleResponsesTransport['send'];
+      }
+    | {
+        readonly kind: 'direct';
+        readonly endpoint: string;
+        readonly send: OpenAICompatibleResponsesFetch;
+        readonly getApiKey?: OpenAIApiKeySupplier;
+        readonly headers: Readonly<Record<string, string>>;
+      }
+  );
 
 interface ParsedStreamEvent {
   readonly done: boolean;
@@ -68,7 +81,7 @@ function validateHeaders(
 }
 
 function validateOptions(options: OpenAICompatibleResponsesModelOptions): ValidatedOptions {
-  if (!isRecord(options) || typeof options.fetch !== 'function') {
+  if (!isRecord(options)) {
     throw new OpenAIResponsesModelError(
       'INVALID_CONFIGURATION',
       'OpenAI-compatible Responses model options and an injected fetch adapter are required.',
@@ -88,6 +101,33 @@ function validateOptions(options: OpenAICompatibleResponsesModelOptions): Valida
   ) {
     throw new OpenAIResponsesModelError('INVALID_CONFIGURATION', 'Invalid reasoning effort.');
   }
+  const common = {
+    model: requiredString(options.model, 'model'),
+    stream: options.stream ?? true,
+    ...(options.reasoningEffort === undefined ? {} : { reasoningEffort: options.reasoningEffort }),
+  };
+  if ('transport' in options) {
+    if (
+      !isRecord(options.transport) ||
+      typeof options.transport.send !== 'function' ||
+      ['endpoint', 'fetch', 'authentication', 'headers'].some((key) => key in options)
+    )
+      throw new OpenAIResponsesModelError(
+        'INVALID_CONFIGURATION',
+        'Brokered Responses requires a transport without endpoint or credentials.',
+      );
+    return Object.freeze({
+      ...common,
+      kind: 'brokered',
+      send: (request: OpenAIResponsesRequest) =>
+        (options.transport as OpenAICompatibleResponsesTransport).send(request),
+    });
+  }
+  if (typeof options.fetch !== 'function')
+    throw new OpenAIResponsesModelError(
+      'INVALID_CONFIGURATION',
+      'An injected fetch adapter is required.',
+    );
   const authentication = options.authentication;
   const getApiKey =
     authentication === undefined
@@ -104,6 +144,7 @@ function validateOptions(options: OpenAICompatibleResponsesModelOptions): Valida
     );
   }
   return Object.freeze({
+    kind: 'direct',
     model: requiredString(options.model, 'model'),
     endpoint: requiredString(options.endpoint, 'endpoint'),
     send: options.fetch,
@@ -114,7 +155,9 @@ function validateOptions(options: OpenAICompatibleResponsesModelOptions): Valida
   });
 }
 
-async function apiKey(options: ValidatedOptions): Promise<string | undefined> {
+async function apiKey(
+  options: Extract<ValidatedOptions, { kind: 'direct' }>,
+): Promise<string | undefined> {
   if (options.getApiKey === undefined) return undefined;
   try {
     const value = await options.getApiKey();
@@ -129,12 +172,11 @@ async function apiKey(options: ValidatedOptions): Promise<string | undefined> {
 }
 
 async function sendRequest(
-  options: ValidatedOptions,
-  request: OpenAICompatibleResponsesHttpRequest,
+  send: () => Promise<OpenAICompatibleResponsesHttpResponse>,
   context?: OperationContext,
 ): Promise<OpenAICompatibleResponsesHttpResponse> {
   try {
-    const response: unknown = await options.send(request);
+    const response: unknown = await send();
     context?.signal?.throwIfCancelled();
     if (
       !isRecord(response) ||
@@ -199,6 +241,7 @@ async function* sseEvents(
       : body;
   let buffer = '';
   let characters = 0;
+  let previousCarriageReturn = false;
   for await (const chunk of source) {
     context?.signal?.throwIfCancelled();
     if (typeof chunk !== 'string') throw malformed();
@@ -206,7 +249,10 @@ async function* sseEvents(
     if (characters > MAXIMUM_STREAM_CHARACTERS) {
       throw malformed('OpenAI-compatible Responses stream is too large.');
     }
-    buffer += chunk.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+    // A CR/LF pair can straddle extension port chunks. Normalize it only once.
+    const normalized = previousCarriageReturn && chunk.startsWith('\n') ? chunk.slice(1) : chunk;
+    if (chunk !== '') previousCarriageReturn = chunk.endsWith('\r');
+    buffer += normalized.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
     for (;;) {
       const boundary = buffer.indexOf('\n\n');
       if (boundary < 0) break;
@@ -323,6 +369,10 @@ async function* decodeCompatibleStream(
     if (type === 'response.completed') {
       const output = eventOutput(event);
       if (output !== undefined) {
+        // The terminal snapshot is authoritative; item IDs and output indices may differ.
+        // Keeping both would emit a completed tool action twice.
+        items.clear();
+        order.length = 0;
         output.forEach((item, index) => setItem(`index:${String(index)}`, item));
       }
       terminal = true;
@@ -374,7 +424,7 @@ function isEventStream(response: OpenAICompatibleResponsesHttpResponse): boolean
   return prefix.startsWith('data:') || prefix.startsWith('event:') || prefix.startsWith(':');
 }
 
-/** Creates a direct model for CORS-capable local, LAN, or otherwise OpenAI-compatible servers. */
+/** Creates a portable Responses model using a trusted transport or explicit direct fetch. */
 export function createOpenAICompatibleResponsesModel(
   options: OpenAICompatibleResponsesModelOptions,
 ): CodexModel {
@@ -382,29 +432,39 @@ export function createOpenAICompatibleResponsesModel(
   return Object.freeze({
     async *generate(request: CodexModelRequest, context?: OperationContext) {
       context?.signal?.throwIfCancelled();
-      const key = await apiKey(validated);
-      context?.signal?.throwIfCancelled();
-      const httpRequest: OpenAICompatibleResponsesHttpRequest = Object.freeze({
-        method: 'POST',
-        url: validated.endpoint,
-        headers: Object.freeze({
-          ...validated.headers,
-          Accept: 'text/event-stream, application/json',
-          ...(key === undefined ? {} : { Authorization: `Bearer ${key}` }),
-          'Content-Type': 'application/json',
+      const body = JSON.stringify(
+        createOpenAIResponsesRequestBody(request, validated.model, {
+          portable: true,
+          ...(validated.reasoningEffort === undefined
+            ? {}
+            : { reasoningEffort: validated.reasoningEffort }),
+          stream: validated.stream,
         }),
-        body: JSON.stringify(
-          createOpenAIResponsesRequestBody(request, validated.model, {
-            portable: true,
-            ...(validated.reasoningEffort === undefined
-              ? {}
-              : { reasoningEffort: validated.reasoningEffort }),
-            stream: validated.stream,
+      );
+      const signal = context?.signal === undefined ? {} : { signal: context.signal };
+      let response: OpenAICompatibleResponsesHttpResponse;
+      if (validated.kind === 'brokered') {
+        response = await sendRequest(
+          () => validated.send(Object.freeze({ body, ...signal })),
+          context,
+        );
+      } else {
+        const key = await apiKey(validated);
+        context?.signal?.throwIfCancelled();
+        const httpRequest: OpenAICompatibleResponsesHttpRequest = Object.freeze({
+          method: 'POST',
+          url: validated.endpoint,
+          body,
+          ...signal,
+          headers: Object.freeze({
+            ...validated.headers,
+            Accept: 'text/event-stream, application/json',
+            ...(key === undefined ? {} : { Authorization: `Bearer ${key}` }),
+            'Content-Type': 'application/json',
           }),
-        ),
-        ...(context?.signal === undefined ? {} : { signal: context.signal }),
-      });
-      const response = await sendRequest(validated, httpRequest, context);
+        });
+        response = await sendRequest(() => validated.send(httpRequest), context);
+      }
       if (response.status < 200 || response.status >= 300) {
         throw new OpenAIResponsesModelError(
           'HTTP_ERROR',

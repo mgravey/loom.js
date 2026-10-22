@@ -234,15 +234,9 @@ importers:
       '@mgravey/loom-agent-codex':
         specifier: workspace:^
         version: link:../agent-codex
-      '@mgravey/loom-auth-extension':
-        specifier: workspace:^
-        version: link:../auth-extension
       '@mgravey/loom-coding':
         specifier: workspace:^
         version: link:../coding
-      '@mgravey/loom-companion-codex-experimental':
-        specifier: workspace:^
-        version: link:../companion-codex-experimental
       '@mgravey/loom-execution-browser':
         specifier: workspace:^
         version: link:../execution-browser
@@ -261,6 +255,9 @@ importers:
       '@mgravey/loom-workspace-fsa':
         specifier: workspace:^
         version: link:../workspace-fsa
+      jose:
+        specifier: ^6.2.13
+        version: 6.2.13
       lottie-web:
         specifier: 5.13.0
         version: 5.13.0
@@ -1881,6 +1878,9 @@ packages:
 
   jackspeak@3.4.3:
     resolution: {integrity: sha512-OGlZQpz2yfahA/Rd1Y8Cd9SIEsqvXkLVoSw/cgwhnhFMDbsQFeZYoJJ7bIZBS9BcamUW96asq/npPWugM+RQBw==}
+
+  jose@6.2.13:
+    resolution: {integrity: sha512-7TIg10ZE1x82YediN+lcrPNvGMKge9yFHQD+Qho/b8y2adfugU3AsvvHfxV0fzyFllT6l9xCjf4RWY9g/Z9PJQ==}
 
   joycon@3.1.1:
     resolution: {integrity: sha512-34wB/Y7MW7bzjKRjUKTa46I2Z7eV62Rkhva+KkopW7Qvv/OSWBqvkSY7vusOPrNuZcUG3tApvdVgNB8POj3SPw==}
@@ -3767,6 +3767,8 @@ snapshots:
       '@isaacs/cliui': 8.0.2
     optionalDependencies:
       '@pkgjs/parseargs': 0.11.0
+
+  jose@6.2.13: {}
 
   joycon@3.1.1: {}
 

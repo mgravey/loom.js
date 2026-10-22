@@ -42,6 +42,12 @@
           </p>
         </header>
 
+        <p>
+          The current workbench uses browser-only ChatGPT sign-in, described below. Extension and
+          custom-server descriptions document separate library integrations and earlier releases;
+          those connection controls are no longer offered in the workbench.
+        </p>
+
         <section class="doc-section" id="scope">
           <h2>1. Who is responsible</h2>
           <p>
@@ -90,6 +96,34 @@
           <p>
             The extension does not request browsing-history, cookies, geolocation, advertising,
             analytics, or content-script access. It does not inspect unrelated pages or tabs.
+          </p>
+        </section>
+
+        <section class="doc-section" id="browser-chatgpt">
+          <h2>Browser-only ChatGPT local test</h2>
+          <p>
+            In the current ChatGPT-only workbench, sign-in, token refresh, model discovery, and
+            model requests go directly from your browser to OpenAI. This mode uses no Chrome
+            extension or model proxy. The local server only serves files and does not log requests.
+            The callback request contains a one-time authorization code; the browser exchanges it
+            with OpenAI. Access, refresh, and ID tokens are never sent to the file server.
+          </p>
+          <p>
+            OAuth tokens and pending sign-in transactions remain in browser memory. Reloading or
+            closing the workbench clears them. Local storage retains only the host identifier,
+            public client registration, verified account label and identifier, and interface
+            preferences. Browser settings can clear that metadata. Signing out attempts to revoke
+            the renewable session before clearing credentials; closing the tab alone does not revoke
+            the remote grant.
+          </p>
+          <p>
+            OpenAI receives sign-in information at auth.openai.com and prompts, selected project
+            context, and tool results at api.openai.com when you run a model. Manage app access and
+            plan usage in
+            <a href="https://chatgpt.com/settings/usage">ChatGPT usage settings</a>. This local
+            browser compatibility test does not establish support for public hosted sign-in. The
+            extension storage descriptions elsewhere on this page apply to the separate Companion
+            providers.
           </p>
         </section>
 
@@ -212,8 +246,9 @@
             </li>
             <li>
               The compatible-server API key, base URL, model, and provider selection remain until
-              the user selects <strong>Clear API key</strong>, changes them, or removes this
-              website's browser data. Website storage is not an encrypted credential vault.
+              the user selects
+              <strong>Clear API key</strong>, changes them, or removes this website's browser data.
+              Website storage is not an encrypted credential vault.
             </li>
           </ul>
           <p>
@@ -234,8 +269,9 @@
               extension-owned authorization state from both session and persistent storage.
             </li>
             <li>
-              Turning off <strong>Remember sign-in on this Chrome profile</strong> removes the local
-              copy and keeps any current authorization only until Chrome exits.
+              Turning off
+              <strong>Remember sign-in on this Chrome profile</strong> removes the local copy and
+              keeps any current authorization only until Chrome exits.
             </li>
             <li>Uninstalling the extension removes its Chrome storage.</li>
             <li>

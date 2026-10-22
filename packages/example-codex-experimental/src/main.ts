@@ -1,13 +1,4 @@
 import type { CodexAgentEvent, CodexAgentTool } from '@mgravey/loom-agent-codex';
-import {
-  createExternalCredentialBroker,
-  createExtensionAuthProvider,
-} from '@mgravey/loom-auth-extension';
-import {
-  createCodexExtensionFetch,
-  requestCodexOriginAccess,
-  type CodexCompanionRuntime,
-} from '@mgravey/loom-companion-codex-experimental';
 import { createCodingSession, type CodingSession } from '@mgravey/loom-coding';
 import {
   createPyodideExecutionRuntime,
@@ -16,16 +7,10 @@ import {
   executeBrowserWorkspace,
   type BrowserExecutionRuntime,
 } from '@mgravey/loom-execution-browser';
-import {
-  createCodexExperimentalModel,
-  type CodexReasoningEffort,
-  type CodexResponsesFetch,
-  type CodexResponsesHttpResponse,
-} from '@mgravey/loom-model-codex-experimental';
+import type { CodexReasoningEffort } from '@mgravey/loom-model-codex-experimental';
 import {
   OpenAIResponsesModelError,
   createOpenAICompatibleResponsesModel,
-  type OpenAICompatibleResponsesFetch,
 } from '@mgravey/loom-model-openai-responses';
 import {
   createMemoryProjectWorkspace,
@@ -50,6 +35,7 @@ import {
   createBrowserRunFileTool,
   type WebsiteRuntimeId,
 } from './browser-run-file-tool.js';
+import { ChatGPTDirectError, createChatGPTDirectClient } from './chatgpt-direct.js';
 import {
   cleanLoomDirectory,
   createWorkspaceConversation,
@@ -59,52 +45,13 @@ import {
   updateWorkspaceConversation,
   type WorkspaceConversation,
 } from './conversation-store.js';
-import {
-  clearLocalModelApiKey,
-  loadLocalModelConnection,
-  loadWorkbenchProvider,
-  openAICompatibleBaseUrl,
-  openAICompatibleEndpoint,
-  openAICompatibleModelIds,
-  saveLocalModelConnection,
-  saveWorkbenchProvider,
-  type WorkbenchModelProvider,
-} from './local-model-connection.js';
-
-const PROVIDER_ID = 'openai/codex-experimental';
-const CODEX_RESPONSES_ENDPOINT = 'https://chatgpt.com/backend-api/codex/responses';
-const DIRECT_AUTH_PROTOCOL = 'loom/codex-direct-auth-experimental';
-const DIRECT_AUTH_VERSION = 1;
 const DEFAULT_RUN_SESSION_ID = sessionId('codex-experimental-browser-run');
 const OPFS_DIRECTORY = 'loom-workbench';
 const OPFS_ARCHIVE = 'project.zip';
-const EXTENSION_ID_PATTERN = /^[a-p]{32}$/u;
-const EXTENSION_ID_STORAGE_KEY = 'loom.chrome-extension-id';
-const LEGACY_DEVELOPMENT_EXTENSION_IDS = new Set(['foofdcgdelahbdgdfgocoeajdodhjbjo']);
-const MODEL_TRANSPORT_STORAGE_PREFIX = 'loom.codex-model-transport.';
-
-interface LoomDeploymentConfig {
-  readonly environment?: string;
-  readonly chromeExtensionId?: string;
-}
-
 interface DirectoryPickerHost {
   showDirectoryPicker(options?: {
     readonly mode?: 'read' | 'readwrite';
   }): Promise<FileSystemDirectoryHandle>;
-}
-
-interface DirectCredentials {
-  readonly accessToken: string;
-  readonly accountId: string;
-  readonly expiresAt: number;
-}
-
-class DirectProviderConnectionError extends Error {
-  constructor(cause: unknown) {
-    super('The direct provider request failed before an HTTP response.', { cause });
-    this.name = 'DirectProviderConnectionError';
-  }
 }
 
 function requiredElement<ElementType extends HTMLElement>(
@@ -116,7 +63,25 @@ function requiredElement<ElementType extends HTMLElement>(
   return element;
 }
 
-const extensionIdInput = requiredElement('#extension-id', HTMLInputElement);
+const chatgptClient = createChatGPTDirectClient();
+const chatgptAccountSelect = requiredElement('#chatgpt-account', HTMLSelectElement);
+const chatgptSignInButton = requiredElement('#chatgpt-sign-in', HTMLButtonElement);
+const chatgptCancelSignInButton = requiredElement('#chatgpt-cancel-sign-in', HTMLButtonElement);
+const chatgptSignOutButton = requiredElement('#chatgpt-sign-out', HTMLButtonElement);
+const chatgptStatus = requiredElement('#chatgpt-status', HTMLParagraphElement);
+const chatgptError = requiredElement('#chatgpt-error', HTMLParagraphElement);
+const chatgptLocalOnly = requiredElement('#chatgpt-local-only', HTMLParagraphElement);
+const chatgptPlanConfirmation = requiredElement('#chatgpt-plan-confirmation', HTMLDivElement);
+const chatgptDismissConfirmation = requiredElement(
+  '#chatgpt-dismiss-confirmation',
+  HTMLButtonElement,
+);
+let chatgptAuthTransition = false;
+let chatgptAuthRevision = 0;
+let agentRunActive = false;
+let modelsLoading = false;
+const confirmedRegistrations = new Set<string>();
+
 const thinkingLevelSelect = requiredElement('#thinking-level', HTMLSelectElement);
 const refreshModelsButton = requiredElement('#refresh-models', HTMLButtonElement);
 const availableModelsSelect = requiredElement('#available-models', HTMLSelectElement);
@@ -129,26 +94,9 @@ if (
   thinkingLevelSelect.value = savedThinkingLevel;
 
 const modelInput = requiredElement('#model', HTMLInputElement);
-const modelProviderSelect = requiredElement('#model-provider', HTMLSelectElement);
-const codexConnectionSettings = requiredElement('#codex-connection-settings', HTMLDivElement);
-const localModelConnectionSettings = requiredElement(
-  '#local-model-connection-settings',
-  HTMLDivElement,
-);
-const localModelBaseUrlInput = requiredElement('#local-model-base-url', HTMLInputElement);
-const localModelApiKeyInput = requiredElement('#local-model-api-key', HTMLInputElement);
-const connectLocalModelButton = requiredElement('#connect-local-model', HTMLButtonElement);
-const clearLocalModelKeyButton = requiredElement('#clear-local-model-key', HTMLButtonElement);
-const localModelConnectionStatus = requiredElement(
-  '#local-model-connection-status',
-  HTMLParagraphElement,
-);
-const localModelList = requiredElement('#local-model-list', HTMLDataListElement);
 const promptInput = requiredElement('#prompt', HTMLTextAreaElement);
-const checkAuthButton = requiredElement('#check-auth', HTMLButtonElement);
 const runButton = requiredElement('#run', HTMLButtonElement);
 const cancelRunButton = requiredElement('#cancel-run', HTMLButtonElement);
-const logoutButton = requiredElement('#logout', HTMLButtonElement);
 const statusElement = requiredElement('#status', HTMLParagraphElement);
 const logElement = requiredElement('#log', HTMLDivElement);
 const transportStatusElement = requiredElement('#transport-status', HTMLSpanElement);
@@ -176,63 +124,14 @@ const commandInput = requiredElement('#command', HTMLInputElement);
 const runCommandButton = requiredElement('#run-command', HTMLButtonElement);
 const runtimeOutput = requiredElement('#runtime-output', HTMLPreElement);
 
-function deploymentExtensionId(): string | undefined {
-  const configured = (
-    globalThis as typeof globalThis & {
-      readonly LOOM_DEPLOYMENT_CONFIG?: LoomDeploymentConfig;
-    }
-  ).LOOM_DEPLOYMENT_CONFIG?.chromeExtensionId;
-  return typeof configured === 'string' && EXTENSION_ID_PATTERN.test(configured)
-    ? configured
-    : undefined;
+// Connection mode is always browser ChatGPT, regardless of legacy URL or storage settings.
+// Remove the old page-held server secret without reading or migrating it.
+try {
+  globalThis.localStorage.removeItem('loom.local-model.api-key');
+} catch {
+  // Storage can be unavailable; the workbench never uses legacy credentials.
 }
-
-function storedExtensionId(): string | undefined {
-  try {
-    const stored = globalThis.localStorage.getItem(EXTENSION_ID_STORAGE_KEY);
-    return stored !== null && EXTENSION_ID_PATTERN.test(stored) ? stored : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function queryExtensionId(): string | undefined {
-  const value = new URL(globalThis.location.href).searchParams.get('extensionId');
-  return value !== null && EXTENSION_ID_PATTERN.test(value) ? value : undefined;
-}
-
-function initialExtensionId(): string {
-  const query = queryExtensionId();
-  if (query !== undefined) return query;
-
-  const stored = storedExtensionId();
-  const deployed = deploymentExtensionId();
-  const environment = (
-    globalThis as typeof globalThis & {
-      readonly LOOM_DEPLOYMENT_CONFIG?: LoomDeploymentConfig;
-    }
-  ).LOOM_DEPLOYMENT_CONFIG?.environment;
-  if (
-    environment === 'production' &&
-    deployed !== undefined &&
-    stored !== undefined &&
-    LEGACY_DEVELOPMENT_EXTENSION_IDS.has(stored)
-  ) {
-    return deployed;
-  }
-  return stored ?? deployed ?? '';
-}
-
-extensionIdInput.value = initialExtensionId();
-const storedLocalModelConnection = loadLocalModelConnection(globalThis.localStorage);
-localModelBaseUrlInput.value = storedLocalModelConnection.baseUrl;
-localModelApiKeyInput.value = storedLocalModelConnection.apiKey;
-modelProviderSelect.value = loadWorkbenchProvider(globalThis.localStorage);
-if (modelProviderSelect.value === 'openai-compatible-responses') {
-  modelInput.value = storedLocalModelConnection.model;
-}
-let codexModelSelection =
-  modelProviderSelect.value === 'codex-experimental' ? modelInput.value : 'gpt-5.6-sol';
+modelInput.value = '';
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -240,6 +139,13 @@ function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
 
 function setStatus(message: string): void {
   statusElement.textContent = message;
+  statusElement.hidden = message === '';
+}
+
+function setChatGPTError(message = ''): void {
+  chatgptError.textContent = message;
+  chatgptError.hidden = message === '';
+  chatgptStatus.hidden = message !== '';
 }
 
 function setActivityStatus(state: 'idle' | 'working' | 'error', message: string): void {
@@ -401,28 +307,11 @@ function appendRuntimeOutput(chunk: string): void {
 }
 
 function errorMessage(error: unknown): string {
+  if (error instanceof ChatGPTDirectError) return error.message;
   if (error instanceof OpenAIResponsesModelError) {
-    if (error.code === 'TRANSPORT_FAILED') {
-      return 'The model server could not be reached. Check its address, CORS allowlist, network binding, and browser mixed-content policy.';
-    }
-    if (error.code === 'AUTHENTICATION_FAILED' || error.status === 401 || error.status === 403) {
-      return 'The model server rejected authentication. Check or clear the configured API key.';
-    }
-    if (error.status === 404) {
-      return 'The model server does not expose the expected /v1/responses endpoint.';
-    }
-    if (error.code === 'HTTP_ERROR') {
-      return `The model server rejected the request${error.status === undefined ? '.' : ` with HTTP ${String(error.status)}.`}`;
-    }
-    if (error.code === 'MALFORMED_RESPONSE') {
-      return 'The model server returned an invalid Responses JSON or SSE payload.';
-    }
-    if (error.code === 'INCOMPLETE_RESPONSE') {
-      return 'The model server ended the response before it completed.';
-    }
-    if (error.code === 'PROVIDER_ERROR') {
-      return 'The model server reported a response failure.';
-    }
+    return error.code === 'AUTHENTICATION_FAILED' || error.status === 401 || error.status === 403
+      ? 'ChatGPT access is unavailable. Continue with ChatGPT again to check your plan access.'
+      : 'The browser could not complete the ChatGPT request. This local compatibility test may be blocked by the provider. Try signing in again or retry later.';
   }
   return error instanceof Error ? error.message : String(error);
 }
@@ -433,48 +322,6 @@ function ownedBuffer(value: Uint8Array): ArrayBuffer {
   return copy.buffer;
 }
 
-function pageDiagnostic(
-  event: string,
-  details: Readonly<Record<string, string | number | boolean>> = {},
-): void {
-  globalThis.console.info('[loom:page-extension]', Object.freeze({ event, ...details }));
-}
-
-function providerDiagnostic(value: unknown): string {
-  return typeof value === 'string' && /^[a-zA-Z0-9._:[\]-]{1,256}$/u.test(value)
-    ? value
-    : 'unclassified';
-}
-
-function extensionRuntime(): CodexCompanionRuntime {
-  const runtime = (
-    globalThis as typeof globalThis & {
-      readonly chrome?: { readonly runtime?: CodexCompanionRuntime };
-    }
-  ).chrome?.runtime;
-  if (
-    runtime === undefined ||
-    typeof runtime.sendMessage !== 'function' ||
-    typeof runtime.connect !== 'function'
-  ) {
-    throw new Error('Chrome external extension messaging is unavailable.');
-  }
-  return runtime;
-}
-
-function selectedExtensionId(): string {
-  const value = extensionIdInput.value.trim();
-  if (!EXTENSION_ID_PATTERN.test(value)) {
-    throw new Error('Enter a valid 32-character Chrome extension ID.');
-  }
-  try {
-    globalThis.localStorage.setItem(EXTENSION_ID_STORAGE_KEY, value);
-  } catch {
-    // The ID is non-secret deployment metadata; storage availability is optional.
-  }
-  return value;
-}
-
 function directoryPicker(): DirectoryPickerHost['showDirectoryPicker'] {
   const picker = (globalThis as typeof globalThis & Partial<DirectoryPickerHost>)
     .showDirectoryPicker;
@@ -483,489 +330,67 @@ function directoryPicker(): DirectoryPickerHost['showDirectoryPicker'] {
   return picker.bind(globalThis);
 }
 
-let nextDirectAuthRequest = 0;
-let cachedDirectCredentials: Promise<DirectCredentials> | undefined;
-let modelTransportMode: 'direct' | 'relay' = 'direct';
-
-function setTransportMode(mode: 'direct' | 'relay'): void {
-  modelTransportMode = mode;
-  if (selectedModelProvider() === 'openai-compatible-responses') {
-    transportStatusElement.textContent = 'Direct model server';
-    transportStatusElement.dataset.mode = 'local';
-    return;
-  }
-  transportStatusElement.textContent = mode === 'direct' ? 'Direct preferred' : 'Extension relay';
-  transportStatusElement.dataset.mode = mode;
-  const extensionId = extensionIdInput.value.trim();
-  if (!EXTENSION_ID_PATTERN.test(extensionId)) return;
-  try {
-    const key = `${MODEL_TRANSPORT_STORAGE_PREFIX}${extensionId}`;
-    if (mode === 'relay') globalThis.sessionStorage.setItem(key, mode);
-    else globalThis.sessionStorage.removeItem(key);
-  } catch {
-    // Tab-scoped transport affinity is an optimization; storage availability is optional.
-  }
+interface SelectableModel {
+  readonly id: string;
+  readonly model: string;
+  readonly label: string;
 }
-
-function storedTransportMode(): 'direct' | 'relay' {
-  const extensionId = extensionIdInput.value.trim();
-  if (!EXTENSION_ID_PATTERN.test(extensionId)) return 'direct';
-  try {
-    return globalThis.sessionStorage.getItem(`${MODEL_TRANSPORT_STORAGE_PREFIX}${extensionId}`) ===
-      'relay'
-      ? 'relay'
-      : 'direct';
-  } catch {
-    return 'direct';
-  }
-}
-
-function sendExtensionMessage(message: unknown): Promise<unknown> {
-  const runtime = extensionRuntime();
-  const extensionId = selectedExtensionId();
-  return new Promise((resolve, reject) => {
-    let settled = false;
-    const resolveOnce = (value: unknown): void => {
-      if (!settled) {
-        settled = true;
-        resolve(value);
-      }
-    };
-    const rejectOnce = (error: unknown): void => {
-      if (!settled) {
-        settled = true;
-        reject(error instanceof Error ? error : new Error('Extension request failed.'));
-      }
-    };
-    try {
-      const returned = runtime.sendMessage(extensionId, message, undefined, (response) => {
-        if (runtime.lastError !== undefined) {
-          rejectOnce(new Error(runtime.lastError.message ?? 'Extension request failed.'));
-        } else {
-          resolveOnce(response);
-        }
-      });
-      if (
-        returned !== null &&
-        (typeof returned === 'object' || typeof returned === 'function') &&
-        typeof (returned as PromiseLike<unknown>).then === 'function'
-      ) {
-        void Promise.resolve(returned as PromiseLike<unknown>).then(resolveOnce, rejectOnce);
-      } else if (returned !== undefined) {
-        resolveOnce(returned);
-      }
-    } catch (error) {
-      rejectOnce(error);
-    }
-  });
-}
-
-async function requestDirectCredentials(): Promise<DirectCredentials> {
-  nextDirectAuthRequest += 1;
-  const requestId = `loom-direct-auth-${String(nextDirectAuthRequest)}`;
-  pageDiagnostic('auth.credentials.request', { requestId });
-  const response = await sendExtensionMessage({
-    protocol: DIRECT_AUTH_PROTOCOL,
-    version: DIRECT_AUTH_VERSION,
-    type: 'getDirectCredentials',
-    requestId,
-    providerId: PROVIDER_ID,
-  });
-  if (
-    !isRecord(response) ||
-    response.protocol !== DIRECT_AUTH_PROTOCOL ||
-    response.version !== DIRECT_AUTH_VERSION ||
-    response.type !== 'getDirectCredentialsResult' ||
-    response.requestId !== requestId ||
-    response.ok !== true ||
-    typeof response.accessToken !== 'string' ||
-    response.accessToken.trim() === '' ||
-    typeof response.accountId !== 'string' ||
-    !/^[a-zA-Z0-9._-]{1,256}$/u.test(response.accountId)
-  ) {
-    const code =
-      isRecord(response) && isRecord(response.error)
-        ? providerDiagnostic(response.error.code)
-        : 'INVALID_EXTENSION_RESPONSE';
-    pageDiagnostic('auth.credentials.rejected', { requestId, code });
-    throw new Error(`Extension direct authentication failed (${code}).`);
-  }
-  pageDiagnostic('auth.credentials.response', { requestId });
-  return Object.freeze({
-    accessToken: response.accessToken,
-    accountId: response.accountId,
-    expiresAt:
-      typeof response.expiresAt === 'number' && Number.isFinite(response.expiresAt)
-        ? response.expiresAt
-        : Date.now() + 30_000,
-  });
-}
-
-async function ensureOriginAccess(): Promise<void> {
-  const status = await requestCodexOriginAccess({
-    extensionId: selectedExtensionId,
-    runtime: extensionRuntime,
-    diagnosticSink(event) {
-      pageDiagnostic(event.event, {
-        stage: event.stage,
-        ...(event.requestId === undefined ? {} : { requestId: event.requestId }),
-        ...(event.code === undefined ? {} : { code: event.code }),
-      });
-    },
-  });
-  if (!status.approved) {
-    throw new Error(
-      'Approve this exact website origin in the extension options page, then check authentication again.',
-    );
-  }
-}
-
-async function directCredentials(): Promise<DirectCredentials> {
-  if (cachedDirectCredentials !== undefined) {
-    const cached = await cachedDirectCredentials;
-    if (cached.expiresAt > Date.now() + 10_000) return cached;
-  }
-  cachedDirectCredentials = requestDirectCredentials();
-  try {
-    return await cachedDirectCredentials;
-  } catch (error) {
-    cachedDirectCredentials = undefined;
-    throw error;
-  }
-}
-
-async function providerErrorMetadata(
-  response: Response,
-): Promise<Readonly<Record<string, string>>> {
-  let envelope: unknown;
-  try {
-    const text = (await response.text()).slice(0, 16 * 1024);
-    envelope = JSON.parse(text);
-  } catch {
-    return Object.freeze({});
-  }
-  const error = isRecord(envelope) && isRecord(envelope.error) ? envelope.error : undefined;
-  if (error === undefined) return Object.freeze({});
-  return Object.freeze({
-    providerCode: providerDiagnostic(error.code),
-    providerType: providerDiagnostic(error.type),
-    providerParam: providerDiagnostic(error.param),
-  });
-}
-
-function decodedResponseBody(
-  body: ReadableStream<Uint8Array>,
-  unsubscribe: () => void,
-): AsyncIterable<string> {
-  return {
-    async *[Symbol.asyncIterator]() {
-      const reader = body.getReader();
-      const decoder = new TextDecoder();
-      try {
-        for (;;) {
-          const result = await reader.read();
-          if (result.done) break;
-          const chunk = decoder.decode(result.value, { stream: true });
-          if (chunk !== '') yield chunk;
-        }
-        const tail = decoder.decode();
-        if (tail !== '') yield tail;
-      } finally {
-        unsubscribe();
-        reader.releaseLock();
-      }
-    },
-  };
-}
-
-const EMPTY_RESPONSE_BODY: AsyncIterable<string> = Object.freeze({
-  [Symbol.asyncIterator](): AsyncIterator<string> {
-    return {
-      next: () => Promise.resolve({ done: true, value: undefined }),
-    };
-  },
-});
-
-const directModelFetch: CodexResponsesFetch = async (
-  request,
-): Promise<CodexResponsesHttpResponse> => {
-  const controller = new AbortController();
-  const unsubscribe = request.signal?.onCancel(() => controller.abort()) ?? (() => undefined);
-  pageDiagnostic('model.fetch.started', { target: 'chatgpt.com', direct: true });
-  const parsedBody: unknown = JSON.parse(request.body);
-  if (!isRecord(parsedBody)) throw new Error('Direct model request body is invalid.');
-  const body = JSON.stringify({
-    ...parsedBody,
-    prompt_cache_key: currentRunSessionId(),
-    client_metadata: {
-      session_id: currentRunSessionId(),
-      thread_id: currentRunSessionId(),
-    },
-  });
-  let response: Response;
-  try {
-    response = await globalThis.fetch(request.url, {
-      method: request.method,
-      headers: request.headers,
-      body,
-      cache: 'no-store',
-      credentials: 'omit',
-      redirect: 'error',
-      mode: 'cors',
-      signal: controller.signal,
-    });
-  } catch (error) {
-    unsubscribe();
-    if (controller.signal.aborted) throw error;
-    throw new DirectProviderConnectionError(error);
-  }
-  pageDiagnostic('model.fetch.response', { status: response.status, direct: true });
-  if (!response.ok) {
-    const metadata = await providerErrorMetadata(response);
-    unsubscribe();
-    appendLog(
-      `Provider rejected the request (${String(response.status)}): ${metadata.providerCode ?? 'unclassified'}; type ${metadata.providerType ?? 'unclassified'}; parameter ${metadata.providerParam ?? 'unclassified'}.`,
-    );
-    return Object.freeze({
-      status: response.status,
-      body: EMPTY_RESPONSE_BODY,
-    });
-  }
-  if (response.body === null) {
-    unsubscribe();
-    throw new Error('Provider response body is unavailable.');
-  }
-  return Object.freeze({
-    status: response.status,
-    body: decodedResponseBody(response.body, unsubscribe),
-  });
-};
-
-const relayModelFetch = createCodexExtensionFetch({
-  extensionId: selectedExtensionId,
-  runtime: extensionRuntime,
-  sessionId: currentRunSessionId,
-  threadId: currentRunSessionId,
-  diagnosticSink(event) {
-    pageDiagnostic(event.event, {
-      stage: event.stage,
-      ...(event.requestId === undefined ? {} : { requestId: event.requestId }),
-      ...(event.code === undefined ? {} : { code: event.code }),
-      ...(event.status === undefined ? {} : { status: event.status }),
-      ...(event.characters === undefined ? {} : { characters: event.characters }),
-    });
-  },
-});
-
-const directFirstModelFetch: CodexResponsesFetch = async (request) => {
-  if (modelTransportMode === 'relay') return relayModelFetch(request);
-  try {
-    return await directModelFetch(request);
-  } catch (error) {
-    request.signal?.throwIfCancelled();
-    if (!(error instanceof DirectProviderConnectionError)) throw error;
-    setTransportMode('relay');
-    pageDiagnostic('model.fetch.fallback', { reason: 'pre-response-failure' });
-    return relayModelFetch(request);
-  }
-};
-
-function assertLocalEndpointUsable(baseUrl: string): string {
-  const normalized = openAICompatibleBaseUrl(baseUrl);
-  if (globalThis.location.protocol === 'https:' && new URL(normalized).protocol === 'http:') {
-    throw new Error(
-      'An HTTPS workbench cannot connect to an HTTP model server. Use the locally served HTTP workbench or enable HTTPS on the model server.',
-    );
-  }
-  return normalized;
-}
-
-function currentLocalModelSettings() {
-  return Object.freeze({
-    baseUrl: assertLocalEndpointUsable(localModelBaseUrlInput.value),
-    model: modelInput.value.trim(),
-    apiKey: localModelApiKeyInput.value,
-  });
-}
-
-function persistLocalModelSettings(): ReturnType<typeof currentLocalModelSettings> {
-  const settings = currentLocalModelSettings();
-  saveLocalModelConnection(globalThis.localStorage, settings);
-  localModelBaseUrlInput.value = settings.baseUrl;
-  return settings;
-}
-
-function renderDiscoveredModels(models: readonly string[]): void {
+let availableModels: readonly SelectableModel[] = [];
+let catalogueRevision = 0;
+function renderDiscoveredModels(models: readonly SelectableModel[]): void {
+  availableModels = models;
   availableModelsSelect.replaceChildren(
     new Option('Select a model', ''),
-    ...models.map((model) => new Option(model, model)),
+    ...models.map((model) => new Option(model.label, model.id)),
   );
-  localModelList.replaceChildren(
-    ...models.map((model) => {
-      const option = globalThis.document.createElement('option');
-      option.value = model;
-      return option;
-    }),
-  );
+  const selected = models.find((entry) => entry.model === modelInput.value);
+  availableModelsSelect.value = selected?.id ?? '';
 }
 
-async function refreshModels(): Promise<void> {
-  refreshModelsButton.disabled = true;
-  const provider = selectedModelProvider();
-  renderDiscoveredModels([]);
+async function refreshModels(quiet = false): Promise<void> {
+  const revision = ++catalogueRevision;
+  modelsLoading = true;
+  updateControls();
+  setChatGPTError();
   try {
-    if (provider === 'openai-compatible-responses') {
-      await discoverLocalModels();
+    const status = chatgptClient.getStatus();
+    if (!status.authenticated || !status.planEnabled) {
+      renderDiscoveredModels([]);
       return;
     }
-    const credentials = await directCredentials();
-    const response = await globalThis.fetch(
-      'https://chatgpt.com/backend-api/codex/models?client_version=0.1.0',
-      {
-        headers: {
-          Accept: 'application/json',
-          Authorization: `Bearer ${credentials.accessToken}`,
-          'ChatGPT-Account-Id': credentials.accountId,
-        },
-        cache: 'no-store',
-        credentials: 'omit',
-        redirect: 'error',
-        mode: 'cors',
-        signal: AbortSignal.timeout(15_000),
-      },
-    );
-    if (!response.ok) throw new Error(`Model discovery returned HTTP ${String(response.status)}.`);
-    const value: unknown = await response.json();
-    if (!isRecord(value) || !Array.isArray(value.models))
-      throw new Error('Invalid Codex model list.');
-    const models = openAICompatibleModelIds({
-      data: value.models.map((entry: unknown) => ({
-        id: isRecord(entry) ? entry.slug : undefined,
+    const models = await chatgptClient.listModels();
+    if (revision !== catalogueRevision) return;
+    if (!models.some((model) => model.slug === modelInput.value))
+      modelInput.value = models[0]?.slug ?? '';
+    renderDiscoveredModels(
+      models.map((model) => ({
+        id: `chatgpt-direct:${model.slug}`,
+        model: model.slug,
+        label: `ChatGPT / ${model.displayName}`,
       })),
-    });
-    if (selectedModelProvider() !== provider) return;
-    renderDiscoveredModels(models);
-    setStatus(`Discovered ${String(models.length)} Codex models.`);
-  } catch {
-    setStatus('Model discovery unavailable. Check the connection or enter a model ID manually.');
-  } finally {
-    refreshModelsButton.disabled = false;
-  }
-}
-
-async function discoverLocalModels(): Promise<void> {
-  localModelConnected = false;
-  connectLocalModelButton.disabled = true;
-  localModelConnectionStatus.textContent = 'Connecting and discovering models…';
-  setActivityStatus('working', 'Connecting model server');
-  const settings = persistLocalModelSettings();
-  const headers: Record<string, string> = { Accept: 'application/json' };
-  if (settings.apiKey !== '') headers.Authorization = `Bearer ${settings.apiKey}`;
-  let response: Response;
-  try {
-    response = await globalThis.fetch(openAICompatibleEndpoint(settings.baseUrl, 'models'), {
-      method: 'GET',
-      headers,
-      cache: 'no-store',
-      credentials: 'omit',
-      redirect: 'error',
-      mode: 'cors',
-    });
-  } catch {
-    localModelConnected = true;
-    localModelConnectionStatus.textContent =
-      'Model discovery was unavailable. Enter the exact model ID; the first run will test the Responses endpoint.';
-    setStatus('Connected configuration saved; model discovery was unavailable.');
-    setActivityStatus('idle', 'Manual model ID');
-    return;
-  } finally {
-    connectLocalModelButton.disabled = false;
-    updateControls();
-  }
-  localModelConnected = true;
-  if (!response.ok) {
-    localModelConnectionStatus.textContent = `Model discovery returned HTTP ${String(response.status)}. Enter the exact model ID to continue.`;
-    setStatus('Connected configuration saved; enter a model ID manually.');
-    setActivityStatus('idle', 'Manual model ID');
-    updateControls();
-    return;
-  }
-  const source = await response.text();
-  if (source.length > 1024 * 1024) {
-    localModelConnected = false;
-    throw new Error('Model discovery response is too large.');
-  }
-  let value: unknown;
-  try {
-    value = JSON.parse(source);
-  } catch {
-    localModelConnected = false;
-    throw new Error('Model discovery returned invalid JSON.');
-  }
-  const models = openAICompatibleModelIds(value);
-  renderDiscoveredModels(models);
-  if (modelInput.value.trim() === '' && models[0] !== undefined) modelInput.value = models[0];
-  persistLocalModelSettings();
-  localModelConnectionStatus.textContent =
-    models.length === 0
-      ? 'Connected. No models were listed; enter the exact model ID.'
-      : `Connected. Discovered ${String(models.length)} model${models.length === 1 ? '' : 's'}.`;
-  setStatus('OpenAI-compatible model server connected.');
-  setActivityStatus('idle', 'Ready');
-  updateControls();
-}
-
-const openAICompatibleModelFetch: OpenAICompatibleResponsesFetch = async (request) => {
-  const controller = new AbortController();
-  const unsubscribe = request.signal?.onCancel(() => controller.abort()) ?? (() => undefined);
-  pageDiagnostic('local-model.fetch.started', { direct: true });
-  let response: Response;
-  try {
-    response = await globalThis.fetch(request.url, {
-      method: request.method,
-      headers: request.headers,
-      body: request.body,
-      cache: 'no-store',
-      credentials: 'omit',
-      redirect: 'error',
-      mode: 'cors',
-      signal: controller.signal,
-    });
+    );
+    if (!quiet)
+      setStatus(
+        models.length === 0
+          ? 'No ChatGPT models are available for this account.'
+          : 'ChatGPT models refreshed.',
+      );
   } catch (error) {
-    unsubscribe();
-    throw error;
+    if (revision === catalogueRevision) {
+      renderDiscoveredModels([]);
+      const message = `ChatGPT model discovery failed: ${errorMessage(error)}`;
+      setChatGPTError(message);
+      setStatus('');
+    }
+  } finally {
+    if (revision === catalogueRevision) {
+      modelsLoading = false;
+      syncChatGPTStatus();
+      updateControls();
+    }
   }
-  pageDiagnostic('local-model.fetch.response', { status: response.status, direct: true });
-  const contentType = response.headers.get('content-type') ?? undefined;
-  if (!response.ok) {
-    unsubscribe();
-    return Object.freeze({
-      status: response.status,
-      ...(contentType === undefined ? {} : { contentType }),
-      body: '',
-    });
-  }
-  if (response.body === null) {
-    unsubscribe();
-    throw new Error('Model server response body is unavailable.');
-  }
-  return Object.freeze({
-    status: response.status,
-    ...(contentType === undefined ? {} : { contentType }),
-    body: decodedResponseBody(response.body, unsubscribe),
-  });
-};
-
-function authProvider() {
-  const broker = createExternalCredentialBroker({
-    extensionId: selectedExtensionId(),
-    runtime: extensionRuntime(),
-  });
-  return createExtensionAuthProvider({ broker, providerId: PROVIDER_ID });
 }
 
-let authenticated = false;
-let localModelConnected = false;
 let activeWorkspace: ProjectWorkspace | undefined;
 let activeWorkspaceMode: 'direct' | 'memory' | 'opfs' | undefined;
 let codingSession: CodingSession | undefined;
@@ -980,16 +405,14 @@ function currentRunSessionId() {
 }
 let runtimeCancellation: CancellationSource | undefined;
 
-function selectedModelProvider(): WorkbenchModelProvider {
-  return modelProviderSelect.value === 'openai-compatible-responses'
-    ? 'openai-compatible-responses'
-    : 'codex-experimental';
-}
-
 function modelConnectionReady(): boolean {
-  return selectedModelProvider() === 'openai-compatible-responses'
-    ? localModelConnected && modelInput.value.trim() !== ''
-    : authenticated;
+  const status = chatgptClient.getStatus();
+  return (
+    status.authenticated &&
+    status.planEnabled &&
+    chatgptAccountSelect.value === status.activeAccountId &&
+    availableModels.some((model) => model.model === modelInput.value)
+  );
 }
 
 const executionRuntimes: Readonly<Record<WebsiteRuntimeId, BrowserExecutionRuntime>> =
@@ -1005,18 +428,33 @@ function updateControls(): void {
   const hasWorkspace = activeWorkspace !== undefined;
   const readable = canReadWorkspace();
   const writable = canWriteWorkspace();
-  const busy = codingSession?.state === 'running' || runtimeCancellation !== undefined;
+  const busy =
+    agentRunActive ||
+    codingSession?.state === 'running' ||
+    runtimeCancellation !== undefined ||
+    chatgptAuthTransition;
+  const directStatus = chatgptClient.getStatus();
+  modelInput.disabled = busy;
+  refreshModelsButton.disabled =
+    busy || modelsLoading || !directStatus.authenticated || !directStatus.planEnabled;
+  chatgptAccountSelect.disabled = busy;
+  chatgptSignInButton.disabled = busy || !directStatus.supported;
+  chatgptSignOutButton.disabled = busy;
+  chatgptSignOutButton.hidden = !directStatus.authenticated;
+  chatgptCancelSignInButton.hidden = !chatgptAuthTransition;
+  workspaceMode.disabled = busy;
+  runtimeSelect.disabled = busy;
+  commandInput.disabled = busy;
   thinkingLevelSelect.disabled = busy;
   availableModelsSelect.disabled = busy;
-  runButton.disabled = !modelConnectionReady() || !readable;
-  logoutButton.disabled = selectedModelProvider() !== 'codex-experimental' || !authenticated;
+  runButton.disabled = busy || !modelConnectionReady() || !readable;
   openWorkspaceButton.disabled = !readable || busy;
-  importFolderButton.disabled = !writable;
-  importZipButton.disabled = !writable;
-  exportZipButton.disabled = !hasWorkspace || !readable;
-  runCommandButton.disabled = !hasWorkspace || !readable;
-  editor.disabled = selectedFile === undefined || !readable;
-  saveFileButton.disabled = selectedFile === undefined || !writable;
+  importFolderButton.disabled = busy || !writable;
+  importZipButton.disabled = busy || !writable;
+  exportZipButton.disabled = busy || !hasWorkspace || !readable;
+  runCommandButton.disabled = busy || !hasWorkspace || !readable;
+  editor.disabled = busy || selectedFile === undefined || !readable;
+  saveFileButton.disabled = busy || selectedFile === undefined || !writable;
   newConversationButton.disabled = !hasWorkspace || !writable || busy;
   deleteConversationButton.disabled = activeConversation === undefined || !writable || busy;
   cleanLoomButton.disabled = !hasWorkspace || !writable || busy;
@@ -1032,46 +470,172 @@ function updateControls(): void {
   );
 }
 
-function updateModelProviderView(): void {
-  const local = selectedModelProvider() === 'openai-compatible-responses';
-  codexConnectionSettings.hidden = local;
-  localModelConnectionSettings.hidden = !local;
-  extensionIdInput.required = !local;
-  if (local) {
-    transportStatusElement.textContent = 'Direct model server';
-    transportStatusElement.dataset.mode = 'local';
-    setActivityStatus(
-      localModelConnected ? 'idle' : 'error',
-      localModelConnected ? 'Ready' : 'Connect server',
-    );
-  } else {
-    setTransportMode(modelTransportMode);
-    setActivityStatus(
-      authenticated ? 'idle' : 'error',
-      authenticated ? 'Ready' : 'Sign-in required',
-    );
-  }
-  updateControls();
+function accountDisplayLabel(label: string, index?: number): string {
+  const safeLabel = label
+    .replace(/\s*\(oaiapp[^)]*\)/giu, '')
+    .replace(/oaiapp[^\s)]*/giu, '')
+    .replace(/^Unverified ChatGPT registration (\d+)$/u, 'Account $1 · sign-in incomplete')
+    .trim();
+  return safeLabel || `ChatGPT account${index === undefined ? '' : ` ${String(index + 1)}`}`;
 }
 
-async function refreshAuthenticationStatus(updateStatus = true): Promise<boolean> {
-  setActivityStatus('working', 'Connecting extension');
-  await ensureOriginAccess();
-  pageDiagnostic('auth.status.request');
-  authenticated = await authProvider().isAuthenticated();
-  if (!authenticated) cachedDirectCredentials = undefined;
-  pageDiagnostic('auth.status.response', { authenticated });
-  updateControls();
-  if (updateStatus) {
-    setStatus(
-      authenticated
-        ? 'Authenticated. Open a workspace or run the agent to choose one.'
-        : 'Not authenticated. Complete sign-in from the extension options page.',
-    );
+function syncChatGPTStatus(): void {
+  const status = chatgptClient.getStatus();
+  const selectedAccount = chatgptAccountSelect.value;
+  chatgptAccountSelect.replaceChildren(
+    new Option('Use another account', ''),
+    ...status.accounts.map(
+      (account, index) => new Option(accountDisplayLabel(account.label, index), account.id),
+    ),
+  );
+  chatgptAccountSelect.value = status.accounts.some((account) => account.id === selectedAccount)
+    ? selectedAccount
+    : (status.activeAccountId ?? '');
+  const accountLabel = chatgptAccountSelect.closest('label');
+  if (accountLabel !== null) accountLabel.hidden = status.accounts.length === 0;
+  chatgptLocalOnly.hidden = status.supported;
+  chatgptStatus.textContent = !status.supported
+    ? 'Sign-in is unavailable on this origin.'
+    : status.authenticated && status.planEnabled
+      ? `Connected${status.accountLabel === undefined ? '' : ` as ${accountDisplayLabel(status.accountLabel)}`}. Your ChatGPT plan is enabled.`
+      : status.authenticated
+        ? 'Your ChatGPT plan is not enabled for this session. Continue with ChatGPT to complete consent.'
+        : 'Use your ChatGPT account and plan.';
+  if (
+    status.notice !== undefined &&
+    status.notice !== '' &&
+    status.notice !== 'Local browser sign-in is experimental.'
+  ) {
+    chatgptStatus.append(` ${status.notice}`);
   }
-  setActivityStatus(authenticated ? 'idle' : 'error', authenticated ? 'Ready' : 'Sign-in required');
-  return authenticated;
+  if (!status.authenticated || !status.planEnabled) chatgptPlanConfirmation.hidden = true;
+  setActivityStatus(
+    status.authenticated && status.planEnabled ? 'idle' : 'error',
+    status.authenticated && status.planEnabled
+      ? 'Ready'
+      : status.supported
+        ? 'Sign-in required'
+        : 'Local test only',
+  );
 }
+
+function showPlanConfirmation(): void {
+  const status = chatgptClient.getStatus();
+  if (!status.authenticated || !status.planEnabled || status.activeAccountId === undefined) return;
+  // Account IDs identify public registrations; this marker contains no credentials.
+  const key = `loom.chatgpt-direct.plan-confirmed.${status.activeAccountId}`;
+  if (confirmedRegistrations.has(key)) return;
+  try {
+    if (globalThis.localStorage.getItem(key) === 'true') return;
+    globalThis.localStorage.setItem(key, 'true');
+  } catch {
+    // Confirmation still works for the lifetime of this page if storage is unavailable.
+  }
+  confirmedRegistrations.add(key);
+  chatgptPlanConfirmation.hidden = false;
+}
+
+chatgptSignInButton.addEventListener('click', () => {
+  if (chatgptAuthTransition || agentRunActive) return;
+  const previousRegistrations = new Set(chatgptClient.getStatus().accounts.map(({ id }) => id));
+  setChatGPTError();
+  const revision = ++chatgptAuthRevision;
+  chatgptAuthTransition = true;
+  catalogueRevision += 1;
+  modelsLoading = false;
+  renderDiscoveredModels([]);
+  void disposeCodingSession();
+  updateControls();
+  chatgptPlanConfirmation.hidden = true;
+  setStatus('');
+  chatgptStatus.textContent = 'Continue in the ChatGPT sign-in window. Waiting for verification.';
+  setActivityStatus('working', 'Signing in');
+  // Invoke synchronously in this gesture so the browser permits the sign-in popup.
+  let signIn: Promise<void>;
+  try {
+    signIn = chatgptClient.signIn(chatgptAccountSelect.value || undefined);
+  } catch (error) {
+    signIn = Promise.reject(error instanceof Error ? error : new Error('ChatGPT sign-in failed.'));
+  }
+  void (async () => {
+    try {
+      await signIn;
+      if (revision !== chatgptAuthRevision) return;
+      syncChatGPTStatus();
+      showPlanConfirmation();
+      setStatus('');
+      await refreshModels(true);
+    } catch (error) {
+      if (revision !== chatgptAuthRevision) return;
+      syncChatGPTStatus();
+      const created = chatgptClient
+        .getStatus()
+        .accounts.find(({ id }) => !previousRegistrations.has(id));
+      if (created !== undefined) chatgptAccountSelect.value = created.id;
+      const message = `ChatGPT sign-in failed: ${errorMessage(error)}`;
+      setChatGPTError(message);
+      setStatus('');
+      setActivityStatus('error', 'Sign-in failed');
+    } finally {
+      if (revision === chatgptAuthRevision) {
+        chatgptAuthTransition = false;
+        updateControls();
+      }
+    }
+  })();
+});
+chatgptCancelSignInButton.addEventListener('click', () => {
+  chatgptAuthRevision += 1;
+  catalogueRevision += 1;
+  modelsLoading = false;
+  chatgptClient.cancelSignIn();
+  chatgptAuthTransition = false;
+  syncChatGPTStatus();
+  updateControls();
+  setChatGPTError();
+  chatgptStatus.textContent = 'ChatGPT login cancelled.';
+});
+chatgptAccountSelect.addEventListener('change', () => {
+  chatgptClient.cancelSignIn();
+  void disposeCodingSession();
+  updateControls();
+  setChatGPTError();
+  chatgptStatus.textContent = 'Continue with ChatGPT to sign in with the selected account.';
+});
+chatgptSignOutButton.addEventListener('click', () => {
+  setChatGPTError();
+  chatgptAuthRevision += 1;
+  catalogueRevision += 1;
+  modelsLoading = false;
+  chatgptAuthTransition = true;
+  chatgptClient.cancelSignIn();
+  void disposeCodingSession();
+  renderDiscoveredModels([]);
+  chatgptPlanConfirmation.hidden = true;
+  updateControls();
+  chatgptCancelSignInButton.hidden = true;
+  chatgptStatus.textContent = 'Signing out…';
+  let signOutNotice = '';
+  void chatgptClient
+    .signOut()
+    .then(({ revoked }) => {
+      signOutNotice = revoked
+        ? 'Signed out of ChatGPT.'
+        : 'Signed out of this tab. Provider revocation could not be confirmed.';
+    })
+    .catch((error: unknown) => {
+      setChatGPTError(`ChatGPT sign-out failed: ${errorMessage(error)}`);
+    })
+    .finally(() => {
+      chatgptAuthTransition = false;
+      syncChatGPTStatus();
+      if (signOutNotice !== '') chatgptStatus.textContent = signOutNotice;
+      updateControls();
+    });
+});
+chatgptDismissConfirmation.addEventListener('click', () => {
+  chatgptPlanConfirmation.hidden = true;
+});
 
 const activeToolRows = new Map<string, HTMLDetailsElement>();
 let activeAssistantMessage: HTMLDivElement | undefined;
@@ -1294,8 +858,10 @@ async function renderAgentEvent(event: CodexAgentEvent): Promise<void> {
 }
 
 async function disposeCodingSession(): Promise<void> {
-  if (codingSession !== undefined) await codingSession.dispose();
+  const session = codingSession;
   codingSession = undefined;
+  session?.cancel(new Error('Model connection changed.'));
+  if (session !== undefined) await session.dispose();
 }
 
 function renderConversationHistory(): void {
@@ -1304,10 +870,10 @@ function renderConversationHistory(): void {
   activeAssistantMessage = undefined;
   activeAssistantText = '';
   if (activeConversation === undefined) return;
-  modelProviderSelect.value = activeConversation.modelProvider;
-  modelInput.value = activeConversation.model;
-  saveWorkbenchProvider(globalThis.localStorage, activeConversation.modelProvider);
-  updateModelProviderView();
+  // Older transcripts remain usable; their server connection and model were discarded on load.
+  if (activeConversation.model !== '') modelInput.value = activeConversation.model;
+  renderDiscoveredModels(availableModels);
+  updateControls();
   for (const entry of activeConversation.transcript) {
     if (entry.role === 'user') appendUserMessage(entry.content);
     else appendLog(entry.content, 'assistant');
@@ -1383,7 +949,6 @@ async function createNewConversation(): Promise<void> {
   await disposeCodingSession();
   const conversation = createWorkspaceConversation({
     model: modelInput.value.trim(),
-    modelProvider: selectedModelProvider(),
   });
   await saveWorkspaceConversation(workspace, conversation);
   replaceConversation(conversation);
@@ -1402,7 +967,6 @@ async function persistActiveConversation(): Promise<void> {
     conversation,
     session.transcript,
     modelInput.value.trim(),
-    selectedModelProvider(),
   );
   replaceConversation(updated);
   if (canWriteWorkspace()) await saveWorkspaceConversation(workspace, updated);
@@ -1549,7 +1113,10 @@ async function selectEditorFile(path: WorkspacePath): Promise<void> {
     editor.value = await activeWorkspace.readFile(path);
     selectedFile = path;
     editorTitle.textContent = path;
+    const drawer = editor.closest('details');
+    if (drawer instanceof HTMLDetailsElement) drawer.open = true;
     updateControls();
+    editor.focus();
   } catch {
     selectedFile = undefined;
     editor.value = '';
@@ -1587,37 +1154,13 @@ function sessionFor(workspace: ProjectWorkspace): CodingSession {
       ? {}
       : { reasoningEffort: thinkingLevelSelect.value as CodexReasoningEffort };
   const runSessionId = currentRunSessionId();
-  const provider = selectedModelProvider();
-  const selectedModel =
-    provider === 'openai-compatible-responses'
-      ? (() => {
-          if (!localModelConnected) throw new Error('Connect the model server before running.');
-          const settings = persistLocalModelSettings();
-          return createOpenAICompatibleResponsesModel({
-            ...reasoningOptions,
-            model,
-            endpoint: openAICompatibleEndpoint(settings.baseUrl, 'responses'),
-            fetch: openAICompatibleModelFetch,
-            ...(settings.apiKey === ''
-              ? {}
-              : { authentication: () => Promise.resolve(settings.apiKey) }),
-          });
-        })()
-      : createCodexExperimentalModel({
-          ...reasoningOptions,
-          model,
-          wireProtocol: model.startsWith('gpt-5.6') ? 'responses-lite' : 'classic',
-          endpoint: CODEX_RESPONSES_ENDPOINT,
-          authentication: async () => (await directCredentials()).accessToken,
-          accountId: async () => (await directCredentials()).accountId,
-          fetch: directFirstModelFetch,
-          originator: 'loom_page_experiment',
-          headers: {
-            'session-id': runSessionId,
-            'thread-id': runSessionId,
-            version: 'loom.js/0.1.0',
-          },
-        });
+  if (!modelConnectionReady())
+    throw new Error('Continue with ChatGPT and choose a model before running.');
+  const selectedModel = createOpenAICompatibleResponsesModel({
+    ...reasoningOptions,
+    model,
+    transport: chatgptClient.transport,
+  });
   codingSession = createCodingSession({
     id: runSessionId,
     transcript: activeConversation?.transcript ?? [],
@@ -1633,8 +1176,10 @@ function sessionFor(workspace: ProjectWorkspace): CodingSession {
 }
 
 async function runAgent(): Promise<void> {
+  if (agentRunActive || chatgptAuthTransition || !modelConnectionReady()) return;
+  agentRunActive = true;
+  updateControls();
   runButton.disabled = true;
-  checkAuthButton.disabled = true;
   thinkingLevelSelect.disabled = true;
   availableModelsSelect.disabled = true;
   cancelRunButton.disabled = false;
@@ -1647,7 +1192,6 @@ async function runAgent(): Promise<void> {
     if (activeConversation === undefined) {
       const conversation = createWorkspaceConversation({
         model: modelInput.value.trim(),
-        modelProvider: selectedModelProvider(),
       });
       replaceConversation(conversation);
       if (canWriteWorkspace()) await saveWorkspaceConversation(workspace, conversation);
@@ -1679,7 +1223,7 @@ async function runAgent(): Promise<void> {
     setStatus('Run failed. You can revise the request and try again.');
     setActivityStatus('error', 'Needs attention');
   } finally {
-    checkAuthButton.disabled = false;
+    agentRunActive = false;
     cancelRunButton.disabled = true;
     updateControls();
   }
@@ -1707,6 +1251,7 @@ async function runCommand(): Promise<void> {
   runtimeOutput.textContent = '';
   runtimeCancellation = createCancellationSource();
   setActivityStatus('working', `Running ${runtime.kind}`);
+  updateControls();
   runCommandButton.disabled = true;
   thinkingLevelSelect.disabled = true;
   availableModelsSelect.disabled = true;
@@ -1733,31 +1278,6 @@ async function runCommand(): Promise<void> {
     updateControls();
   }
 }
-
-checkAuthButton.addEventListener('click', () => {
-  void refreshAuthenticationStatus().catch((error: unknown) => {
-    authenticated = false;
-    updateControls();
-    setStatus(`Connection failed: ${errorMessage(error)}`);
-    setActivityStatus('error', 'Connection failed');
-  });
-});
-
-logoutButton.addEventListener('click', () => {
-  logoutButton.disabled = true;
-  setActivityStatus('working', 'Signing out');
-  void authProvider()
-    .logout()
-    .then(async () => {
-      cachedDirectCredentials = undefined;
-      await disposeCodingSession();
-      return refreshAuthenticationStatus();
-    })
-    .catch((error: unknown) => {
-      setStatus(`Logout failed: ${errorMessage(error)}`);
-      setActivityStatus('error', 'Logout failed');
-    });
-});
 
 runButton.addEventListener('click', () => void runAgent());
 promptInput.addEventListener('keydown', (event) => {
@@ -1909,105 +1429,24 @@ thinkingLevelSelect.addEventListener('change', () => {
 });
 availableModelsSelect.addEventListener('change', () => {
   if (availableModelsSelect.value === '') return;
-  modelInput.value = availableModelsSelect.value;
+  const selected = availableModels.find((entry) => entry.id === availableModelsSelect.value);
+  if (selected === undefined) return;
+  modelInput.value = selected.model;
+  renderDiscoveredModels(availableModels);
   modelInput.dispatchEvent(new Event('change'));
 });
 modelInput.addEventListener('change', () => {
-  if (selectedModelProvider() === 'openai-compatible-responses') {
-    try {
-      saveLocalModelConnection(globalThis.localStorage, {
-        baseUrl: localModelBaseUrlInput.value,
-        model: modelInput.value,
-        apiKey: localModelApiKeyInput.value,
-      });
-    } catch {
-      // Base URL validation and its actionable error are presented by the explicit Connect action.
-    }
-  } else {
-    codexModelSelection = modelInput.value;
-  }
+  renderDiscoveredModels(availableModels);
   updateControls();
   void disposeCodingSession();
-});
-modelProviderSelect.addEventListener('change', () => {
-  renderDiscoveredModels([]);
-  const provider = selectedModelProvider();
-  if (provider === 'openai-compatible-responses') {
-    codexModelSelection = modelInput.value;
-    const settings = loadLocalModelConnection(globalThis.localStorage);
-    modelInput.value = settings.model;
-    localModelBaseUrlInput.value = settings.baseUrl;
-    localModelApiKeyInput.value = settings.apiKey;
-    setStatus('Click Connect before sending a request to this model server.');
-  } else {
-    modelInput.value = codexModelSelection;
-    setStatus(
-      authenticated
-        ? 'Authenticated. Open a workspace or run the agent to choose one.'
-        : 'Not authenticated. Complete sign-in from the extension options page.',
-    );
-  }
-  saveWorkbenchProvider(globalThis.localStorage, provider);
-  updateModelProviderView();
-  void disposeCodingSession();
-});
-connectLocalModelButton.addEventListener('click', () => {
-  void discoverLocalModels().catch((error: unknown) => {
-    localModelConnected = false;
-    updateControls();
-    localModelConnectionStatus.textContent = errorMessage(error);
-    setStatus(`Model connection failed: ${errorMessage(error)}`);
-    setActivityStatus('error', 'Connection failed');
-  });
-});
-clearLocalModelKeyButton.addEventListener('click', () => {
-  localModelApiKeyInput.value = '';
-  clearLocalModelApiKey(globalThis.localStorage);
-  localModelConnected = false;
-  localModelConnectionStatus.textContent = 'API key cleared. Connect again to apply the change.';
-  setStatus('Local model API key cleared from browser storage.');
-  updateControls();
-  void disposeCodingSession();
-});
-for (const input of [localModelBaseUrlInput, localModelApiKeyInput]) {
-  input.addEventListener('input', () => {
-    localModelConnected = false;
-    localModelConnectionStatus.textContent = 'Connection settings changed. Connect again.';
-    updateControls();
-    void disposeCodingSession();
-  });
-}
-extensionIdInput.addEventListener('change', () => {
-  cachedDirectCredentials = undefined;
-  setTransportMode(storedTransportMode());
-  void disposeCodingSession();
-  if (EXTENSION_ID_PATTERN.test(extensionIdInput.value.trim())) {
-    setStatus('Connecting to extension…');
-    void refreshAuthenticationStatus().catch((error: unknown) => {
-      authenticated = false;
-      updateControls();
-      setStatus(`Connection failed: ${errorMessage(error)}`);
-      setActivityStatus('error', 'Connection failed');
-    });
-  }
 });
 
-setTransportMode(storedTransportMode());
-setActivityStatus('idle', 'Ready');
-updateModelProviderView();
+transportStatusElement.textContent = 'ChatGPT';
+transportStatusElement.dataset.mode = 'direct';
+setStatus('');
+syncChatGPTStatus();
 updateControls();
-if (
-  selectedModelProvider() === 'codex-experimental' &&
-  EXTENSION_ID_PATTERN.test(extensionIdInput.value.trim())
-) {
-  setStatus('Connecting to extension…');
-  void refreshAuthenticationStatus().catch((error: unknown) => {
-    authenticated = false;
-    updateControls();
-    setStatus(`Connection failed: ${errorMessage(error)}`);
-    setActivityStatus('error', 'Connection failed');
-  });
-} else if (selectedModelProvider() === 'openai-compatible-responses') {
-  setStatus('Click Connect before sending a request to this model server.');
-  setActivityStatus('error', 'Connect server');
-}
+
+globalThis.addEventListener('pagehide', () => {
+  chatgptClient.dispose();
+});

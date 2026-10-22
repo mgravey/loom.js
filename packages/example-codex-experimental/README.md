@@ -1,67 +1,51 @@
-# Loom.js welcome site and experimental Codex vertical slice
+# Loom.js site and ChatGPT workbench
 
-This package contains three deliberately separate browser surfaces:
-
-- `index.html` introduces the provider-neutral Loom.js library and its potential;
-- `docs.html` provides step-by-step onboarding from repository setup through custom capabilities;
-- `workbench.html` runs either the experimental ChatGPT-backed composition or a direct
-  OpenAI-compatible Responses server.
-- `install.html`, `privacy.html`, `terms.html`, `legal.html`, and `support.html` provide the
-  unpacked installation and future Store-facing policy/support surfaces.
-
-The GitHub Pages workflow publishes these static surfaces at <https://mgravey.com/loom.js/>. The
-workbench is available at <https://mgravey.com/loom.js/workbench.html> after the Pages deployment
-succeeds.
-
-The private example is a multi-mode browser coding workbench built on `@mgravey/loom-coding`. The
-extension owns ChatGPT/Codex login, refresh credentials, ID-token parsing, and account-routing
-persistence. For a model run it returns a short-lived access token plus the routing ID to the exact
-authorized workbench origin, which starts with direct non-auth provider requests. The page renews
-that credential through the extension shortly before expiry. If direct `fetch` fails before an HTTP
-response, the credential-free body is retried through the extension relay and later turns or reloads
-in the same tab stay on that relay. HTTP errors and cancellation are not retried. Refresh and ID
-tokens remain extension-only.
-
-This is an unsupported interoperability experiment, not a public OpenAI OAuth integration. Never
-paste tokens into this page, configuration, source files, logs, or test fixtures.
-
-The separate **OpenAI-compatible server** connection needs no extension. It explicitly connects to a
-user-entered `/v1` base URL, discovers models when available, and persists the endpoint, selected
-model, and API key in this browser origin. Use **Clear API key** to remove it. See
-[Local and LAN models](../../docs/local-models.md) for Ollama, LM Studio, CORS, LAN, HTTPS, and tool
-compatibility requirements.
-
-The current checkout's observed unpacked ID is `foofdcgdelahbdgdfgocoeajdodhjbjo`. The site reads it
-from the development `deployment-config.js`. Another checkout may receive a different unpacked ID,
-so `chrome://extensions` remains authoritative. Production Pages artifacts default to the assigned
-Store ID `gdcebopdllcifgleoefgbobdopiaholg` and attempt that connection on page load.
-
-The website consumes `@mgravey/loom-companion-codex-experimental` for origin approval and the
-streaming Chrome Port model relay instead of carrying a private copy of the client protocol.
+This package contains the Loom.js library welcome site, documentation, and a browser coding
+workbench. The workbench has one connection: **Continue with ChatGPT**. Extension and custom-server
+adapters remain separate library integrations, with no connection controls in this workbench.
 
 ## Build and run
 
 From the repository root:
 
 ```sh
+pnpm install --frozen-lockfile
 pnpm build
-python3 -m http.server 4173 --directory packages
+pnpm dev:chatgpt
 ```
 
-In `chrome://extensions`, enable Developer mode, select **Load unpacked**, and choose
-`packages/extension-codex-experimental/dist`. Open the extension's options page, enable the
-experiment, then choose normal **Sign in with ChatGPT** or the device-code fallback. Open the
-welcome page at `http://localhost:4173/example-codex-experimental/`, follow its documentation, then
-launch `http://localhost:4173/example-codex-experimental/workbench.html`. Enter the extension ID;
-the page checks it automatically, with **Reconnect** available when needed. First contact opens
-trusted extension options; approve the exact `http://localhost:4173` origin there, return to the
-workbench, and reload. Then choose a direct directory, virtual memory project, or persistent OPFS
-project. Folder and ZIP import plus ZIP export are available for every mode.
+Open the printed `http://127.0.0.1:4174/example-codex-experimental/workbench.html` URL. Use
+`LOOM_BROWSER_PORT=4175 pnpm dev:chatgpt` if the default port is occupied.
 
-The workbench defaults to `gpt-5.6-sol` and uses the current Responses Lite input-item envelope for
-GPT-5.6 model IDs, including `reasoning.context: "all_turns"` and disabled parallel tool calls.
-Other model IDs use the classic Responses request. Both remain audited, unsupported compatibility
-paths rather than documented Platform API contracts.
+1. Click **Continue with ChatGPT** and finish the account and plan consent on OpenAI's page.
+2. Once the account is verified, choose an available model. **Refresh models** retries discovery.
+3. Open a local folder, temporary browser project, or persistent browser project, then send a
+   prompt.
+
+The sidebar presents account, workspace and conversation controls. The main panel keeps chat,
+model/reasoning selection and the composer together; files and execution tools are in the drawer.
+The layout adapts to narrow screens, and sign-in errors stay visible beside the login button. Saved
+account choices appear only after a registration exists. A saved registration does not prove that
+authentication succeeded. Old conversations retain their transcript, but require a newly selected
+ChatGPT model before another request.
+
+## Browser-only authentication boundaries
+
+OAuth tokens remain in memory in the user's tab. Reloading requires signing in again. Only public
+registration metadata and interface preferences persist in browser storage. The loopback server
+serves static files, including the callback, and never exchanges tokens or proxies model requests.
+No API key or extension setup is required.
+
+This remains an experimental local compatibility test. Observed OpenAI discovery/JWKS CORS failures
+block browser identity verification; Business authorization has also returned an organization policy
+denial. A popup closing is not evidence of success. Tests use local fixtures, not live account
+credentials. See
+[setup and current limitations](../../docs/codex-auth-experiment.md#extension-free-sign-in-with-chatgpt).
+
+The GitHub Pages workflow publishes the static site, but public HTTPS sign-in has not been verified
+or enabled by the loopback integration. Never paste tokens into source, logs, or fixtures.
+
+## Workspace and execution
 
 QuickJS, WebContainer Node.js, and Pyodide Python execution receive only project snapshots and
 command arguments. Credentials never enter a runtime. The workbench registers those runtimes as the
@@ -81,15 +65,3 @@ permission once when it is opened. Multiple resumable chats are stored as bounde
 Conversation records are excluded from runtime snapshots. See the
 [browser workbench guide](../../docs/browser-coding-workbench.md) for runtime hosting headers,
 isolation constraints, project synchronization, and security limits.
-
-By default, the refresh credential and routing ID are cleared when Chrome exits. The extension
-options offer **Remember sign-in on this Chrome profile** after a private-computer warning; this
-moves that pair to trusted local extension storage until the option is disabled, logout/experiment
-disable occurs, the provider rejects it, extension data is cleared, or the extension is uninstalled.
-Local deletion does not itself revoke a provider-side grant. The application cannot start
-authorization or receive refresh/ID tokens, but direct model mode does receive a short-lived access
-token in page memory. Website access is a separate exact-origin grant stored by the extension until
-revoked or the experiment is disabled. Do not run untrusted scripts in an approved origin.
-
-For complete step-by-step instructions, automated verification, trust boundaries, and current
-limitations, see the [Phase 5.5 vertical-slice guide](../../docs/phase-5-5-vertical-slice.md).

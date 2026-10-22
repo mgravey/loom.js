@@ -37,10 +37,8 @@ test('presents Loom as a library before linking to the experimental workbench', 
   await page.getByRole('link', { name: 'Open workbench' }).click();
   await expect(page).toHaveURL(/workbench\.html$/u);
   await expect(page.getByRole('heading', { name: 'Coding conversation' })).toBeVisible();
-  await expect(page.getByText('Experimental coding workbench', { exact: true })).toBeVisible();
-  await expect(page.getByLabel('Experimental extension ID')).toHaveValue(
-    'foofdcgdelahbdgdfgocoeajdodhjbjo',
-  );
+  await expect(page.locator('#chatgpt-direct-settings')).toBeVisible();
+  await expect(page.locator('#extension-id, #model-provider')).toHaveCount(0);
 });
 
 test('serves installation, privacy, terms, legal, and support surfaces', async ({ page }) => {
@@ -91,7 +89,7 @@ test('serves installation, privacy, terms, legal, and support surfaces', async (
   await expect(page.getByText('Chrome Web Store Limited Use')).toBeVisible();
 });
 
-test('automatically selects the Store extension over a legacy production ID', async ({ page }) => {
+test('ignores legacy extension configuration in the ChatGPT-only workbench', async ({ page }) => {
   await openBuiltEsmHarness(page);
   await page.addInitScript(() => {
     localStorage.setItem('loom.chrome-extension-id', 'foofdcgdelahbdgdfgocoeajdodhjbjo');
@@ -111,8 +109,9 @@ test('automatically selects the Store extension over a legacy production ID', as
 
   await page.goto(`${browserOrigin}/example-codex-experimental/workbench.html`);
 
-  await expect(page.getByLabel('Experimental extension ID')).toHaveValue(
-    'gdcebopdllcifgleoefgbobdopiaholg',
-  );
-  await expect(page.getByRole('status')).toContainText('Connection failed:');
+  await expect(page.locator('#extension-id, #model-provider')).toHaveCount(0);
+  await expect(page.locator('#chatgpt-direct-settings')).toBeVisible();
+  await expect(page.locator('#chatgpt-local-only')).toBeVisible();
+  await expect(page.locator('#transport-status')).toHaveAttribute('data-mode', 'direct');
+  await expect(page.locator('#chatgpt-sign-in')).toBeDisabled();
 });

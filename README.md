@@ -35,9 +35,9 @@ workspaces with safe ZIP transfer, and isolated QuickJS, WebContainer, and Pyodi
 multi-mode browser workbench. Core and the agent packages remain free of provider, browser, and
 extension APIs. Loom now also includes a separate adapter for the documented OpenAI Platform
 Responses API; applications must still supply a secure transport or trusted-host credential source.
-The same package now has a separate portable Responses factory for CORS-enabled localhost and LAN
-servers, and the workbench exposes it as an explicit direct connection. Loom contains no supported
-OpenAI OAuth product or built-in server-side API-key host.
+The same package has a portable Responses factory for application-managed servers. The example
+workbench uses only browser-based ChatGPT sign-in; extension and server adapters remain available as
+separate library integrations. Browser-only sign-in is an experimental local compatibility test.
 
 The project now includes a browser-readable front page and onboarding manual. After serving the
 `packages` directory, open `http://localhost:4173/example-codex-experimental/` to learn what the
@@ -196,10 +196,9 @@ response bodies and headers remain extension-owned. Streamed `error`, `response.
 `response.incomplete` events produce the same structured model-error fields. See
 [Provider failure handling](./docs/provider-failures.md).
 
-The workbench can instead select a direct OpenAI-compatible server. That path discovers models from
-`GET /v1/models`, sends the portable tool-capable request subset to `POST /v1/responses`, and
-accepts either SSE or complete JSON. It uses no Companion permission or authentication state;
-browser CORS and mixed-content rules apply. See [Local and LAN models](./docs/local-models.md).
+The portable Responses adapter supports direct endpoints or an injected transport, including the
+workbench's browser-held ChatGPT session. See
+[adapter documentation](./packages/model-openai-responses/README.md).
 
 ## Install as a library
 
@@ -299,7 +298,11 @@ const cartSummary: CodexTool = Object.freeze({
   async execute(input, context) {
     context?.signal?.throwIfCancelled();
     if (typeof input.currency !== 'string') throw new TypeError('currency is required.');
-    return { currency: input.currency, itemCount: cart.items.length, total: cart.total };
+    return {
+      currency: input.currency,
+      itemCount: cart.items.length,
+      total: cart.total,
+    };
   },
 });
 
@@ -364,6 +367,27 @@ extension workflow. The [Codex authentication experiment](./docs/codex-auth-expe
 the Phase 5 source audit, threat model, callback bridge, and test policy. Architectural decisions
 are recorded in [`docs/adr`](./docs/adr/README.md).
 
+The workbench now has one connection: **ChatGPT**. A compact account card, a single model picker,
+and responsive project/chat panels replace the previous provider settings. Saved conversations from
+older providers retain their history and require selecting a ChatGPT model before sending.
+
+To test **Continue with ChatGPT** without an extension, run `pnpm build` followed by
+`pnpm dev:chatgpt` and open the printed `http://127.0.0.1:4174` URL. This browser-only local
+prototype performs OAuth and model requests in the user's tab. The server serves static files only;
+OAuth tokens stay in browser memory and are lost on reload. See
+[browser-only sign-in setup and limits](./docs/codex-auth-experiment.md#extension-free-sign-in-with-chatgpt).
+Public HTTPS callback support remains unverified; the existing GitHub Pages deployment is not
+automatically enabled by this local experiment.
+
+Live browser checks on 2026-10-22 found that OpenAI's discovery and signing-key endpoints omit CORS
+permission for the local page, blocking identity verification in this browser-only version. An
+issued registration or closing popup does not confirm login. Login failures now remain visible
+beside **Continue with ChatGPT**; repeating registration does not resolve this provider restriction.
+
+ChatGPT Business testing also encountered `3p_delegated_access_policy_denied` on OpenAI's
+authorization page. Identity permission alone does not establish ChatGPT-plan access; see
+[Business workspace troubleshooting](./docs/codex-auth-experiment.md#chatgpt-business-workspace-denial).
+
 The [OpenAI Platform Responses guide](./docs/openai-responses.md) covers the supported API adapter,
 secure transport boundary, stateless continuation, Programmatic Tool Calling, and direct-only write
 policy. It is independent of the ChatGPT-authenticated Codex experiment.
@@ -373,27 +397,10 @@ The [context-compaction guide](./docs/context-compaction.md) documents the exper
 opaque checkpoint, persist it beside the transcript, and replay only transcript entries that are
 newer than that checkpoint. Existing sessions do not compact unless explicitly configured.
 
-The [Phase 5.5 vertical-slice guide](./docs/phase-5-5-vertical-slice.md) explains how to build, load
-the unpacked extension, serve the browser application, authenticate from trusted extension UI, run
-an agent with a direct-first model fetch and extension fallback, inspect Network/Console
-diagnostics, and perform the fully local acceptance test. The example supports the classic audited
-Responses shape and the current Responses Lite input-item shape. It defaults to `gpt-5.6-sol`; model
-availability and entitlement remain account-controlled and can change independently of Loom. This
-direct mode temporarily exposes the refreshed access token and account-routing ID to the authorized
-workbench JavaScript process; refresh and ID tokens remain extension-only. Authorization normally
-ends when Chrome closes; the extension options provide an explicit, warned private-computer option
-to remember the refresh credential and routing ID in the current Chrome profile. On first contact,
-the user must also approve the workbench's exact origin in trusted extension UI; that origin grant
-persists until revoked or the experiment is disabled. If the browser fails before receiving an HTTP
-response—typically CORS or a connection failure—the same request is retried through the extension.
-That failure selects the extension relay for the rest of the tab session, including reloads,
-avoiding repeated direct failures and conversation notices. Provider HTTP errors and cancellation
-are never retried. A configured extension is checked automatically when the workbench loads, while
-workspace-tool activity stays compact and collapsible in the chat-first interface. Tool rows explain
-what each operation does and show live state; long conversations scroll independently without
-pushing the follow-up composer off-screen. Assistant Markdown is rendered with safe DOM nodes,
-including polished output/code panels with copy controls and readable inline code. The composer
-opens empty and presents its starter guidance as placeholder text only.
+The [Phase 5.5 vertical-slice guide](./docs/phase-5-5-vertical-slice.md) records the historical
+extension integration. Its connection controls are no longer part of the current workbench.
+Workspace tools remain collapsible, conversation history scrolls independently, and the composer
+stays accessible. Assistant Markdown uses safe DOM rendering with copyable code panels.
 
 Each workspace can keep multiple resumable conversations as bounded JSON records under
 `.loom/conversations/`. The sidebar can create, switch, and delete individual conversations, or
@@ -423,8 +430,8 @@ with an application-selected directory using the Phase 3 plugins. The
 token from the separately loaded extension and resolves it through Loom's public `AuthProvider`
 capability.
 
-The [experimental Codex example](./packages/example-codex-experimental/README.md) is the only
-browser-to-extension real-provider composition and remains explicitly unsupported.
+The [experimental workbench](./packages/example-codex-experimental/README.md) now uses direct
+ChatGPT sign-in only. Its local browser compatibility and account eligibility remain unverified.
 
 ## Project status
 
@@ -446,8 +453,6 @@ milestone history.
 Loom.js source and public package artifacts are available under the
 [Mozilla Public License 2.0](./LICENSE).
 
-The workbench provides an **Available models** selector and **Refresh models** action. Local
-connections discover `/models`; experimental Codex discovery uses its authenticated backend
-catalogue and retains manual model entry if unavailable. **Thinking level** persists in this browser
-and applies to new requests; Default preserves provider behavior (medium for Codex, omitted for
-compatible servers). Supported levels depend on the selected server/model.
+The workbench’s **Model** picker lists models advertised by the signed-in ChatGPT account. Use
+**Refresh models** to retry discovery. The **Reasoning** preference applies to new requests; model
+support and usage limits are controlled by OpenAI.

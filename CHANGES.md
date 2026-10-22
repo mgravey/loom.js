@@ -2,6 +2,25 @@
 
 This project follows a milestone changelog alongside Changesets for public package versioning.
 
+## Unreleased — Browser-only ChatGPT sign-in test
+
+- Redesign the workbench with a compact ChatGPT account card, a single model picker, responsive
+  panels and accessible controls. Remove extension and custom-server connection modes from the UI
+  and runtime; migrate saved conversations to require a fresh ChatGPT model selection.
+- Keep login and model-discovery errors visible next to the login button, label unverified
+  registrations, and select a newly issued registration after verification fails so retrying does
+  not create another client. Record the observed discovery/JWKS browser CORS blocker.
+
+- Add a direct ChatGPT workbench connection using OpenAI's new dynamic registration protocol,
+  browser-held OAuth tokens, account model discovery, and direct public Responses streaming.
+- Add `pnpm dev:chatgpt`, a loopback static-file server with a static callback route. It has no
+  authentication, credential storage, or model proxy endpoints.
+- Recover declined plan consent, retain sessions on temporary refresh failures, and show sanitized
+  actionable errors. Cover callback validation, token lifetimes, and streaming with offline
+  fixtures.
+- Keep this a local compatibility prototype: browser-only use and public HTTPS callbacks still need
+  provider verification. Extension libraries remain available separately.
+
 ## 0.2.1 — Codex transport terminal handshake
 
 ### Fixed

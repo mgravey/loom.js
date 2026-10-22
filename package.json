@@ -20,11 +20,12 @@
   },
   "scripts": {
     "build": "pnpm -r --if-present build",
+    "dev:chatgpt": "node scripts/serve-chatgpt-browser.mjs",
     "clean": "tsc --build --clean && pnpm -r --if-present clean",
     "typecheck": "tsc --build --force --pretty false && tsc -p tsconfig.test.json --pretty false",
     "lint": "eslint .",
     "test": "pnpm test:unit && pnpm build && pnpm test:browser",
-    "test:unit": "vitest run",
+    "test:unit": "vitest run && node --test scripts/test/serve-chatgpt-browser.test.mjs",
     "test:browser": "playwright test",
     "test:coverage": "vitest run --coverage",
     "format": "prettier --write .",

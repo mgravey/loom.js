@@ -85,14 +85,26 @@ export type CreateOpenAIResponsesModelOptions =
  * Portable OpenAI-compatible Responses mode. The endpoint is explicit so omitting authentication
  * can never accidentally target the default OpenAI Platform URL.
  */
-export interface OpenAICompatibleResponsesModelOptions {
+interface OpenAICompatibleResponsesCommonOptions {
   /** Omitted by default so the server chooses its own reasoning behavior. */
   readonly reasoningEffort?: OpenAIReasoningEffort;
   readonly model: string;
+  /** Defaults to true. A JSON response is still accepted when a server ignores streaming. */
+  readonly stream?: boolean;
+}
+
+/** A credential-free streaming Responses boundary owned by a trusted host. */
+export interface OpenAICompatibleResponsesTransport {
+  send(request: OpenAIResponsesRequest): Promise<OpenAICompatibleResponsesHttpResponse>;
+}
+export interface OpenAICompatibleResponsesBrokeredOptions extends OpenAICompatibleResponsesCommonOptions {
+  readonly transport: OpenAICompatibleResponsesTransport;
+}
+export interface OpenAICompatibleResponsesDirectOptions extends OpenAICompatibleResponsesCommonOptions {
   readonly endpoint: string;
   readonly fetch: OpenAICompatibleResponsesFetch;
   readonly authentication?: AuthProvider | OpenAIApiKeySupplier;
   readonly headers?: Readonly<Record<string, string>>;
-  /** Defaults to true. A JSON response is still accepted when a server ignores streaming. */
-  readonly stream?: boolean;
 }
+export type OpenAICompatibleResponsesModelOptions =
+  OpenAICompatibleResponsesBrokeredOptions | OpenAICompatibleResponsesDirectOptions;

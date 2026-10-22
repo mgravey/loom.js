@@ -214,9 +214,7 @@ describe('package architecture', () => {
     expect(new Set(imports.filter((value) => value.startsWith('@mgravey/loom-')))).toEqual(
       new Set([
         '@mgravey/loom-agent-codex',
-        '@mgravey/loom-auth-extension',
         '@mgravey/loom-coding',
-        '@mgravey/loom-companion-codex-experimental',
         '@mgravey/loom-execution-browser',
         '@mgravey/loom-model-codex-experimental',
         '@mgravey/loom-model-openai-responses',

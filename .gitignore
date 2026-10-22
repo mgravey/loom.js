@@ -78,3 +78,10 @@ after-effects-reference-animation/renders/
 
 # Local model catalogue captures may contain account-specific metadata.
 model-catalogue-dumps/
+
+# Private ChatGPT login diagnostics and organization support drafts.
+openai-login-diagnostics/
+chatgpt-browser-diagnostics/
+openai-support-private/
+# Local workbench visual review captures.
+workbench-design-previews/

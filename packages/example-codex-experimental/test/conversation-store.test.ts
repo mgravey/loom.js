@@ -67,24 +67,60 @@ describe('workspace conversation storage', () => {
     expect(conversationTitle('x'.repeat(80))).toBe(`${'x'.repeat(55)}…`);
   });
 
-  it('migrates version-one conversations to the experimental provider', async () => {
-    const workspace = createMemoryProjectWorkspace();
-    await workspace.createDirectory(workspacePath('.loom/conversations'), { recursive: true });
-    await workspace.writeFile(
-      workspacePath('.loom/conversations/conversation-legacy.json'),
-      JSON.stringify({
-        version: 1,
+  it.each([
+    { version: 1 },
+    { version: 2, modelProvider: 'codex-experimental' },
+    { version: 2, modelProvider: 'openai-compatible-responses' },
+    { version: 3, modelProvider: 'codex-experimental' },
+    { version: 3, modelProvider: 'openai-compatible-responses', connectionId: 'server-a' },
+  ])(
+    'migrates legacy $version $modelProvider history without restoring its route',
+    async (legacy) => {
+      const workspace = createMemoryProjectWorkspace();
+      await workspace.createDirectory(workspacePath('.loom/conversations'), { recursive: true });
+      const transcript = [{ role: 'user' as const, content: 'Keep my history' }];
+      await workspace.writeFile(
+        workspacePath('.loom/conversations/conversation-legacy.json'),
+        JSON.stringify({
+          ...legacy,
+          id: 'conversation-legacy',
+          title: 'Legacy',
+          model: 'server-only-model',
+          createdAt: 1,
+          updatedAt: 2,
+          transcript,
+        }),
+      );
+      const [loaded] = await loadWorkspaceConversations(workspace);
+      expect(loaded).toEqual({
+        version: 3,
         id: 'conversation-legacy',
         title: 'Legacy',
-        model: 'gpt-5.6-sol',
+        model: '',
+        modelProvider: 'chatgpt-direct',
         createdAt: 1,
         updatedAt: 2,
-        transcript: [],
-      }),
-    );
+        transcript,
+      });
+      if (loaded === undefined) throw new Error('Missing migrated conversation');
+      const updated = updateWorkspaceConversation(loaded, transcript, 'chatgpt-model', 3);
+      await saveWorkspaceConversation(workspace, updated);
+      await expect(loadWorkspaceConversations(workspace)).resolves.toEqual([updated]);
+    },
+  );
 
-    await expect(loadWorkspaceConversations(workspace)).resolves.toMatchObject([
-      { version: 2, id: 'conversation-legacy', modelProvider: 'codex-experimental' },
-    ]);
+  it('round-trips ChatGPT conversations before model selection and after a turn', async () => {
+    const workspace = createMemoryProjectWorkspace();
+    const original = createWorkspaceConversation({ model: '' });
+    expect(original.modelProvider).toBe('chatgpt-direct');
+    await saveWorkspaceConversation(workspace, original);
+    await expect(loadWorkspaceConversations(workspace)).resolves.toEqual([original]);
+    const updated = updateWorkspaceConversation(
+      original,
+      [{ role: 'user', content: 'A saved conversation' }],
+      'chatgpt-model',
+    );
+    await saveWorkspaceConversation(workspace, updated);
+    await expect(loadWorkspaceConversations(workspace)).resolves.toEqual([updated]);
   });
 });

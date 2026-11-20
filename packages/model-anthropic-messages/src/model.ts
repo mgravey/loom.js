@@ -8,7 +8,7 @@ import type {
 } from './contracts.js';
 import {
   AnthropicMessagesModelError,
-  providerType,
+  classifyAnthropicErrorBody,
   retryableFailure,
   safeRequestId,
   safeRetryAfter,
@@ -18,7 +18,6 @@ import { decodeAnthropicStream } from './stream.js';
 
 const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
 const MAXIMUM_ERROR_CHARACTERS = 16 * 1024;
-const CORS_DENIED = 'CORS requests are not allowed for this Organization';
 
 function configuration(message: string): AnthropicMessagesModelError {
   return new AnthropicMessagesModelError('INVALID_CONFIGURATION', message);
@@ -119,19 +118,10 @@ async function httpFailure(
   response: AnthropicMessagesHttpResponse,
   context?: OperationContext,
 ): Promise<AnthropicMessagesModelError> {
-  let type: ReturnType<typeof providerType>;
-  let browserAccessDenied = false;
+  let body: unknown;
   try {
     const text = await boundedText(response.body, context);
-    if (text.length <= MAXIMUM_ERROR_CHARACTERS) {
-      const value: unknown = JSON.parse(text);
-      const error = isRecord(value) && isRecord(value.error) ? value.error : undefined;
-      type = providerType(error?.type);
-      browserAccessDenied =
-        response.status === 401 &&
-        typeof error?.message === 'string' &&
-        error.message.startsWith(CORS_DENIED);
-    }
+    if (text.length <= MAXIMUM_ERROR_CHARACTERS) body = JSON.parse(text);
   } catch (error) {
     context?.signal?.throwIfCancelled();
     void error;
@@ -139,6 +129,11 @@ async function httpFailure(
   const requestId = safeRequestId(response.requestId);
   const retryAfterMs = safeRetryAfter(response.retryAfterMs);
   const status = response.status;
+  const {
+    providerCode: type,
+    browserAccessDenied,
+    contextCompactionRequired,
+  } = classifyAnthropicErrorBody(status, body);
   const message = browserAccessDenied
     ? 'This Anthropic organization does not allow direct browser requests.'
     : type === 'authentication_error'
@@ -153,7 +148,9 @@ async function httpFailure(
               ? 'Anthropic is temporarily overloaded. Retry later.'
               : type === 'request_too_large'
                 ? 'The request is too large for Anthropic.'
-                : 'Anthropic Messages request was rejected.';
+                : contextCompactionRequired
+                  ? 'The prompt exceeds the Anthropic model context window.'
+                  : 'Anthropic Messages request was rejected.';
   return new AnthropicMessagesModelError(
     status === 401 ? 'AUTHENTICATION_FAILED' : 'HTTP_ERROR',
     `${message} (HTTP ${String(status)}).`,
@@ -164,7 +161,7 @@ async function httpFailure(
       ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
       ...(requestId === undefined ? {} : { requestId }),
       browserAccessDenied,
-      ...(type === 'request_too_large' ? { contextCompactionRequired: true } : {}),
+      ...(contextCompactionRequired ? { contextCompactionRequired: true } : {}),
     },
   );
 }

@@ -13,8 +13,8 @@ import {
 } from './contracts.js';
 import {
   AnthropicMessagesModelError,
+  classifyAnthropicErrorBody,
   parseRetryAfter,
-  providerType,
   retryableFailure,
   safeRequestId,
 } from './errors.js';
@@ -350,18 +350,22 @@ export function createAnthropicDirectTransport(
           link.abort();
         }
         if (!response.ok) {
-          const type = providerType(
-            isRecord(data) && isRecord(data.error) ? data.error.type : undefined,
+          const { providerCode: type, browserAccessDenied } = classifyAnthropicErrorBody(
+            response.status,
+            data,
           );
           const requestId = safeRequestId(response.headers.get('request-id'));
           throw new AnthropicMessagesModelError(
             response.status === 401 ? 'AUTHENTICATION_FAILED' : 'HTTP_ERROR',
-            `Anthropic models could not be listed (HTTP ${String(response.status)}).`,
+            browserAccessDenied
+              ? `This Anthropic organization does not allow direct browser requests (HTTP ${String(response.status)}).`
+              : `Anthropic models could not be listed (HTTP ${String(response.status)}).`,
             {
               status: response.status,
               ...(type === undefined ? {} : { providerCode: type }),
-              retryable: retryableFailure(response.status, type),
+              retryable: !browserAccessDenied && retryableFailure(response.status, type),
               ...(requestId === undefined ? {} : { requestId }),
+              browserAccessDenied,
             },
           );
         }

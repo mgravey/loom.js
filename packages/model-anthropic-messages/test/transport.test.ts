@@ -359,6 +359,29 @@ describe('Anthropic model listing', () => {
       retryable: false,
     });
     expect(String(error) + JSON.stringify(error)).not.toContain('secret');
+    expect(error).toMatchObject({ browserAccessDenied: false });
+    const cors = setup({}, () =>
+      Response.json(
+        {
+          type: 'error',
+          error: {
+            type: 'authentication_error',
+            message: 'CORS requests are not allowed for this Organization because of its settings',
+          },
+        },
+        { status: 401 },
+      ),
+    );
+    const corsError = await cors.transport.listModels().catch((value: unknown) => value);
+    expect(corsError).toBeInstanceOf(AnthropicMessagesModelError);
+    expect(corsError).toMatchObject({
+      code: 'AUTHENTICATION_FAILED',
+      status: 401,
+      providerCode: 'authentication_error',
+      retryable: false,
+      browserAccessDenied: true,
+      message: 'This Anthropic organization does not allow direct browser requests (HTTP 401).',
+    });
     const html = setup({}, () => new Response('<html>secret</html>', { status: 502 }));
     await expect(html.transport.listModels()).rejects.toMatchObject({
       status: 502,

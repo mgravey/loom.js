@@ -85,8 +85,18 @@ IDs as the source of truth.
 
 Failures are `AnthropicMessagesModelError` values with a stable `code`, `status`, allowlisted
 `providerCode` (Claude API `error.type`, such as `overloaded_error` or `rate_limit_error`),
-`retryable`, validated `retryAfterMs` and `requestId`, and `browserAccessDenied` when the
-organization refuses browser (CORS) requests. Response bodies, provider messages, keys, and tokens
-are never exposed.
+`retryable`, validated `retryAfterMs` and `requestId`, and two flags:
+
+- `browserAccessDenied: true` when the organization refuses direct browser (CORS) requests, on both
+  message requests and `listModels()`. Such failures are not retryable.
+- `contextCompactionRequired: true` when the conversation no longer fits the model context: a 413
+  `request_too_large`, a 400 `invalid_request_error` whose message reports that the prompt is too
+  long (`prompt is too long: N tokens > M maximum`) or that input and `max_tokens` exceed the
+  context limit, and the `model_context_window_exceeded` stop reason. The flag is absent otherwise.
+  Hosts (and the Loom agent) can compact history and retry; this adapter does not implement
+  `compact()`.
+
+Provider messages are only matched against these fixed wordings. Response bodies, provider messages,
+keys, and tokens are never exposed.
 
 Licensed under MPL-2.0.

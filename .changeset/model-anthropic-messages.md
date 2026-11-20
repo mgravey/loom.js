@@ -3,5 +3,7 @@
 ---
 
 Add a credential-free Anthropic Messages streaming adapter with tool-result continuations, thinking
-replay, typed sanitized errors, model listing, and a direct transport for user-supplied API keys or
-bearer access tokens.
+replay, typed sanitized errors (flagging `browserAccessDenied` for organizations that refuse browser
+requests, including during model listing, and `contextCompactionRequired` for prompts that exceed
+the context window), model listing, and a direct transport for user-supplied API keys or bearer
+access tokens.

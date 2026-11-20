@@ -108,6 +108,48 @@ export function retryableFailure(
   return status === 408 || status === 429 || (status !== undefined && status >= 500);
 }
 
+function record(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+const CORS_DENIED = 'CORS requests are not allowed for this Organization';
+/** Documented `invalid_request_error` wordings for a prompt that exceeds the context window. */
+const CONTEXT_WINDOW_EXCEEDED = [
+  /^prompt is too long\b/iu,
+  /^input length and `?max_tokens`? exceed context limit\b/iu,
+];
+
+export interface AnthropicErrorBodyClassification {
+  readonly providerCode: AnthropicProviderErrorType | undefined;
+  /** True when the organization does not allow direct browser (CORS) requests. */
+  readonly browserAccessDenied: boolean;
+  /** True when the request exceeds the model context and history must be compacted. */
+  readonly contextCompactionRequired: boolean;
+}
+
+/**
+ * Classifies a parsed Claude API error body. The provider message is only matched against fixed
+ * wordings and is never returned.
+ */
+export function classifyAnthropicErrorBody(
+  status: number,
+  body: unknown,
+): AnthropicErrorBodyClassification {
+  const error = record(body) && record(body.error) ? body.error : undefined;
+  const providerCode = providerType(error?.type);
+  const message = typeof error?.message === 'string' ? error.message : undefined;
+  return {
+    providerCode,
+    browserAccessDenied: status === 401 && message?.startsWith(CORS_DENIED) === true,
+    contextCompactionRequired:
+      providerCode === 'request_too_large' ||
+      (status === 400 &&
+        providerCode === 'invalid_request_error' &&
+        message !== undefined &&
+        CONTEXT_WINDOW_EXCEEDED.some((pattern) => pattern.test(message.trim()))),
+  };
+}
+
 const REQUEST_ID = /^[A-Za-z0-9._:-]{1,128}$/u;
 export function safeRequestId(value: unknown): string | undefined {
   return typeof value === 'string' && REQUEST_ID.test(value) ? value : undefined;

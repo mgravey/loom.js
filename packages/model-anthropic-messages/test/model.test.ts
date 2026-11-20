@@ -546,6 +546,42 @@ describe('Anthropic Messages streaming model', () => {
     await expect(collect({ transport: tooLarge.transport })).rejects.toMatchObject({
       contextCompactionRequired: true,
     });
+    for (const message of [
+      'prompt is too long: 208310 tokens > 200000 maximum',
+      'input length and `max_tokens` exceed context limit: 197202 + 21333 > 200000, decrease input length or `max_tokens` and try again',
+    ]) {
+      const tooLong = transportReturning({
+        status: 400,
+        body: JSON.stringify({ type: 'error', error: { type: 'invalid_request_error', message } }),
+      });
+      const compaction = await collect({ transport: tooLong.transport }).catch(
+        (value: unknown) => value,
+      );
+      expect(compaction).toBeInstanceOf(AnthropicMessagesModelError);
+      expect(compaction).toMatchObject({
+        code: 'HTTP_ERROR',
+        status: 400,
+        providerCode: 'invalid_request_error',
+        retryable: false,
+        browserAccessDenied: false,
+        contextCompactionRequired: true,
+      });
+      expect(String(compaction) + JSON.stringify(compaction)).not.toContain('tokens >');
+    }
+    for (const [status, type, message] of [
+      [400, 'invalid_request_error', 'messages: field required'],
+      [400, 'invalid_request_error', undefined],
+      [429, 'rate_limit_error', 'prompt is too long: 1 tokens > 0 maximum'],
+      [401, 'authentication_error', 'prompt is too long: 1 tokens > 0 maximum'],
+    ] as const) {
+      const other = transportReturning({
+        status,
+        body: JSON.stringify({ error: { type, message } }),
+      });
+      await expect(collect({ transport: other.transport })).rejects.toMatchObject({
+        contextCompactionRequired: undefined,
+      });
+    }
     const oversized = transportReturning({ status: 400, body: `{"x":"${'y'.repeat(20_000)}"}` });
     await expect(collect({ transport: oversized.transport })).rejects.toMatchObject({
       providerCode: undefined,

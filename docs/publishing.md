@@ -13,7 +13,8 @@ The public set contains the provider-neutral runtime and its stable adapters:
 - `@mgravey/loom-tool-workspace`, `@mgravey/loom-agent-codex`, and `@mgravey/loom-coding`;
 - `@mgravey/loom-execution-browser`, `@mgravey/loom-platform-browser`,
   `@mgravey/loom-storage-indexeddb`, and `@mgravey/loom-workspace-fsa`;
-- `@mgravey/loom-model-openai-responses` and `@mgravey/loom-auth-chatgpt-browser`;
+- `@mgravey/loom-model-openai-responses`, `@mgravey/loom-model-anthropic-messages`, and
+  `@mgravey/loom-auth-chatgpt-browser`;
 - `@mgravey/loom-credential-broker-api`, `@mgravey/loom-credential-provider-api`,
   `@mgravey/loom-auth-extension`, and `@mgravey/loom-extension`.
 

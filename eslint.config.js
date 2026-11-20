@@ -378,6 +378,28 @@ export default tseslint.config(
     },
   },
   {
+    files: ['packages/model-anthropic-messages/src/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: [
+                '@mgravey/loom-*',
+                '!@mgravey/loom-agent-codex',
+                '!@mgravey/loom-plugin-api',
+                '!@mgravey/loom-types',
+                'node:*',
+              ],
+              message: 'The Anthropic Messages adapter may depend only on public agent contracts.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ['packages/auth-chatgpt-browser/src/**/*.ts'],
     rules: {
       'no-restricted-imports': [

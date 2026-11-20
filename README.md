@@ -120,32 +120,33 @@ reduced-motion and loading fallback.
 
 ## Packages
 
-| Package                                      | Responsibility                                                                      |
-| -------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `@mgravey/loom-types`                        | Dependency-free primitives shared across the ecosystem                              |
-| `@mgravey/loom-plugin-api`                   | Contracts used by plugin authors                                                    |
-| `@mgravey/loom-core`                         | Runtime composition, lifecycle, registries, DI, events, configuration, and sessions |
-| `@mgravey/loom-tool-workspace`               | Text/binary projects, safe archives, strict patches, and workspace tools            |
-| `@mgravey/loom-agent-codex`                  | Minimal streamed model/tool orchestration; no provider integration                  |
-| `@mgravey/loom-coding`                       | Coding sessions, follow-ups, cancellation, transcripts, and runtime dispatch        |
-| `@mgravey/loom-execution-browser`            | Credential-free QuickJS, WebContainer, and Pyodide execution adapters               |
-| `@mgravey/loom-model-openai-responses`       | Platform and portable OpenAI-compatible Responses model adapters                    |
-| `@mgravey/loom-auth-chatgpt-browser`         | Browser-only Sign in with ChatGPT session and credential-free Responses transport   |
-| `@mgravey/loom-platform-browser`             | Explicitly supplied browser host capability                                         |
-| `@mgravey/loom-storage-indexeddb`            | Namespaced byte storage implemented with IndexedDB                                  |
-| `@mgravey/loom-workspace-fsa`                | File System Access and OPFS implementation of binary project workspaces             |
-| `@mgravey/loom-credential-broker-api`        | Transport-neutral, validated access-token request/response protocol                 |
-| `@mgravey/loom-credential-provider-api`      | Host-neutral provider, refresh, and interactive-authorization contracts             |
-| `@mgravey/loom-auth-extension`               | External-message client and Loom `AuthProvider` adapter                             |
-| `@mgravey/loom-extension`                    | Manifest V3 credential broker with extension-owned refresh state                    |
-| `@mgravey/loom-auth-codex-experimental`      | Audited Codex PKCE/device-auth experiment with injected host services               |
-| `@mgravey/loom-extension-codex-experimental` | Separate disabled-by-default Manifest V3 experiment composition                     |
-| `@mgravey/loom-model-codex-experimental`     | Experimental Responses/SSE adapter with an injected credential-free transport       |
-| `@mgravey/loom-companion-codex-experimental` | Website client that routes model streams through the published Companion extension  |
-| `@mgravey/loom-examples`                     | Provider-neutral examples that use public package exports only                      |
-| `@mgravey/loom-example-browser`              | Browser application demonstrating explicit Phase 3 composition                      |
-| `@mgravey/loom-example-extension`            | Browser application demonstrating the Phase 4 extension boundary                    |
-| `@mgravey/loom-example-codex-experimental`   | Project welcome/docs site plus a separate experimental browser coding workbench     |
+| Package                                      | Responsibility                                                                       |
+| -------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `@mgravey/loom-types`                        | Dependency-free primitives shared across the ecosystem                               |
+| `@mgravey/loom-plugin-api`                   | Contracts used by plugin authors                                                     |
+| `@mgravey/loom-core`                         | Runtime composition, lifecycle, registries, DI, events, configuration, and sessions  |
+| `@mgravey/loom-tool-workspace`               | Text/binary projects, safe archives, strict patches, and workspace tools             |
+| `@mgravey/loom-agent-codex`                  | Minimal streamed model/tool orchestration; no provider integration                   |
+| `@mgravey/loom-coding`                       | Coding sessions, follow-ups, cancellation, transcripts, and runtime dispatch         |
+| `@mgravey/loom-execution-browser`            | Credential-free QuickJS, WebContainer, and Pyodide execution adapters                |
+| `@mgravey/loom-model-openai-responses`       | Platform and portable OpenAI-compatible Responses model adapters                     |
+| `@mgravey/loom-model-anthropic-messages`     | Credential-free Anthropic Messages streaming adapter and direct-credential transport |
+| `@mgravey/loom-auth-chatgpt-browser`         | Browser-only Sign in with ChatGPT session and credential-free Responses transport    |
+| `@mgravey/loom-platform-browser`             | Explicitly supplied browser host capability                                          |
+| `@mgravey/loom-storage-indexeddb`            | Namespaced byte storage implemented with IndexedDB                                   |
+| `@mgravey/loom-workspace-fsa`                | File System Access and OPFS implementation of binary project workspaces              |
+| `@mgravey/loom-credential-broker-api`        | Transport-neutral, validated access-token request/response protocol                  |
+| `@mgravey/loom-credential-provider-api`      | Host-neutral provider, refresh, and interactive-authorization contracts              |
+| `@mgravey/loom-auth-extension`               | External-message client and Loom `AuthProvider` adapter                              |
+| `@mgravey/loom-extension`                    | Manifest V3 credential broker with extension-owned refresh state                     |
+| `@mgravey/loom-auth-codex-experimental`      | Audited Codex PKCE/device-auth experiment with injected host services                |
+| `@mgravey/loom-extension-codex-experimental` | Separate disabled-by-default Manifest V3 experiment composition                      |
+| `@mgravey/loom-model-codex-experimental`     | Experimental Responses/SSE adapter with an injected credential-free transport        |
+| `@mgravey/loom-companion-codex-experimental` | Website client that routes model streams through the published Companion extension   |
+| `@mgravey/loom-examples`                     | Provider-neutral examples that use public package exports only                       |
+| `@mgravey/loom-example-browser`              | Browser application demonstrating explicit Phase 3 composition                       |
+| `@mgravey/loom-example-extension`            | Browser application demonstrating the Phase 4 extension boundary                     |
+| `@mgravey/loom-example-codex-experimental`   | Project welcome/docs site plus a separate experimental browser coding workbench      |
 
 Dependency direction is intentional:
 
@@ -170,6 +171,7 @@ Dependency direction is intentional:
                                                         +-- browser workbench
         ^
         +-------------- @mgravey/loom-model-openai-responses <- @mgravey/loom-auth-chatgpt-browser
+        +-------------- @mgravey/loom-model-anthropic-messages
         `-------------- @mgravey/loom-coding
 
 @mgravey/loom-tool-workspace <- @mgravey/loom-workspace-fsa
@@ -204,6 +206,11 @@ OpenAI's documented open-source Sign in with ChatGPT flow in the page (loopback
 callback helper, status subscription, and typed recovery errors. See the
 [adapter documentation](./packages/model-openai-responses/README.md) and the
 [browser ChatGPT client](./packages/auth-chatgpt-browser/README.md).
+
+`@mgravey/loom-model-anthropic-messages` maps the same agent protocol to the Anthropic Messages API
+with streamed tool use and replayed thinking blocks. Its injected transport can be a trusted host
+relay or the included direct transport for a user-supplied API key or bearer access token. See the
+[Anthropic adapter documentation](./packages/model-anthropic-messages/README.md).
 
 ## Install as a library
 

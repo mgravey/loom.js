@@ -12,7 +12,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: [
-        'packages/{types,plugin-api,core,tool-workspace,agent-codex,coding,execution-browser,model-openai-responses,auth-chatgpt-browser,platform-browser,storage-indexeddb,workspace-fsa,credential-broker-api,credential-provider-api,auth-extension,extension,auth-codex-experimental,extension-codex-experimental,model-codex-experimental}/src/**/*.ts',
+        'packages/{types,plugin-api,core,tool-workspace,agent-codex,coding,execution-browser,model-openai-responses,model-anthropic-messages,auth-chatgpt-browser,platform-browser,storage-indexeddb,workspace-fsa,credential-broker-api,credential-provider-api,auth-extension,extension,auth-codex-experimental,extension-codex-experimental,model-codex-experimental}/src/**/*.ts',
       ],
       exclude: [
         '**/*.test.ts',
@@ -23,6 +23,7 @@ export default defineConfig({
         'packages/extension-codex-experimental/src/options.ts',
         'packages/model-codex-experimental/src/contracts.ts',
         'packages/model-openai-responses/src/contracts.ts',
+        'packages/model-anthropic-messages/src/contracts.ts',
         'packages/workspace-fsa/src/adapter.ts',
       ],
       reporter: ['text', 'html', 'lcov'],

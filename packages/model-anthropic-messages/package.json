@@ -1,0 +1,61 @@
+{
+  "name": "@mgravey/loom-model-anthropic-messages",
+  "version": "0.0.0",
+  "description": "Credential-free Anthropic Messages API streaming model adapter with tool continuations for Loom.js.",
+  "license": "MPL-2.0",
+  "author": "Mathieu Gravey",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mgravey/loom.js.git",
+    "directory": "packages/model-anthropic-messages"
+  },
+  "homepage": "https://mgravey.com/loom.js/",
+  "bugs": {
+    "url": "https://github.com/mgravey/loom.js/issues"
+  },
+  "keywords": [
+    "loom",
+    "anthropic",
+    "claude",
+    "messages-api",
+    "agents",
+    "model"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist/index.js",
+    "dist/index.d.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --clean --tsconfig tsconfig.build.json",
+    "prepack": "pnpm run build && node ../../scripts/prepare-package.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --root ../.. packages/model-anthropic-messages/test"
+  },
+  "dependencies": {
+    "@mgravey/loom-agent-codex": "workspace:^",
+    "@mgravey/loom-plugin-api": "workspace:^",
+    "@mgravey/loom-types": "workspace:^"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}

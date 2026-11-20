@@ -19,6 +19,7 @@ on:
           - credential-provider-api
           - execution-browser
           - extension
+          - model-anthropic-messages
           - model-codex-experimental
           - model-openai-responses
           - platform-browser

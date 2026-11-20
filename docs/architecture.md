@@ -85,6 +85,11 @@ fetch, and origin-scoped settings. No local-network authority enters Core or Com
 [the local-model guide](./local-models.md) and
 [ADR-016](./adr/016-direct-openai-compatible-responses.md).
 
+`@mgravey/loom-model-anthropic-messages` is a parallel removable leaf for the Anthropic Messages
+API. It depends only on the public agent, plugin, and type contracts, replays assistant content
+blocks as opaque continuation items, and receives credentials only through an injected transport.
+Its optional direct transport obtains a user-supplied API key or bearer token per request.
+
 `@mgravey/loom-auth-chatgpt-browser` is a browser leaf above the portable adapter. It owns the
 documented Sign in with ChatGPT loopback flow, in-memory token lifetime, refresh, revocation, model
 discovery, and a credential-free `OpenAICompatibleResponsesTransport`. Hosts inject the app name,

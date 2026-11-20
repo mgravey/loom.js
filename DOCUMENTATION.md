@@ -20,6 +20,8 @@ phases.
 - [Browser ChatGPT client](./packages/auth-chatgpt-browser/README.md) — browser-only Sign in with
   ChatGPT, loopback callback helper, in-memory session, status subscription, typed recovery errors,
   and the Responses transport
+- [Anthropic Messages adapter](./packages/model-anthropic-messages/README.md) — streamed tool use,
+  thinking replay, stop reasons, direct API-key and bearer transports, model listing, and errors
 - [Local and LAN models](./docs/local-models.md) — direct OpenAI-compatible Responses setup,
   streaming/JSON behavior, model discovery, CORS, persisted keys, Ollama, and LM Studio
 - [Provider failure handling](./docs/provider-failures.md) — sanitized Codex failure fields, retry

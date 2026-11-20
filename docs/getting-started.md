@@ -39,13 +39,13 @@ access; automated OAuth and model tests use deterministic fixtures.
 Loom Core validates a fixed plugin graph, owns lifecycle, and exposes capability and service
 registries. Behavior enters through replaceable packages:
 
-| Boundary      | Responsibility                                                    | Starting package                       |
-| ------------- | ----------------------------------------------------------------- | -------------------------------------- |
-| Orchestration | Prompts, transcript, follow-ups, events, cancellation             | `@mgravey/loom-coding`                 |
-| Model         | Agent-protocol translation and credential-free provider transport | `@mgravey/loom-model-openai-responses` |
-| Tools         | Validated operations with narrow authority                        | `@mgravey/loom-tool-workspace`         |
-| Workspace     | Memory, OPFS, File System Access, or a custom host                | `@mgravey/loom-workspace-fsa`          |
-| Execution     | Credential-free project snapshots executed by an injected runtime | `@mgravey/loom-execution-browser`      |
+| Boundary      | Responsibility                                                    | Starting package                                                                 |
+| ------------- | ----------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Orchestration | Prompts, transcript, follow-ups, events, cancellation             | `@mgravey/loom-coding`                                                           |
+| Model         | Agent-protocol translation and credential-free provider transport | `@mgravey/loom-model-openai-responses`, `@mgravey/loom-model-anthropic-messages` |
+| Tools         | Validated operations with narrow authority                        | `@mgravey/loom-tool-workspace`                                                   |
+| Workspace     | Memory, OPFS, File System Access, or a custom host                | `@mgravey/loom-workspace-fsa`                                                    |
+| Execution     | Credential-free project snapshots executed by an injected runtime | `@mgravey/loom-execution-browser`                                                |
 
 Use `createCodingSession()` directly for a small embedding. Use `@mgravey/loom-core` when the
 application needs typed capability discovery, dependency ordering, configuration, events, and full

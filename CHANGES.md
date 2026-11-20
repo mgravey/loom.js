@@ -4,6 +4,15 @@ This project follows a milestone changelog alongside Changesets for public packa
 
 ## Unreleased — Browser-only ChatGPT sign-in test
 
+- Add `@mgravey/loom-model-anthropic-messages`, a credential-free Anthropic Messages adapter:
+  streamed text and tool use with partial-JSON input, tool-result continuations, verbatim replay of
+  thinking and other content blocks, stop-reason handling (`pause_turn`, `max_tokens`, `refusal`),
+  adaptive/disabled thinking and effort options, usage reporting, and sanitized errors with
+  retryability, `retry-after`, and request IDs. Its direct transport sends a user-supplied API key
+  (`x-api-key`) or bearer access token with `anthropic-version: 2026-10-21`, optional browser
+  access, betas, headers, and body fields (for example linked-billing `billing_policy`), and lists
+  models through `GET /v1/models`.
+
 - Extract the browser ChatGPT client into the public, host-neutral
   `@mgravey/loom-auth-chatgpt-browser` package. Hosts configure the app name, callback path, message
   type, metadata storage and key prefix, notices, tool namespace, `fetch`, clock, and timeouts.

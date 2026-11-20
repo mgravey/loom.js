@@ -15,6 +15,7 @@ test('built packages publish declaration entry points', async () => {
     'coding',
     'execution-browser',
     'model-openai-responses',
+    'model-anthropic-messages',
     'auth-chatgpt-browser',
     'platform-browser',
     'storage-indexeddb',
@@ -42,6 +43,8 @@ test('built packages publish declaration entry points', async () => {
   expect(declarations.get('coding')).toContain('createCodingSession');
   expect(declarations.get('execution-browser')).toContain('createQuickJsExecutionRuntime');
   expect(declarations.get('model-openai-responses')).toContain('createOpenAIResponsesModelPlugin');
+  expect(declarations.get('model-anthropic-messages')).toContain('createAnthropicMessagesModel');
+  expect(declarations.get('model-anthropic-messages')).toContain('createAnthropicDirectTransport');
   expect(declarations.get('auth-chatgpt-browser')).toContain('createChatGPTBrowserClient');
   expect(declarations.get('auth-chatgpt-browser')).toContain('completeChatGPTBrowserCallback');
   expect(declarations.get('platform-browser')).toContain('createBrowserPlatformPlugin');

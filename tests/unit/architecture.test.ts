@@ -14,6 +14,7 @@ const runtimePackages = [
   'coding',
   'execution-browser',
   'model-openai-responses',
+  'model-anthropic-messages',
   'auth-chatgpt-browser',
   'platform-browser',
   'storage-indexeddb',
@@ -38,6 +39,7 @@ const publicRuntimePackages = new Set<(typeof runtimePackages)[number]>([
   'coding',
   'execution-browser',
   'model-openai-responses',
+  'model-anthropic-messages',
   'auth-chatgpt-browser',
   'platform-browser',
   'storage-indexeddb',
@@ -70,6 +72,11 @@ const allowedInternalDependencies: Readonly<
   ],
   'execution-browser': [],
   'model-openai-responses': [
+    '@mgravey/loom-agent-codex',
+    '@mgravey/loom-plugin-api',
+    '@mgravey/loom-types',
+  ],
+  'model-anthropic-messages': [
     '@mgravey/loom-agent-codex',
     '@mgravey/loom-plugin-api',
     '@mgravey/loom-types',
@@ -426,6 +433,10 @@ describe('package architecture', () => {
     const platformModelImports = await packageImports('model-openai-responses');
     expect(platformModelImports).not.toContain('@mgravey/loom-core');
     expect(platformModelImports.filter((value) => value.startsWith('node:'))).toEqual([]);
+
+    const anthropicModelImports = await packageImports('model-anthropic-messages');
+    expect(anthropicModelImports).not.toContain('@mgravey/loom-core');
+    expect(anthropicModelImports.filter((value) => value.startsWith('node:'))).toEqual([]);
 
     const browserAuthImports = await packageImports('auth-chatgpt-browser');
     expect(browserAuthImports).not.toContain('@mgravey/loom-core');

@@ -985,6 +985,16 @@ describe('ChatGPT direct Responses transport', () => {
     await expect(consume(h.client)).rejects.toThrow(error);
     expect(h.fetchMock.mock.calls.filter(([url]) => url.endsWith('/responses'))).toHaveLength(1);
   });
+  it('accepts a stream the provider sends without a Content-Type header', async () => {
+    const h = harness();
+    await h.login();
+    h.setStream(() => {
+      const response = sse(completed);
+      response.headers.delete('Content-Type');
+      return response;
+    });
+    await expect(consume(h.client)).resolves.toBeDefined();
+  });
   it('rejects malformed input without issuing inference', async () => {
     const h = harness();
     await h.login();

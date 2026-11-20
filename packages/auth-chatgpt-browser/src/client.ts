@@ -1010,9 +1010,12 @@ export function createChatGPTBrowserClient(
             response,
             'ChatGPT inference was rejected. No generation was retried',
           );
+        // The provider streams plan responses without a Content-Type header; only a declared
+        // non-stream type is rejected. The stream shaper validates every event regardless.
+        const contentType = response.headers.get('content-type');
         if (
           response.body === null ||
-          !response.headers.get('content-type')?.includes('text/event-stream')
+          (contentType !== null && !contentType.includes('text/event-stream'))
         ) {
           await discardBody(response);
           throw chatgptError(

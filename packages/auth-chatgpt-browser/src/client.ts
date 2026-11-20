@@ -56,6 +56,50 @@ export interface ChatGPTBrowserNotices {
   unsupported(reason: ChatGPTBrowserUnsupportedReason): string;
 }
 
+/**
+ * Opaque, versioned record that lets a host resume a verified session in a later page. It contains a
+ * refresh token: treat the whole value as a secret. Hosts store it as-is and never inspect it; the
+ * client re-validates it with a refresh and ID-token verification before using it.
+ */
+export interface ChatGPTBrowserPersistedSession {
+  readonly format: 'loom.chatgpt-browser.session';
+  readonly version: 1;
+  /** Issued public client ID (`oaiapp_…`) the refresh token belongs to. */
+  readonly clientId: string;
+  /** Verified ID-token subject; a restore that returns another subject is rejected. */
+  readonly subject: string;
+  readonly email?: string;
+  /** Original sign-in nonce, compared when a refreshed ID token repeats it. */
+  readonly nonce: string;
+  /** Last granted scopes, used only when a refresh response omits `scope`. */
+  readonly scopes: readonly string[];
+  readonly refreshToken: string;
+  /** Epoch milliseconds of this record. */
+  readonly savedAt: number;
+}
+
+/**
+ * Host-implemented store for one persisted session. Every method must settle (apply your own
+ * timeouts). The client serializes calls in order, so a `clear()` issued after a `save()` always
+ * runs after that save settles. Failures are swallowed and never reach sign-in or errors.
+ */
+export interface ChatGPTBrowserSessionStore {
+  /** Returns the last saved value, or `null`/`undefined` when nothing is stored. */
+  load(): Promise<unknown>;
+  save(session: ChatGPTBrowserPersistedSession): Promise<void>;
+  clear(): Promise<void>;
+}
+
+/**
+ * - `restored`: a stored session was refreshed, verified, and is now active.
+ * - `none`: no store, nothing stored, or the page cannot use ChatGPT sign-in.
+ * - `discarded`: the stored value was malformed or confirmed unusable and was cleared.
+ * - `unavailable`: the store or ChatGPT could not be reached; the stored value is kept.
+ * - `superseded`: a sign-in, sign-out, or disposal happened first; nothing was applied.
+ */
+export type ChatGPTBrowserRestoreResult =
+  'restored' | 'none' | 'discarded' | 'unavailable' | 'superseded';
+
 export interface ChatGPTBrowserClientOptions {
   /** Sent as `agent_name_hint` on first registration. Use the same value on every installation. */
   readonly appName: string;
@@ -77,6 +121,11 @@ export interface ChatGPTBrowserClientOptions {
   readonly fetch?: FetchFunction;
   /** Defaults to `Date.now`. */
   readonly now?: () => number;
+  /**
+   * Opt-in persistence for resuming a session after a reload. Omitted by default: sessions then
+   * live in memory only. The host decides where the value is kept; browser storage is discouraged.
+   */
+  readonly sessionStore?: ChatGPTBrowserSessionStore;
   /** Sign-in attempt lifetime. Defaults to 5 minutes. */
   readonly signInTimeoutMs?: number;
   /** Total lifetime of one model or catalog request. Defaults to 10 minutes. */
@@ -97,6 +146,8 @@ export interface ChatGPTBrowserStatus {
   readonly authenticated: boolean;
   readonly planEnabled: boolean;
   readonly signingIn: boolean;
+  /** True while `restoreSession()` is validating a stored session. */
+  readonly restoring?: boolean;
   readonly accountLabel?: string;
   readonly activeAccountId?: string;
   readonly accounts: readonly ChatGPTBrowserAccount[];
@@ -116,8 +167,20 @@ export interface ChatGPTBrowserClient {
   /** Call synchronously from a user gesture: the popup opens before any await. */
   signIn(accountId?: string): Promise<void>;
   cancelSignIn(): void;
-  /** Stops requests, attempts revocation, then clears tokens. Registrations are kept. */
+  /**
+   * Stops requests, attempts revocation, then clears tokens. Registrations are kept. With a
+   * `sessionStore`, also clears the stored session.
+   */
   signOut(): Promise<{ readonly revoked: boolean }>;
+  /**
+   * Resumes a session from `sessionStore` without a popup: refreshes the stored refresh token and
+   * verifies the returned ID token. Single-flight; never throws.
+   */
+  restoreSession(): Promise<ChatGPTBrowserRestoreResult>;
+  /** Writes the active session to `sessionStore` (for example after the user opts in). */
+  saveSession(): Promise<boolean>;
+  /** Clears `sessionStore` without signing out (for example after the user opts out). */
+  forgetStoredSession(): Promise<boolean>;
   listModels(): Promise<readonly ChatGPTBrowserModel[]>;
   /** Plug into `createOpenAICompatibleResponsesModel({ model, transport })`. */
   readonly transport: OpenAICompatibleResponsesTransport;
@@ -211,6 +274,38 @@ const TERMINAL_REFRESH_CODES = new Set<ChatGPTBrowserTokenErrorCode>([
   'refresh_token_reused',
 ]);
 
+const SESSION_FORMAT = 'loom.chatgpt-browser.session';
+
+function persistedSession(value: unknown): ChatGPTBrowserPersistedSession | undefined {
+  if (
+    !record(value) ||
+    value.format !== SESSION_FORMAT ||
+    value.version !== 1 ||
+    !clientId(value.clientId) ||
+    !bounded(value.subject) ||
+    (value.email !== undefined && !bounded(value.email, 200)) ||
+    !bounded(value.nonce, 512) ||
+    !Array.isArray(value.scopes) ||
+    value.scopes.length > 64 ||
+    !value.scopes.every((scope) => bounded(scope, 200)) ||
+    !bounded(value.refreshToken, 32768) ||
+    typeof value.savedAt !== 'number' ||
+    !Number.isFinite(value.savedAt)
+  )
+    return undefined;
+  return {
+    format: SESSION_FORMAT,
+    version: 1,
+    clientId: value.clientId,
+    subject: value.subject,
+    ...(typeof value.email === 'string' ? { email: value.email } : {}),
+    nonce: value.nonce,
+    scopes: [...value.scopes],
+    refreshToken: value.refreshToken,
+    savedAt: value.savedAt,
+  };
+}
+
 /** Creates a browser-only Sign in with ChatGPT client. Credentials stay in this object's memory. */
 export function createChatGPTBrowserClient(
   options: ChatGPTBrowserClientOptions,
@@ -264,6 +359,17 @@ export function createChatGPTBrowserClient(
   let epoch = 0;
   let registrations: Registration[] = [];
   let snapshot: ChatGPTBrowserStatus | undefined;
+  const sessionStore = options.sessionStore;
+  if (
+    sessionStore !== undefined &&
+    (!record(sessionStore) ||
+      typeof sessionStore.load !== 'function' ||
+      typeof sessionStore.save !== 'function' ||
+      typeof sessionStore.clear !== 'function')
+  )
+    throw new TypeError('Invalid ChatGPT session store.');
+  let storeQueue: Promise<unknown> = Promise.resolve();
+  let restoring: Promise<ChatGPTBrowserRestoreResult> | undefined;
   const listeners = new Set<(status: ChatGPTBrowserStatus) => void>();
 
   try {
@@ -321,6 +427,7 @@ export function createChatGPTBrowserClient(
       authenticated: session !== undefined,
       planEnabled: session?.tokens.scopes.includes(PLAN_SCOPE) ?? false,
       signingIn: attempt !== undefined,
+      restoring: restoring !== undefined,
       ...(session === undefined
         ? {}
         : { accountLabel: session.registration.label, activeAccountId: session.registration.id }),
@@ -356,6 +463,50 @@ export function createChatGPTBrowserClient(
       );
     }
   }
+  /** Runs store operations strictly in order; failures resolve to `false` and stay private. */
+  function enqueueStore(
+    operation: (store: ChatGPTBrowserSessionStore) => Promise<boolean>,
+  ): Promise<boolean> {
+    if (sessionStore === undefined) return Promise.resolve(false);
+    const run = storeQueue.then(
+      () => operation(sessionStore),
+      () => operation(sessionStore),
+    );
+    const settled = run.then(
+      (done) => done,
+      () => false,
+    );
+    storeQueue = settled;
+    return settled;
+  }
+  function saveStored(current: Session): Promise<boolean> {
+    return enqueueStore(async (store) => {
+      // Evaluated when the operation runs: a session replaced or signed out meanwhile is skipped.
+      const refreshToken = current.tokens.refresh;
+      const subject = current.registration.subject;
+      if (disposed || session !== current || refreshToken === undefined || subject === undefined)
+        return false;
+      await store.save({
+        format: SESSION_FORMAT,
+        version: 1,
+        clientId: current.registration.id,
+        subject,
+        ...(current.registration.email === undefined ? {} : { email: current.registration.email }),
+        nonce: current.nonce,
+        scopes: [...current.tokens.scopes],
+        refreshToken,
+        savedAt: now(),
+      });
+      return true;
+    });
+  }
+  function clearStored(): Promise<boolean> {
+    return enqueueStore(async (store) => {
+      await store.clear();
+      return true;
+    });
+  }
+
   function host(): string {
     try {
       if (storage === undefined) throw new Error('unavailable');
@@ -643,6 +794,7 @@ export function createChatGPTBrowserClient(
       };
       epoch += 1;
       notice = next.scopes.includes(PLAN_SCOPE) ? notices.ready : notices.planNotGranted;
+      void saveStored(session);
       pending.finish();
     } catch (error) {
       pending.finish(
@@ -861,6 +1013,7 @@ export function createChatGPTBrowserClient(
             checkSession(current);
             // Replace access token, expiry, scopes, and rotating refresh token together.
             current.tokens = next;
+            if (next.refresh !== refresh) void saveStored(current);
           } finally {
             clearTimeout(timer);
             current.controller.signal.removeEventListener('abort', abort);
@@ -885,6 +1038,7 @@ export function createChatGPTBrowserClient(
           clearSession(current);
           notice = notices.ready;
           changed();
+          void clearStored();
         }
         if (error instanceof ChatGPTBrowserError) throw error;
         throw chatgptError(
@@ -939,6 +1093,8 @@ export function createChatGPTBrowserClient(
     session = undefined;
     previous?.controller.abort();
     changed();
+    // Queued now, so it runs after any save already in flight and before any later save.
+    const cleared = clearStored();
     let revoked = previous === undefined;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10_000);
@@ -972,12 +1128,152 @@ export function createChatGPTBrowserClient(
       clearTimeout(timeout);
       // A detached session may still be referenced by aborted requests: erase its tokens too.
       if (previous !== undefined) previous.tokens = EMPTY_TOKENS();
+      await cleared;
       if (epoch === version && !disposed) {
         notice = revoked ? notices.ready : notices.revocationUnconfirmed;
         changed();
       }
     }
     return { revoked };
+  }
+
+  async function runRestore(
+    store: ChatGPTBrowserSessionStore,
+  ): Promise<ChatGPTBrowserRestoreResult> {
+    const start = epoch;
+    const current = () =>
+      !disposed && epoch === start && session === undefined && attempt === undefined;
+    let raw: unknown;
+    try {
+      raw = await store.load();
+    } catch {
+      return 'unavailable';
+    }
+    if (!current()) return 'superseded';
+    if (raw === null || raw === undefined) return 'none';
+    const saved = persistedSession(raw);
+    const known = saved && registrations.find((item) => item.id === saved.clientId);
+    if (saved === undefined || (known?.subject !== undefined && known.subject !== saved.subject)) {
+      await clearStored();
+      return 'discarded';
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 30_000);
+    let data: Record<string, unknown>;
+    try {
+      data = await tokenRequest(
+        new URLSearchParams({
+          grant_type: 'refresh_token',
+          client_id: saved.clientId,
+          refresh_token: saved.refreshToken,
+          resource: RESOURCE,
+        }),
+        controller.signal,
+      );
+    } catch (error) {
+      clearTimeout(timer);
+      if (!current()) return 'superseded';
+      if (
+        error instanceof ChatGPTBrowserError &&
+        (error.invalidatesSession || error.kind === 'client-configuration')
+      ) {
+        await clearStored();
+        return 'discarded';
+      }
+      return 'unavailable';
+    }
+    if (!current()) {
+      clearTimeout(timer);
+      return 'superseded';
+    }
+    // The stored refresh token may have rotated: keep the new one if verification is only delayed.
+    const rotated = bounded(data.refresh_token, 32768) ? data.refresh_token : saved.refreshToken;
+    let next: Tokens;
+    let verified: { subject: string; email?: string };
+    try {
+      next = tokens(data, {
+        ...EMPTY_TOKENS(),
+        scopes: saved.scopes,
+        refresh: saved.refreshToken,
+      });
+      // A restore always requires a freshly signed ID token for the stored subject.
+      verified = await identity(next.id, saved.clientId, saved.nonce, controller.signal, true);
+      if (verified.subject !== saved.subject)
+        throw new ChatGPTBrowserError(
+          'identity-verification-failed',
+          'Stored ChatGPT session returned a different identity.',
+          { invalidatesSession: true },
+        );
+    } catch (error) {
+      if (!current()) return 'superseded';
+      if (
+        error instanceof ChatGPTBrowserError &&
+        error.kind === 'temporarily-unavailable' &&
+        !error.invalidatesSession
+      ) {
+        if (rotated !== saved.refreshToken)
+          await enqueueStore(async (target) => {
+            if (!current()) return false;
+            await target.save({ ...saved, refreshToken: rotated, savedAt: now() });
+            return true;
+          });
+        return 'unavailable';
+      }
+      await clearStored();
+      return 'discarded';
+    } finally {
+      clearTimeout(timer);
+    }
+    if (!current()) return 'superseded';
+    const email = verified.email ?? saved.email;
+    const registration: Registration = {
+      id: saved.clientId,
+      subject: saved.subject,
+      label: `${email ?? 'ChatGPT account'} (${saved.clientId})`,
+      ...(email === undefined ? {} : { email }),
+    };
+    if (known !== undefined)
+      registrations = registrations.map((item) =>
+        item.id === saved.clientId ? registration : item,
+      );
+    else if (registrations.length < 100) registrations = [...registrations, registration];
+    try {
+      persist();
+    } catch {
+      /* Registration metadata is optional for a restored in-memory session. */
+    }
+    const restored: Session = {
+      registration,
+      nonce: saved.nonce,
+      tokens: next,
+      controller: new AbortController(),
+    };
+    session = restored;
+    epoch += 1;
+    notice = next.scopes.includes(PLAN_SCOPE) ? notices.ready : notices.planNotGranted;
+    changed();
+    await saveStored(restored);
+    return 'restored';
+  }
+  function restoreSession(): Promise<ChatGPTBrowserRestoreResult> {
+    if (sessionStore === undefined || disposed || support.reason !== undefined)
+      return Promise.resolve('none');
+    if (restoring !== undefined) return restoring;
+    if (session !== undefined || attempt !== undefined) return Promise.resolve('superseded');
+    const store = sessionStore;
+    const task = (async (): Promise<ChatGPTBrowserRestoreResult> => {
+      try {
+        return await runRestore(store);
+      } catch {
+        return 'unavailable';
+      } finally {
+        restoring = undefined;
+        changed();
+      }
+    })();
+    restoring = task;
+    changed();
+    return task;
   }
 
   const transport: OpenAICompatibleResponsesTransport = Object.freeze({
@@ -1056,6 +1352,11 @@ export function createChatGPTBrowserClient(
     signIn,
     signOut,
     cancelSignIn,
+    restoreSession,
+    saveSession() {
+      return session === undefined ? Promise.resolve(false) : saveStored(session);
+    },
+    forgetStoredSession: clearStored,
     transport,
     async listModels() {
       const current = await ready();

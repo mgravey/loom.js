@@ -11,6 +11,7 @@
   "references": [
     { "path": "../types" },
     { "path": "../agent-codex" },
+    { "path": "../auth-chatgpt-browser" },
     { "path": "../auth-extension" },
     { "path": "../coding" },
     { "path": "../companion-codex-experimental" },

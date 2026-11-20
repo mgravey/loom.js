@@ -6,38 +6,13 @@
     <meta name="referrer" content="no-referrer" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; script-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"
+      content="default-src 'none'; script-src 'self'; base-uri 'none'; form-action 'none'"
     />
     <title>Loom.js — ChatGPT local sign-in</title>
+    <!-- Uses completeChatGPTBrowserCallback from @mgravey/loom-auth-chatgpt-browser. -->
+    <script type="module" src="/example-codex-experimental/dist/chatgpt-callback.js"></script>
   </head>
   <body>
     <p id="status">Returning to your local Loom.js workbench…</p>
-    <script>
-      (() => {
-        const url = location.href;
-        // Remove the short-lived code from this history entry before doing anything else.
-        history.replaceState(null, '', '/auth/callback');
-        try {
-          if (
-            location.protocol !== 'http:' ||
-            location.hostname !== '127.0.0.1' ||
-            location.pathname !== '/auth/callback' ||
-            !window.opener ||
-            window.opener.location.origin !== location.origin
-          )
-            throw new Error();
-          window.opener.postMessage(
-            { type: 'loom/chatgpt-direct/callback', url },
-            window.opener.location.origin,
-          );
-          document.getElementById('status').textContent =
-            'Returned to Loom.js. You can close this window.';
-          // The opener closes this popup after validating and exchanging the callback.
-        } catch {
-          document.getElementById('status').textContent =
-            'The local workbench is unavailable. Close this window and start a fresh sign-in from http://127.0.0.1:4174/example-codex-experimental/workbench.html?provider=chatgpt-direct';
-        }
-      })();
-    </script>
   </body>
 </html>

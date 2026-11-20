@@ -16,6 +16,7 @@ const packageEntries = Object.freeze({
   '@mgravey/loom-coding': '/packages/coding/dist/index.js',
   '@mgravey/loom-execution-browser': '/packages/execution-browser/dist/index.js',
   '@mgravey/loom-model-openai-responses': '/packages/model-openai-responses/dist/index.js',
+  '@mgravey/loom-auth-chatgpt-browser': '/packages/auth-chatgpt-browser/dist/index.js',
   '@mgravey/loom-platform-browser': '/packages/platform-browser/dist/index.js',
   '@mgravey/loom-storage-indexeddb': '/packages/storage-indexeddb/dist/index.js',
   '@mgravey/loom-workspace-fsa': '/packages/workspace-fsa/dist/index.js',

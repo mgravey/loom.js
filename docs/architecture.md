@@ -85,6 +85,12 @@ fetch, and origin-scoped settings. No local-network authority enters Core or Com
 [the local-model guide](./local-models.md) and
 [ADR-016](./adr/016-direct-openai-compatible-responses.md).
 
+`@mgravey/loom-auth-chatgpt-browser` is a browser leaf above the portable adapter. It owns the
+documented Sign in with ChatGPT loopback flow, in-memory token lifetime, refresh, revocation, model
+discovery, and a credential-free `OpenAICompatibleResponsesTransport`. Hosts inject the app name,
+callback path, message type, metadata storage, notices, `fetch`, and clock; nothing in it refers to
+a particular application.
+
 The browser workbench adds two more removable layers. `@mgravey/loom-coding` owns application-level
 coding session lifecycle and composes the existing model, agent, and tool contracts without entering
 Core. `@mgravey/loom-execution-browser` owns credential-free QuickJS, WebContainer, and Pyodide

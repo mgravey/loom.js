@@ -35,6 +35,38 @@ The workbench's sole **ChatGPT** connection is a browser-only local interoperabi
 protocol. It uses no extension, API key, client secret, model relay, or token backend. The old
 extension's "direct-first" integration remains in the library, outside this workbench.
 
+The implementation is published as the reusable, host-neutral
+[`@mgravey/loom-auth-chatgpt-browser`](../packages/auth-chatgpt-browser/README.md) package. The
+workbench configures it with its app name (`Loom.js`), its legacy storage keys and callback message
+type, and local-only notices. Its static `/auth/callback` page loads the package's
+`completeChatGPTBrowserCallback()` helper; a single-page app can call the same helper from its own
+route.
+
+### Documentation re-check (2026-11-20)
+
+The sub-pages for sign-in, accounts and sessions, models and inference, token reference, errors and
+recovery, preview limitations, and UI/UX guidelines were re-read on 2026-11-20. Resulting changes:
+
+- The undocumented `prompt=consent` parameter is no longer sent. Reauthorizing a saved registration
+  sends the issued `client_id`, the stable `ext_agent_host_id`, and fresh state/nonce/PKCE, plus the
+  documented `id_token_hint` (only while the ID token is still in memory) or `login_hint` (the
+  verified email). `agent_name_hint` is sent only on first registration.
+- Reauthorization with an issued client shows no consent screen, so a verified sign-in without
+  `chatgpt.tokens.use.direct` keeps the session with plan usage disabled, as documented.
+- All documented `subscription_sharing_*` and `chatpass_v2_*` Responses codes are mapped to stable
+  error kinds (`usage-limit-reached`, `user-not-eligible`, `temporarily-unavailable`,
+  `unsupported-capability`, `credential-rejected`, `client-configuration`), from HTTP error bodies
+  and `response.failed`/`error` stream events. Uncoded direct-admission 401/403/503 responses map to
+  `credential-rejected`, `access-denied`, and `temporarily-unavailable`. Only allowlisted codes and
+  a format-checked `x-request-id` are exposed.
+- Explicit `system` message items are rejected by the route; they are still sent as `developer`. The
+  documented unsupported request fields remain filtered out.
+- The total per-request lifetime is configurable and now defaults to 10 minutes instead of 2, so
+  long tool-using generations are not aborted mid-stream.
+- The docs describe protected local credential storage and retaining the ID token for
+  `id_token_hint`. This browser adaptation intentionally keeps all tokens in memory, so a reload
+  requires a fresh sign-in.
+
 ### Start the browser-only test
 
 ```sh
@@ -137,6 +169,13 @@ next to the login button. An unverified registration in the account picker is pu
 metadata, not a signed-in session; retrying uses that registration instead of creating a new one.
 Signature verification remains mandatory. This prototype does not proxy credentials or disable
 browser security to bypass the missing public-metadata CORS support.
+
+A credential-free re-test on 2026-11-20 (GET with `Origin: http://127.0.0.1:4174`, outside a
+browser) returned HTTP 200 without `Access-Control-Allow-Origin` for both the discovery document and
+`/.well-known/jwks.json`; OPTIONS returned 405 and 404 respectively. The blocker is unchanged:
+browser ID-token verification still fails before a session is created. The token endpoint and
+`api.openai.com/v1` returned `Access-Control-Allow-Origin: *` for OPTIONS and for unauthenticated
+400/401 responses, and the API exposes `X-Request-ID`.
 
 Credential-free OPTIONS checks on 2026-10-22 returned HTTP 200 and CORS permission for the token,
 models, and Responses endpoints from `http://127.0.0.1:4173` and `https://mgravey.com`. Preflight

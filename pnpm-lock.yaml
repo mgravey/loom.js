@@ -70,6 +70,28 @@ importers:
         specifier: ^3.2.4
         version: 3.2.7(@types/node@22.20.1)
 
+  packages/auth-chatgpt-browser:
+    dependencies:
+      '@mgravey/loom-model-openai-responses':
+        specifier: workspace:^
+        version: link:../model-openai-responses
+      '@mgravey/loom-types':
+        specifier: workspace:^
+        version: link:../types
+      jose:
+        specifier: ^6.2.13
+        version: 6.2.13
+    devDependencies:
+      tsup:
+        specifier: ^8.5.0
+        version: 8.5.1(postcss@8.5.19)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7(@types/node@22.20.1)
+
   packages/auth-codex-experimental:
     dependencies:
       '@mgravey/loom-credential-provider-api':
@@ -234,6 +256,9 @@ importers:
       '@mgravey/loom-agent-codex':
         specifier: workspace:^
         version: link:../agent-codex
+      '@mgravey/loom-auth-chatgpt-browser':
+        specifier: workspace:^
+        version: link:../auth-chatgpt-browser
       '@mgravey/loom-coding':
         specifier: workspace:^
         version: link:../coding
@@ -255,9 +280,6 @@ importers:
       '@mgravey/loom-workspace-fsa':
         specifier: workspace:^
         version: link:../workspace-fsa
-      jose:
-        specifier: ^6.2.13
-        version: 6.2.13
       lottie-web:
         specifier: 5.13.0
         version: 5.13.0
@@ -1656,6 +1678,7 @@ packages:
   eslint@9.39.5:
     resolution: {integrity: sha512-DgZS62aPLXKlnxILS/AYCoRvHaZeXceIzlXPkkGGzJWSow1aEk0lbTlxUSlyjC8jcaKxAdOnTDz+o1JFSBsyjw==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+    deprecated: This version is no longer supported. Please see https://eslint.org/version-support for other options.
     hasBin: true
     peerDependencies:
       jiti: '*'

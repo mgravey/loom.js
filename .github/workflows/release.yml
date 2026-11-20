@@ -10,6 +10,7 @@ on:
         type: choice
         options:
           - agent-codex
+          - auth-chatgpt-browser
           - auth-extension
           - coding
           - companion-codex-experimental

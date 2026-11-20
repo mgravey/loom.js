@@ -4,6 +4,17 @@ This project follows a milestone changelog alongside Changesets for public packa
 
 ## Unreleased — Browser-only ChatGPT sign-in test
 
+- Extract the browser ChatGPT client into the public, host-neutral
+  `@mgravey/loom-auth-chatgpt-browser` package. Hosts configure the app name, callback path, message
+  type, metadata storage and key prefix, notices, tool namespace, `fetch`, clock, and timeouts.
+  Status gains `signingIn`, `unsupportedReason`, per-account `verified`, cached snapshots, and
+  `subscribe()`. `completeChatGPTBrowserCallback()` lets a single-page app serve the callback route;
+  the workbench's static callback page now uses it.
+- Re-check OpenAI's Sign in with ChatGPT documentation (2026-11-20): stop sending the undocumented
+  `prompt=consent`, send documented `id_token_hint`/`login_hint` on reauthorization, map every
+  documented Responses error code to typed recovery kinds with optional request IDs, and raise the
+  default per-request lifetime from 2 to 10 minutes. Discovery and JWKS still lack browser CORS.
+
 - Redesign the workbench with a compact ChatGPT account card, a single model picker, responsive
   panels and accessible controls. Remove extension and custom-server connection modes from the UI
   and runtime; migrate saved conversations to require a fresh ChatGPT model selection.

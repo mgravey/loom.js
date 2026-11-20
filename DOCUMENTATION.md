@@ -17,6 +17,9 @@ phases.
 - [Minimal coding agent](./docs/minimal-agent.md) — Phase 2 composition and protocol boundaries
 - [OpenAI Platform Responses](./docs/openai-responses.md) — supported Responses API adapter,
   Programmatic Tool Calling, continuation, and API-key trust boundary
+- [Browser ChatGPT client](./packages/auth-chatgpt-browser/README.md) — browser-only Sign in with
+  ChatGPT, loopback callback helper, in-memory session, status subscription, typed recovery errors,
+  and the Responses transport
 - [Local and LAN models](./docs/local-models.md) — direct OpenAI-compatible Responses setup,
   streaming/JSON behavior, model discovery, CORS, persisted keys, Ollama, and LM Studio
 - [Provider failure handling](./docs/provider-failures.md) — sanitized Codex failure fields, retry

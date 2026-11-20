@@ -378,6 +378,28 @@ export default tseslint.config(
     },
   },
   {
+    files: ['packages/auth-chatgpt-browser/src/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: [
+                '@mgravey/loom-*',
+                '!@mgravey/loom-model-openai-responses',
+                '!@mgravey/loom-types',
+                'node:*',
+              ],
+              message:
+                'The browser ChatGPT client may depend only on the Responses transport contract and types.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ['packages/model-codex-experimental/src/**/*.ts'],
     rules: {
       'no-restricted-imports': [

@@ -14,6 +14,7 @@ const runtimePackages = [
   'coding',
   'execution-browser',
   'model-openai-responses',
+  'auth-chatgpt-browser',
   'platform-browser',
   'storage-indexeddb',
   'workspace-fsa',
@@ -37,6 +38,7 @@ const publicRuntimePackages = new Set<(typeof runtimePackages)[number]>([
   'coding',
   'execution-browser',
   'model-openai-responses',
+  'auth-chatgpt-browser',
   'platform-browser',
   'storage-indexeddb',
   'workspace-fsa',
@@ -72,6 +74,7 @@ const allowedInternalDependencies: Readonly<
     '@mgravey/loom-plugin-api',
     '@mgravey/loom-types',
   ],
+  'auth-chatgpt-browser': ['@mgravey/loom-model-openai-responses', '@mgravey/loom-types'],
   'platform-browser': ['@mgravey/loom-plugin-api', '@mgravey/loom-types'],
   'storage-indexeddb': ['@mgravey/loom-plugin-api', '@mgravey/loom-types'],
   'workspace-fsa': [
@@ -214,6 +217,7 @@ describe('package architecture', () => {
     expect(new Set(imports.filter((value) => value.startsWith('@mgravey/loom-')))).toEqual(
       new Set([
         '@mgravey/loom-agent-codex',
+        '@mgravey/loom-auth-chatgpt-browser',
         '@mgravey/loom-coding',
         '@mgravey/loom-execution-browser',
         '@mgravey/loom-model-codex-experimental',
@@ -422,6 +426,11 @@ describe('package architecture', () => {
     const platformModelImports = await packageImports('model-openai-responses');
     expect(platformModelImports).not.toContain('@mgravey/loom-core');
     expect(platformModelImports.filter((value) => value.startsWith('node:'))).toEqual([]);
+
+    const browserAuthImports = await packageImports('auth-chatgpt-browser');
+    expect(browserAuthImports).not.toContain('@mgravey/loom-core');
+    expect(browserAuthImports).not.toContain('@mgravey/loom-agent-codex');
+    expect(browserAuthImports.filter((value) => value.startsWith('node:'))).toEqual([]);
 
     for (const packageName of [
       'credential-broker-api',

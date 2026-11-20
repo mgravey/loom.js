@@ -10,6 +10,7 @@
     { "path": "./packages/coding" },
     { "path": "./packages/execution-browser" },
     { "path": "./packages/model-openai-responses" },
+    { "path": "./packages/auth-chatgpt-browser" },
     { "path": "./packages/platform-browser" },
     { "path": "./packages/storage-indexeddb" },
     { "path": "./packages/workspace-fsa" },

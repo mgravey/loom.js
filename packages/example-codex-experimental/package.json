@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@mgravey/loom-agent-codex": "workspace:^",
+    "@mgravey/loom-auth-chatgpt-browser": "workspace:^",
     "@mgravey/loom-coding": "workspace:^",
     "@mgravey/loom-execution-browser": "workspace:^",
     "@mgravey/loom-model-codex-experimental": "workspace:^",
@@ -17,7 +18,6 @@
     "@mgravey/loom-tool-workspace": "workspace:^",
     "@mgravey/loom-types": "workspace:^",
     "@mgravey/loom-workspace-fsa": "workspace:^",
-    "jose": "^6.2.13",
     "lottie-web": "5.13.0"
   },
   "devDependencies": {

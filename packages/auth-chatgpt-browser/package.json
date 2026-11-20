@@ -1,0 +1,61 @@
+{
+  "name": "@mgravey/loom-auth-chatgpt-browser",
+  "version": "0.0.0",
+  "description": "Browser-only Sign in with ChatGPT client for Loom.js: in-memory OAuth session and a credential-free Responses transport.",
+  "license": "MPL-2.0",
+  "author": "Mathieu Gravey",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mgravey/loom.js.git",
+    "directory": "packages/auth-chatgpt-browser"
+  },
+  "homepage": "https://mgravey.com/loom.js/",
+  "bugs": {
+    "url": "https://github.com/mgravey/loom.js/issues"
+  },
+  "keywords": [
+    "loom",
+    "chatgpt",
+    "oauth",
+    "pkce",
+    "browser",
+    "responses-api"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist/index.js",
+    "dist/index.d.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --clean --tsconfig tsconfig.build.json",
+    "prepack": "pnpm run build && node ../../scripts/prepare-package.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --root ../.. packages/auth-chatgpt-browser/test"
+  },
+  "dependencies": {
+    "@mgravey/loom-model-openai-responses": "workspace:^",
+    "@mgravey/loom-types": "workspace:^",
+    "jose": "^6.2.13"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}

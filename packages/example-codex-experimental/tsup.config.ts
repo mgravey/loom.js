@@ -1,7 +1,7 @@
 import { defineConfig } from 'tsup';
 
 export default defineConfig({
-  entry: ['src/main.ts', 'src/brand-animation.ts'],
+  entry: ['src/main.ts', 'src/brand-animation.ts', 'src/chatgpt-callback.ts'],
   format: ['esm'],
   platform: 'browser',
   target: 'es2022',

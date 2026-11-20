@@ -130,6 +130,7 @@ reduced-motion and loading fallback.
 | `@mgravey/loom-coding`                       | Coding sessions, follow-ups, cancellation, transcripts, and runtime dispatch        |
 | `@mgravey/loom-execution-browser`            | Credential-free QuickJS, WebContainer, and Pyodide execution adapters               |
 | `@mgravey/loom-model-openai-responses`       | Platform and portable OpenAI-compatible Responses model adapters                    |
+| `@mgravey/loom-auth-chatgpt-browser`         | Browser-only Sign in with ChatGPT session and credential-free Responses transport   |
 | `@mgravey/loom-platform-browser`             | Explicitly supplied browser host capability                                         |
 | `@mgravey/loom-storage-indexeddb`            | Namespaced byte storage implemented with IndexedDB                                  |
 | `@mgravey/loom-workspace-fsa`                | File System Access and OPFS implementation of binary project workspaces             |
@@ -168,7 +169,7 @@ Dependency direction is intentional:
                                                         ^
                                                         +-- browser workbench
         ^
-        +-------------- @mgravey/loom-model-openai-responses
+        +-------------- @mgravey/loom-model-openai-responses <- @mgravey/loom-auth-chatgpt-browser
         `-------------- @mgravey/loom-coding
 
 @mgravey/loom-tool-workspace <- @mgravey/loom-workspace-fsa
@@ -196,9 +197,13 @@ response bodies and headers remain extension-owned. Streamed `error`, `response.
 `response.incomplete` events produce the same structured model-error fields. See
 [Provider failure handling](./docs/provider-failures.md).
 
-The portable Responses adapter supports direct endpoints or an injected transport, including the
-workbench's browser-held ChatGPT session. See
-[adapter documentation](./packages/model-openai-responses/README.md).
+The portable Responses adapter supports direct endpoints or an injected transport, including a
+browser-held ChatGPT session from `@mgravey/loom-auth-chatgpt-browser`. That package implements
+OpenAI's documented open-source Sign in with ChatGPT flow in the page (loopback
+`http://127.0.0.1:<port>` origins only), keeps every token in memory, and exposes a reusable
+callback helper, status subscription, and typed recovery errors. See the
+[adapter documentation](./packages/model-openai-responses/README.md) and the
+[browser ChatGPT client](./packages/auth-chatgpt-browser/README.md).
 
 ## Install as a library
 

@@ -310,11 +310,7 @@ const cartSummary: CodexTool = Object.freeze({
   async execute(input, context) {
     context?.signal?.throwIfCancelled();
     if (typeof input.currency !== 'string') throw new TypeError('currency is required.');
-    return {
-      currency: input.currency,
-      itemCount: cart.items.length,
-      total: cart.total,
-    };
+    return { currency: input.currency, itemCount: cart.items.length, total: cart.total };
   },
 });
 
@@ -405,9 +401,11 @@ secure transport boundary, stateless continuation, Programmatic Tool Calling, an
 policy. It is independent of the ChatGPT-authenticated Codex experiment.
 
 The [context-compaction guide](./docs/context-compaction.md) documents the experimental
-`responses/compact` path. Coding sessions can opt into a character threshold, receive a bounded
-opaque checkpoint, persist it beside the transcript, and replay only transcript entries that are
-newer than that checkpoint. Existing sessions do not compact unless explicitly configured.
+`compaction_trigger` Responses stream and bounded failure recovery. Coding sessions can opt into a
+character threshold, receive a bounded opaque checkpoint, persist it beside the transcript, and
+replay only transcript entries that are newer than that checkpoint. Upgrade the model, Companion
+packages and extension together; proactive fallback requires an explicit verified context budget.
+Existing sessions do not compact unless explicitly configured.
 
 The [Phase 5.5 vertical-slice guide](./docs/phase-5-5-vertical-slice.md) records the historical
 extension integration. Its connection controls are no longer part of the current workbench.
@@ -468,3 +466,24 @@ Loom.js source and public package artifacts are available under the
 The workbench’s **Model** picker lists models advertised by the signed-in ChatGPT account. Use
 **Refresh models** to retry discovery. The **Reasoning** preference applies to new requests; model
 support and usage limits are controlled by OpenAI.
+
+Custom server settings accept API base URLs such as `http://localhost:11434/v1/`, check model
+availability on save, and fetch fresh catalogues for every model-list request.
+
+Companion 0.5.1 distinguishes custom server permission, field validation and storage failures. After
+replacing an unpacked extension build, reload it at chrome://extensions and reopen settings.
+
+Companion 0.6.0 adds a Provider selector for Responses-compatible servers, Anthropic Claude and
+Google Gemini. Each saved server contributes to the merged model list; keys remain in Companion. See
+[model server setup](docs/local-models.md).
+
+An opt-in Google account prototype is available on the subscription-login branch. It requires a
+Loom-owned Chrome Extension OAuth client; live Code Assist acceptance is unverified. See
+[setup and limitations](docs/subscription-login-experiment.md).
+
+Claude account access is available as an additional experimental provider through the official
+Claude Code client and a local helper. Anthropic API-key access remains available. See
+[setup and limitations](docs/claude-account-helper.md).
+
+Companion settings group API servers and account sign-ins in one provider selector. Select ChatGPT /
+Codex, Google account, or Claude account to see its setup and sign-in controls.

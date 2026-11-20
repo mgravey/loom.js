@@ -226,7 +226,7 @@ describe('experimental Codex Responses model', () => {
         async send(request) {
           requests.push(request);
           return response(
-            '{"output":[{"type":"message","role":"user","content":[{"type":"input_text","text":"Keep this"}]},{"type":"compaction","encrypted_content":"opaque"}]}',
+            'data: {"type":"response.output_item.done","item":{"type":"compaction","encrypted_content":"opaque"}}\n\ndata: {"type":"response.completed","response":{"id":"resp-1","status":"completed"}}\n\n',
           );
         },
       },
@@ -242,7 +242,7 @@ describe('experimental Codex Responses model', () => {
         {
           type: 'message',
           role: 'user',
-          content: [{ type: 'input_text', text: 'Keep this' }],
+          content: [{ type: 'input_text', text: 'Inspect the workspace.' }],
         },
         { type: 'compaction', encrypted_content: 'opaque' },
       ],
@@ -255,12 +255,11 @@ describe('experimental Codex Responses model', () => {
     const compactBody = JSON.parse(requests[0]?.body ?? '{}') as Record<string, unknown>;
     expect(compactBody).toMatchObject({
       model: 'gpt-5.6-sol',
-      instructions: 'Work carefully.',
       parallel_tool_calls: false,
       reasoning: { effort: 'medium', context: 'all_turns' },
     });
-    expect(compactBody).not.toHaveProperty('stream');
-    expect(compactBody).not.toHaveProperty('store');
+    expect(compactBody).toHaveProperty('stream', true);
+    expect(compactBody).toHaveProperty('store', false);
     expect(compactBody.input).toEqual(
       expect.arrayContaining([{ type: 'compaction', encrypted_content: 'older' }]),
     );
@@ -532,7 +531,7 @@ describe('experimental Codex Responses model', () => {
       },
     });
     await expect(collect(invalidResponseModel.generate(REQUEST))).rejects.toMatchObject({
-      code: 'TRANSPORT_FAILED',
+      code: 'MALFORMED_RESPONSE',
     });
 
     const failingBody: AsyncIterable<string> = {

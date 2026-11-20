@@ -199,6 +199,86 @@ client with an HTTPS callback, ChatGPT plan scopes, and browser token/refresh/re
 access. Publishing the source on GitHub does not itself register that callback. Do not substitute an
 unregistered public URL in the dynamic loopback flow or add a credential proxy as a workaround.
 
+## Test the current ChatGPT sign-in
+
+These steps are for the existing **extension-based** experiment, not the extension-free integration
+described above.
+
+Checked against the local implementation and
+[OpenAI authentication documentation](https://learn.chatgpt.com/docs/auth#login-on-headless-devices)
+on 2026-10-22. Automated tests use fixtures; they do not establish that OpenAI currently accepts
+Loom's client integration or that a particular account can run a model.
+
+Local verification on that date: `pnpm build` passed; the auth package, browser-authorization, and
+direct-auth unit suites passed all 23 tests; `tests/browser/codex-auth-experiment.spec.ts` passed
+all four Chromium tests. The primary browser callback has fixture-based unit coverage; the browser
+suite exercises device authorization and persistence with mocked provider responses. No live OpenAI
+sign-in or model request was performed.
+
+### OpenAI / ChatGPT settings
+
+- For the primary **Sign in with ChatGPT** button, use an account with Codex access. The current
+  implementation supplies the audited Codex client ID and localhost callback itself; there is no
+  Loom client ID, client secret, or redirect-URL field to fill in on OpenAI Platform for this test.
+  This reuse remains an unsupported experiment, not a Loom-owned OAuth registration.
+- To test **Use device-code fallback**, open ChatGPT's **Settings → Security** and enable device
+  code login. For a managed workspace, ask its administrator to enable device code login in
+  workspace permissions and confirm your Codex access. This setting is documented for Codex;
+  enabling it does not establish support for Loom's extension.
+- The device-code setting applies to the fallback, not the primary browser callback flow. API-key
+  creation and API billing settings are a separate authentication path.
+
+### Build, sign in, and send a test prompt
+
+From the repository root:
+
+```sh
+pnpm install --frozen-lockfile
+pnpm build
+python3 -m http.server 4173 --directory packages
+```
+
+1. In Chrome, open `chrome://extensions`, enable **Developer mode**, and **Load unpacked** from
+   `packages/extension-codex-experimental/dist`. If already installed, select **Reload** after
+   rebuilding. Copy the current extension ID from that card.
+2. Open **Details → Extension options**. Under **Model connections → Provider**, choose **ChatGPT /
+   Codex account**. The default API connection selection hides the account controls.
+3. Read the disclosure and check the box enabling experimental ChatGPT/Codex authentication.
+4. Select **Sign in with ChatGPT**, complete sign-in in the new tab, and return to extension
+   options. Expect **Authenticated for this browser session** (or the remembered-profile variant).
+   The extension intercepts its own `http://localhost:1455/auth/callback` navigation; no local
+   authentication server needs to be started on port 1455.
+5. If testing the fallback instead, select **Use device-code fallback**, keep options open, and open
+   its displayed `https://auth.openai.com/codex/device` link. Enter the displayed one-time code
+   there, complete sign-in, and wait for the extension's authenticated status.
+6. Open <http://localhost:4173/example-codex-experimental/workbench.html> in the same Chrome
+   profile. Set **Model connection** to **Experimental ChatGPT**, enter the extension ID, and select
+   **Reconnect** if needed.
+7. In extension options, approve `http://localhost:4173` under website access, then reload the
+   workbench. `http://127.0.0.1:4173` is a different origin and requires its own approval.
+8. Choose a disposable memory project and a model available to your account. Send
+   `Reply with exactly: Loom login test OK. Do not use tools.` A model reply checks inference as
+   well as login; authenticated status alone only checks stored authorization.
+9. Select **Log out** when finished. Remembering sign-in across Chrome restarts is a separate,
+   optional setting in the extension.
+
+### Diagnose a failed test
+
+- Missing sign-in buttons: choose **ChatGPT / Codex account** in the extension's Provider selector.
+- Disabled sign-in buttons: enable the experiment using its disclosure checkbox.
+- Device authorization unavailable: check ChatGPT Security / workspace permissions first. Provider
+  rejection can still occur because this is an undocumented third-party integration.
+- Browser stops at a failed localhost callback: reload the rebuilt extension and restart sign-in
+  from its options. Try the explicit device-code fallback if the callback still fails.
+- Login succeeds but the workbench cannot connect: check the current extension ID, exact-origin
+  approval, Chrome profile, and local port `4173`.
+- Login succeeds but inference fails: check model access and the sanitized provider error. A saved
+  authorization does not prove current entitlement, quota, or backend protocol compatibility.
+
+Keep private login diagnostics in the ignored `openai-login-diagnostics/` directory if needed. Do
+not share tokens, one-time codes, or callback query strings. The existing
+[vertical-slice guide](./phase-5-5-vertical-slice.md) covers broader workbench testing.
+
 ## Evidence snapshot
 
 This analysis pins behavior to OpenAI Codex commit

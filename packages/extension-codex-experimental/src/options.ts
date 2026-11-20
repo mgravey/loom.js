@@ -1,4 +1,10 @@
-import type { BrowserCrypto, CodexChromeExtensionApi, OAuthFetch } from './chrome-contracts.js';
+import type { ResponsesModelsFetch } from './responses-models.js';
+import type {
+  BrowserCrypto,
+  CodexChromeExtensionApi,
+  OAuthFetch,
+  CodexModelFetch,
+} from './chrome-contracts.js';
 import {
   clearBrowserAuthorization,
   CODEX_EXTENSION_CALLBACK_PATH,
@@ -11,6 +17,8 @@ import { runManualDeviceAuthorization } from './manual-authorization.js';
 import { createCodexOriginAccessStore } from './origin-access.js';
 import { createCodexExperimentSettings, type CodexCredentialPersistenceMode } from './settings.js';
 
+import { initializeResponsesOptions } from './responses-options.js';
+
 function requiredElement<T extends Element>(root: Document, id: string): T {
   const element = root.querySelector(`#${id}`);
   if (element === null) throw new Error(`Options page is missing #${id}.`);
@@ -21,7 +29,7 @@ const host = globalThis as unknown as {
   readonly chrome: CodexChromeExtensionApi;
   readonly crypto: BrowserCrypto;
   readonly document: Document;
-  readonly fetch: OAuthFetch;
+  readonly fetch: OAuthFetch & ResponsesModelsFetch & CodexModelFetch;
   readonly confirm: (message: string) => boolean;
   readonly setInterval: (callback: () => void, milliseconds: number) => unknown;
   readonly setTimeout: (callback: () => void, milliseconds: number) => unknown;
@@ -123,7 +131,6 @@ async function refreshOriginAccess(): Promise<void> {
             {
               label: 'Approve',
               run: async () => {
-                if (!enabled.checked) throw new Error('The experiment is disabled.');
                 await originAccessStore.approve(origin);
                 status.textContent = `${origin} is approved.`;
               },
@@ -188,7 +195,6 @@ enabled.addEventListener('change', () => {
           declarativeNetRequest: host.chrome.declarativeNetRequest,
         }),
         credentialPersistence.clearAll(CODEX_EXPERIMENTAL_CONFIGURATION.providerId),
-        originAccessStore.clear(),
       ]);
       await settings.setCredentialPersistenceMode('session');
       updateRememberButton('session');
@@ -352,3 +358,5 @@ void initialize().catch(() => {
   remember.disabled = true;
   status.textContent = 'Trusted credential storage could not be initialized.';
 });
+
+initializeResponsesOptions(host.document, host.chrome, host.fetch.bind(globalThis));

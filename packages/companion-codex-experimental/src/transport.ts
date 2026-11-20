@@ -1,4 +1,8 @@
 import type {
+  OpenAICompatibleResponsesTransport,
+  OpenAIResponsesRequest,
+} from '@mgravey/loom-model-openai-responses';
+import type {
   CodexResponsesFetch,
   CodexResponsesHttpResponse,
   CodexResponsesRequest,
@@ -65,7 +69,7 @@ function validateProviderError(
   });
 }
 
-function createChunkStream(): {
+function createChunkStream(onClose?: () => void): {
   readonly body: AsyncIterable<string>;
   push(chunk: string): void;
   finish(): void;
@@ -81,15 +85,19 @@ function createChunkStream(): {
   return Object.freeze({
     body: Object.freeze({
       async *[Symbol.asyncIterator]() {
-        for (;;) {
-          const chunk = chunks.shift();
-          if (chunk !== undefined) {
-            yield chunk;
-            continue;
+        try {
+          for (;;) {
+            const chunk = chunks.shift();
+            if (chunk !== undefined) {
+              yield chunk;
+              continue;
+            }
+            if (failure !== undefined) throw failure;
+            if (finished) return;
+            await new Promise<void>((resolve) => waiters.push(resolve));
           }
-          if (failure !== undefined) throw failure;
-          if (finished) return;
-          await new Promise<void>((resolve) => waiters.push(resolve));
+        } finally {
+          onClose?.();
         }
       },
     }),
@@ -114,9 +122,11 @@ function transportError(
   code: 'CONNECTION_FAILED' | 'INVALID_RESPONSE' | 'EXTENSION_REQUEST_FAILED' | 'CANCELLED',
   message: string,
   remoteCode?: string,
+  stage?: string,
 ): CodexCompanionError {
   return new CodexCompanionError(code, message, {
     ...(remoteCode === undefined ? {} : { remoteCode }),
+    ...(stage === undefined ? {} : { stage }),
   });
 }
 
@@ -136,6 +146,7 @@ function sendThroughPort(
   options: CreateCodexExtensionTransportOptions,
   requestId: string,
   request: CodexResponsesRequest,
+  connectionId?: string,
 ): Promise<CodexResponsesHttpResponse> {
   request.signal?.throwIfCancelled();
   const wireProtocol: unknown = request.wireProtocol;
@@ -162,7 +173,9 @@ function sendThroughPort(
   const threadId = resolveIdentifier(options.threadId ?? sessionId, 'thread ID');
   let port: CodexCompanionPort;
   try {
-    port = runtime.connect(extensionId, { name: CODEX_MODEL_PORT_NAME });
+    port = runtime.connect(extensionId, {
+      name: connectionId === undefined ? CODEX_MODEL_PORT_NAME : 'loom/responses/v1',
+    });
   } catch {
     throw transportError(
       'CONNECTION_FAILED',
@@ -170,26 +183,32 @@ function sendThroughPort(
     );
   }
 
-  const stream = createChunkStream();
+  const diagnostic = (event: Parameters<typeof report>[1]): void =>
+    report(options.diagnosticSink, { ...event, operation: request.operation ?? 'generate' });
+  let closeConsumer = (): void => undefined;
+  const stream = createChunkStream(connectionId === undefined ? undefined : () => closeConsumer());
   let responseStarted = false;
   let responseStatus: number | undefined;
+  let responseContentType: string | undefined;
   let providerErrorReceived = false;
   let settled = false;
   let terminal = false;
   let cleanedUp = false;
   let connectionClosedReported = false;
   let unsubscribe = (): void => undefined;
-  report(options.diagnosticSink, {
+  diagnostic({
     event: 'model.connection.opened',
     stage: 'connection',
     requestId,
   });
 
   return new Promise((resolve, reject) => {
-    const reportConnectionClosed = (code: 'COMPLETED' | 'DISCONNECTED'): void => {
+    const reportConnectionClosed = (
+      code: 'COMPLETED' | 'DISCONNECTED' | 'FAILED' | 'CANCELLED',
+    ): void => {
       if (connectionClosedReported) return;
       connectionClosedReported = true;
-      report(options.diagnosticSink, {
+      diagnostic({
         event: 'model.connection.closed',
         stage: 'cleanup',
         requestId,
@@ -205,10 +224,30 @@ function sendThroughPort(
       port.onDisconnect.removeListener?.(onDisconnect);
       if (disconnect) safeDisconnect(port);
     };
+    closeConsumer = () => {
+      if (!terminal) {
+        terminal = true;
+        reportConnectionClosed('COMPLETED');
+        cleanup(true);
+      }
+    };
     const fail = (error: CodexCompanionError, disconnect = true): void => {
       if (terminal) return;
       terminal = true;
-      reportConnectionClosed('DISCONNECTED');
+      reportConnectionClosed(
+        error.code === 'CONNECTION_FAILED'
+          ? 'DISCONNECTED'
+          : error.code === 'CANCELLED'
+            ? 'CANCELLED'
+            : 'FAILED',
+      );
+      error = new CodexCompanionError(error.code, error.message, {
+        ...(error.remoteCode === undefined ? {} : { remoteCode: error.remoteCode }),
+        ...(responseStatus === undefined ? {} : { status: responseStatus }),
+        operation: request.operation ?? 'generate',
+        requestId,
+        stage: error.stage ?? (responseStarted ? 'stream' : 'request'),
+      });
       cleanup(disconnect);
       if (settled) {
         stream.fail(error);
@@ -218,7 +257,7 @@ function sendThroughPort(
       }
     };
     const invalidResponse = (): void => {
-      report(options.diagnosticSink, {
+      diagnostic({
         event: 'model.response.invalid',
         stage: 'response',
         requestId,
@@ -244,7 +283,17 @@ function sendThroughPort(
       ) {
         responseStarted = true;
         responseStatus = message.status;
-        report(options.diagnosticSink, {
+        if (
+          message.contentType !== undefined &&
+          message.contentType !== 'application/json' &&
+          message.contentType !== 'text/event-stream'
+        ) {
+          invalidResponse();
+          return;
+        }
+        responseContentType =
+          typeof message.contentType === 'string' ? message.contentType : undefined;
+        diagnostic({
           event: 'model.response.started',
           stage: 'response',
           requestId,
@@ -252,7 +301,15 @@ function sendThroughPort(
         });
         if (message.status >= 200 && message.status < 300) {
           settled = true;
-          resolve(Object.freeze({ status: message.status, body: stream.body }));
+          resolve(
+            Object.freeze({
+              status: message.status,
+              body: stream.body,
+              ...(responseContentType === undefined ? {} : { contentType: responseContentType }),
+              requestId,
+              operation: request.operation ?? 'generate',
+            }),
+          );
         }
         return;
       }
@@ -264,7 +321,7 @@ function sendThroughPort(
         responseStatus >= 200 &&
         responseStatus < 300
       ) {
-        report(options.diagnosticSink, {
+        diagnostic({
           event: 'model.response.chunk',
           stage: 'stream',
           requestId,
@@ -285,13 +342,13 @@ function sendThroughPort(
           return;
         }
         const metadata = validateProviderError(message, responseStatus);
-        report(options.diagnosticSink, {
+        diagnostic({
           event: 'model.provider.rejected',
           stage: 'response',
           requestId,
           status: responseStatus,
           ...(metadata.providerCode === undefined ? {} : { code: metadata.providerCode }),
-          providerMessage: metadata.providerMessage,
+          providerMessage: GENERIC_CODEX_PROVIDER_MESSAGE,
           retryable: metadata.retryable,
           ...(metadata.retryAfterMs === undefined ? {} : { retryAfterMs: metadata.retryAfterMs }),
         });
@@ -300,6 +357,8 @@ function sendThroughPort(
         resolve(
           Object.freeze({
             status: responseStatus,
+            requestId,
+            operation: request.operation ?? 'generate',
             body: stream.body,
             ...metadata,
           }),
@@ -309,7 +368,7 @@ function sendThroughPort(
       if (message.type === 'end' && responseStarted && isValidEndMessage(message)) {
         terminal = true;
         stream.finish();
-        report(options.diagnosticSink, {
+        diagnostic({
           event: 'model.response.completed',
           stage: 'stream',
           requestId,
@@ -320,6 +379,7 @@ function sendThroughPort(
             Object.freeze({
               status: responseStatus,
               body: stream.body,
+              ...(responseContentType === undefined ? {} : { contentType: responseContentType }),
               providerMessage: GENERIC_CODEX_PROVIDER_MESSAGE,
               retryable: isRetryableProviderFailure(responseStatus),
             }),
@@ -338,8 +398,19 @@ function sendThroughPort(
       }
       if (message.type === 'error') {
         const remoteCode =
-          typeof message.code === 'string' ? message.code.slice(0, 256) : undefined;
-        report(options.diagnosticSink, {
+          typeof message.code === 'string' &&
+          [
+            'CANCELLED',
+            'UNAUTHORIZED_ORIGIN',
+            'INVALID_REQUEST',
+            'ACCOUNT_ROUTING_UNAVAILABLE',
+            'AUTHENTICATION_FAILED',
+            'PROVIDER_FETCH_FAILED',
+            'PROVIDER_STREAM_FAILED',
+          ].includes(message.code)
+            ? message.code
+            : undefined;
+        diagnostic({
           event: 'model.response.failed',
           stage: 'response',
           requestId,
@@ -352,6 +423,18 @@ function sendThroughPort(
               ? 'This website origin is not approved in the Loom.js Companion.'
               : 'The Loom.js Companion model relay failed.',
             remoteCode,
+            typeof message.stage === 'string' &&
+              [
+                'port',
+                'authorization',
+                'validation',
+                'routing',
+                'authentication',
+                'provider',
+                'stream',
+              ].includes(message.stage)
+              ? message.stage
+              : undefined,
           ),
         );
         return;
@@ -375,7 +458,7 @@ function sendThroughPort(
 
     if (request.signal !== undefined) {
       unsubscribe = request.signal.onCancel(() => {
-        report(options.diagnosticSink, {
+        diagnostic({
           event: 'model.request.cancelled',
           stage: 'cleanup',
           requestId,
@@ -390,7 +473,7 @@ function sendThroughPort(
       }
     }
 
-    report(options.diagnosticSink, {
+    diagnostic({
       event: 'model.request.sent',
       stage: 'request',
       requestId,
@@ -399,7 +482,8 @@ function sendThroughPort(
     try {
       port.postMessage(
         Object.freeze({
-          protocol: CODEX_MODEL_TRANSPORT_PROTOCOL,
+          protocol: connectionId === undefined ? CODEX_MODEL_TRANSPORT_PROTOCOL : 'loom/responses',
+          ...(connectionId === undefined ? {} : { connectionId }),
           version: CODEX_MODEL_TRANSPORT_VERSION,
           type: operation,
           requestId,
@@ -460,4 +544,28 @@ export function createCodexExtensionFetch(
           : 'classic',
       ...(request.signal === undefined ? {} : { signal: request.signal }),
     });
+}
+
+/** Relays a portable Responses body to a connection configured only in extension settings. */
+export function createExtensionResponsesTransport(
+  options: CreateCodexExtensionTransportOptions & { readonly connectionId: string },
+): OpenAICompatibleResponsesTransport {
+  if (!/^[a-zA-Z0-9_-]{1,64}$/u.test(options.connectionId))
+    throw new CodexCompanionError('INVALID_CONFIGURATION', 'Invalid Responses connection ID.');
+  const requestIdFactory = validateRequestIdFactory(options.requestIdFactory, 'loom-responses');
+  return Object.freeze({
+    send(request: OpenAIResponsesRequest) {
+      return sendThroughPort(
+        options,
+        requestIdFactory(),
+        {
+          body: request.body,
+          wireProtocol: 'classic',
+          operation: 'generate',
+          ...(request.signal === undefined ? {} : { signal: request.signal }),
+        },
+        options.connectionId,
+      );
+    },
+  });
 }

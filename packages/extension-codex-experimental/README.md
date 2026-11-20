@@ -202,3 +202,35 @@ postal-address placeholders remain visible until the actual publisher and counse
 - [Program policies](https://developer.chrome.com/docs/webstore/program-policies/policies)
 - [Supplying images](https://developer.chrome.com/docs/webstore/images)
 - [Publishing workflow](https://developer.chrome.com/docs/webstore/publish)
+
+Companion 0.3.0 uses the Codex Responses streaming compaction trigger. Upgrade the model and
+Companion website packages together with the extension; see
+[compaction recovery and Studio integration](../../docs/context-compaction.md).
+
+## Custom Responses connections
+
+Companion 0.4.0+ supports custom domains and localhost `/v1/responses` servers. Configure the
+endpoint and optional key in extension options, then grant the optional host permission. Approve a
+website once under Website access to allow every server. Websites use
+`createExtensionResponsesTransport` with a saved connection ID and
+`createOpenAICompatibleResponsesModel`; keys and endpoint overrides are not accepted from the page.
+ChatGPT sign-in is independent. See [setup and Studio migration](../../docs/local-models.md).
+
+Companion 0.5.0 adds `listExtensionResponsesModels({ runtime, extensionId, sessionId })` to merge
+all approved server catalogues. Entries contain stable server-qualified IDs plus their raw model and
+connection ID. One Companion-wide website approval covers all servers. Use those fields when
+constructing the model/transport; keys never leave Companion. Discovery uses only each saved
+endpoint’s sibling `/v1/models`, bounded to eight seconds and 256 KiB per server. Offline servers
+are reported separately from successful results.
+
+## Native providers
+
+Companion 0.6.0 adds Anthropic Claude and Google Gemini to the per-server Provider selector. Native
+text/function-tool requests use the saved key and native API contract inside the extension. See
+[setup and limits](../../docs/local-models.md#anthropic-and-google-gemini).
+
+## Google account experiment
+
+The Google account selector is enabled only in an OAuth-configured experimental build. See
+[configuration and evidence](../../docs/subscription-login-experiment.md). Standard manifests
+request no additional OAuth permission.

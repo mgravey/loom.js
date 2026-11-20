@@ -128,7 +128,7 @@ test('built experimental extension is isolated, installable, and self-contained'
     manifest_version: 3,
     name: 'Loom.js Companion',
     description:
-      'Authenticates Loom sessions and relays model requests only when direct browser access fails.',
+      'Connects approved Loom websites to ChatGPT and custom Responses servers with extension-managed credentials.',
     icons: {
       '16': 'icons/icon16.png',
       '32': 'icons/icon32.png',
@@ -136,6 +136,7 @@ test('built experimental extension is isolated, installable, and self-contained'
       '128': 'icons/icon128.png',
     },
     permissions: ['declarativeNetRequest', 'storage'],
+    optional_host_permissions: ['https://*/*', 'http://*/*'],
     host_permissions: [
       'http://localhost:1455/*',
       'https://auth.openai.com/*',

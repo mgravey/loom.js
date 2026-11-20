@@ -3,11 +3,20 @@ export type CodexExperimentalModelErrorCode =
   | 'INVALID_REQUEST'
   | 'AUTHENTICATION_FAILED'
   | 'TRANSPORT_FAILED'
+  | 'COMPACTION_UNAVAILABLE'
+  | 'EXTENSION_DISCONNECTED'
+  | 'CANCELLED'
+  | 'DEADLINE_EXCEEDED'
   | 'HTTP_ERROR'
   | 'MALFORMED_RESPONSE'
   | 'PROVIDER_ERROR';
 
 export interface CodexProviderFailureDetails {
+  readonly operation?: 'generate' | 'compact';
+  readonly requestId?: string;
+  readonly stage?: string;
+  readonly remoteCode?: string;
+  readonly cause?: Readonly<Record<string, unknown>>;
   readonly providerCode?: string;
   readonly providerMessage?: string;
   readonly incompleteReason?: string;
@@ -18,6 +27,10 @@ export interface CodexProviderFailureDetails {
 
 /** Sanitized failure: access tokens, endpoints, and provider response bodies are never exposed. */
 export class CodexExperimentalModelError extends Error {
+  public readonly operation: 'generate' | 'compact' | undefined;
+  public readonly requestId: string | undefined;
+  public readonly stage: string | undefined;
+  public readonly remoteCode: string | undefined;
   public readonly code: CodexExperimentalModelErrorCode;
   public readonly status: number | undefined;
   public readonly providerCode: string | undefined;
@@ -32,7 +45,11 @@ export class CodexExperimentalModelError extends Error {
     message: string,
     options: CodexProviderFailureDetails & { readonly status?: number } = {},
   ) {
-    super(message);
+    super(message, { cause: options.cause });
+    this.operation = options.operation;
+    this.requestId = options.requestId;
+    this.stage = options.stage;
+    this.remoteCode = options.remoteCode;
     this.name = 'CodexExperimentalModelError';
     this.code = code;
     this.status = options.status;

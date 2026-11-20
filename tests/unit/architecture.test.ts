@@ -111,6 +111,7 @@ const allowedInternalDependencies: Readonly<
   'companion-codex-experimental': [
     '@mgravey/loom-auth-extension',
     '@mgravey/loom-model-codex-experimental',
+    '@mgravey/loom-model-openai-responses',
     '@mgravey/loom-plugin-api',
   ],
   examples: [

@@ -37,6 +37,7 @@ export type CodexCompanionDiagnosticStage =
 
 export interface CodexCompanionDiagnosticEvent {
   readonly event: string;
+  readonly operation?: 'generate' | 'compact';
   readonly stage: CodexCompanionDiagnosticStage;
   readonly requestId?: string;
   readonly code?: string;

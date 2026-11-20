@@ -9,6 +9,7 @@
   "references": [
     { "path": "../auth-extension" },
     { "path": "../model-codex-experimental" },
+    { "path": "../model-openai-responses" },
     { "path": "../plugin-api" }
   ]
 }

@@ -50,6 +50,7 @@
   "dependencies": {
     "@mgravey/loom-auth-extension": "workspace:^",
     "@mgravey/loom-model-codex-experimental": "workspace:^",
+    "@mgravey/loom-model-openai-responses": "workspace:^",
     "@mgravey/loom-plugin-api": "workspace:^"
   },
   "devDependencies": {

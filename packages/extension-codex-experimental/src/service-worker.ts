@@ -1,12 +1,14 @@
+import type { ResponsesModelsFetch } from './responses-models.js';
 import { createCodexExperimentalExtension } from './composition.js';
 import type { CodexChromeExtensionApi, CodexModelFetch, OAuthFetch } from './chrome-contracts.js';
 import { createExternallyConnectableAuthorizer } from './manifest-origins.js';
 import { isCodexDirectAuthRequest } from './direct-auth.js';
+import { isResponsesConnectionRequest } from './responses-connections.js';
 import { isCodexOriginAccessRequest } from './origin-access.js';
 
 const host = globalThis as unknown as {
   readonly chrome: CodexChromeExtensionApi;
-  readonly fetch: OAuthFetch & CodexModelFetch;
+  readonly fetch: OAuthFetch & CodexModelFetch & ResponsesModelsFetch;
 };
 const fetchRequest = host.fetch.bind(globalThis);
 if (host.chrome.runtime.getManifest === undefined) {
@@ -31,6 +33,7 @@ const composition = createCodexExperimentalExtension({
   chromeApi: host.chrome,
   fetchRequest,
   modelFetchRequest: fetchRequest,
+  modelsFetchRequest: fetchRequest,
   manifestAuthorizer,
 });
 
@@ -39,11 +42,13 @@ host.chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse
     '[loom:extension-auth]',
     Object.freeze({ event: 'message.received', ...authEnvelopeMetadata(message) }),
   );
-  const listener = isCodexOriginAccessRequest(message)
-    ? composition.originAccessExternalMessageListener
-    : isCodexDirectAuthRequest(message)
-      ? composition.directAuthExternalMessageListener
-      : composition.externalMessageListener;
+  const listener = isResponsesConnectionRequest(message)
+    ? composition.responsesConnectionListener
+    : isCodexOriginAccessRequest(message)
+      ? composition.originAccessExternalMessageListener
+      : isCodexDirectAuthRequest(message)
+        ? composition.directAuthExternalMessageListener
+        : composition.externalMessageListener;
   return listener(message, sender, (response) => {
     globalThis.console.info(
       '[loom:extension-auth]',

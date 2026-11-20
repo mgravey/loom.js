@@ -135,6 +135,10 @@ assertExactStringSet('Manifest permissions', manifest.permissions, [
   'declarativeNetRequest',
   'storage',
 ]);
+assertExactStringSet('Manifest optional host permissions', manifest.optional_host_permissions, [
+  'https://*/*',
+  'http://*/*',
+]);
 assertExactStringSet('Manifest host permissions', manifest.host_permissions, [
   'http://localhost:1455/*',
   'https://auth.openai.com/*',

@@ -1,3 +1,4 @@
+import type { ResponsesHostPermissions } from './responses-connections.js';
 import type {
   ChromeExtensionApi,
   ChromeMessageSender,
@@ -5,6 +6,10 @@ import type {
 } from '@mgravey/loom-extension';
 
 export interface ChromeIdentityApi {
+  getAuthToken?(details: {
+    readonly interactive: boolean;
+  }): Promise<{ readonly token?: string; readonly grantedScopes?: readonly string[] }>;
+  clearAllCachedAuthTokens?(): Promise<void>;
   getRedirectURL(path?: string): string;
   launchWebAuthFlow(details: {
     readonly url: string;
@@ -64,7 +69,8 @@ export interface CodexExternalConnectEvent {
 }
 
 export interface CodexChromeExtensionApi extends ChromeExtensionApi {
-  readonly identity: ChromeIdentityApi;
+  readonly permissions?: ResponsesHostPermissions;
+  readonly identity?: ChromeIdentityApi;
   readonly declarativeNetRequest: ChromeDeclarativeNetRequestApi;
   readonly tabs: ChromeTabsApi;
   readonly storage: {

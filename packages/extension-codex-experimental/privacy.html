@@ -81,7 +81,8 @@
       <p>
         Authenticate a user-initiated Loom session and provide its authorized workbench with the
         short-lived credentials required for a direct model request and relay that request only when
-        direct browser access fails before an HTTP response.
+        direct browser access fails before an HTTP response. For custom Responses servers, route the
+        authorized website’s model requests through a user-configured extension connection.
       </p>
       <h2>Information handled</h2>
       <ul>
@@ -103,8 +104,8 @@
         </li>
         <li>
           Exact website origins approved by the user in trusted extension UI. Approved origins
-          remain in local extension storage until revoked or the experiment is disabled; pending
-          first-contact requests remain session-only.
+          remain in local extension storage until revoked; pending first-contact requests remain
+          session-only.
         </li>
       </ul>
       <p>
@@ -112,6 +113,33 @@
         option only on a private computer; someone able to use the same unlocked Chrome profile may
         be able to use the connected account. Logout and disabling the experiment remove session and
         persistent authorization copies.
+      </p>
+      <h2>Model server connections</h2>
+      <p>
+        Responses-compatible, Anthropic and Gemini HTTP(S) server endpoints and optional API keys
+        are stored in trusted local extension storage until edited, removed, extension data is
+        cleared, or the extension is uninstalled. Keys are not returned to websites. Chrome host
+        access is requested when you save a connection. Model discovery reads the saved servers’
+        provider-specific model catalogues using their individual keys. Only approved servers’ model
+        IDs and labels are returned to the website. Website approval applies to every configured
+        server and remains independent of ChatGPT sign-in or disabling its experiment. Custom model
+        requests and responses pass transiently through the extension to that saved server; no
+        ChatGPT credentials are attached. HTTP endpoints do not encrypt traffic. Local storage is
+        not an encrypted credential vault.
+      </p>
+      <p>
+        Use Remove beside a custom connection to delete its profile and key. ChatGPT logout and
+        disabling the Codex experiment do not delete independent custom connections. Remove prevents
+        new requests; running requests may finish. Revoke host permissions separately in Chrome.
+      </p>
+      <h2>Optional Google account experiment</h2>
+      <p>
+        Developer builds configured with a Google OAuth client can request Google Cloud access
+        through Chrome Identity. Tokens remain in Chrome's OAuth cache and are used only for fixed
+        Code Assist account checks and generation. Companion stores a revocable session marker,
+        optional project ID and manually configured model IDs. Sign out clears local authorization
+        and the extension's Chrome token cache. Running requests may finish. The standard build does
+        not enable this OAuth experiment.
       </p>
       <h2>Not collected</h2>
       <p>

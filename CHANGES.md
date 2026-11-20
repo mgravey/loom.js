@@ -54,6 +54,25 @@ This project follows a milestone changelog alongside Changesets for public packa
 - Corrected the trusted-publishing workflow to publish one explicitly selected, validated package
   tarball without an empty classic-auth token shadowing NPM's OIDC exchange.
 
+## Unreleased — Merged server model selection
+
+- Companion 0.5.0 discovers all approved custom `/v1/models` catalogues with extension-owned keys,
+  bounded responses and per-server deadlines. Unavailable servers do not hide healthy catalogues.
+- Website approval now applies to all configured servers, including future additions. Removed
+  per-server origin lists; the ChatGPT toggle no longer revokes Companion-wide website grants.
+- One workbench selector combines custom and ChatGPT models with distinct server prefixes and
+  automatically routes generation to the selected server. Conversation records retain that route.
+- Added public `listExtensionResponsesModels` for Studio's own combined model selectors.
+
+## Unreleased — Extension-owned custom Responses
+
+- Companion 0.4.0 adds trusted connection settings for custom HTTP(S) `/v1/responses` servers,
+  optional host permissions, exact website grants and extension-only API keys.
+- Added a brokered portable model transport with SSE/JSON replies, cancellation, bounded requests
+  and responses, and an overall relay deadline. No ChatGPT credentials are used for these servers.
+- The workbench now stores only custom connection IDs and model selections. Legacy website keys are
+  removed; re-enter them in Companion. See [migration and Studio setup](docs/local-models.md).
+
 ## Unreleased — Local and LAN Responses
 
 ### Added
@@ -61,8 +80,8 @@ This project follows a milestone changelog alongside Changesets for public packa
 - Added `createOpenAICompatibleResponsesModel` and a separate plugin capability alongside the
   unchanged OpenAI Platform adapter. The compatible path emits a portable request subset, supports
   optional Bearer authentication, and decodes bounded Responses SSE or complete JSON.
-- Added an explicit OpenAI-compatible workbench connection with `/v1/models` discovery, manual model
-  fallback, direct `/v1/responses` requests, persisted endpoint/model/API-key settings, and no
+- Initially added a direct workbench connection (superseded by Companion routing above), manual
+  model fallback, direct `/v1/responses` requests, persisted endpoint/model/API-key settings, and no
   dependency on Companion authentication.
 - Versioned workspace conversation records now retain their model-provider kind while migrating
   existing version-one records to the experimental ChatGPT provider.
@@ -420,3 +439,44 @@ This project follows a milestone changelog alongside Changesets for public packa
 Added model catalogue selection/refresh and a persisted thinking-level control. Both model adapters
 accept `reasoningEffort`; Codex uses it for generation and compaction, and compatible requests
 include it only when explicitly configured.
+
+## Codex compaction resilience
+
+Verified the upstream streaming compaction-trigger contract, replaced the obsolete compact route,
+and added transactional checkpoint validation, bounded retries/deadlines, temporary
+unsupported-state caching, safe transport causes and operation diagnostics. See
+[context compaction](docs/context-compaction.md) for coordinated extension/package upgrades and
+Studio integration limits.
+
+### Custom server base URLs and availability
+
+Settings accept /v1/ base URLs, retain legacy Responses URLs, and probe /models on each save with a
+bounded timeout and visible warning on failure. Catalogue requests always refetch models.
+
+### Companion 0.5.1: server setup diagnostics
+
+Validate connection fields before requesting permission or contacting a server. Separate permission
+denial, storage failure and post-save display failure with sanitized actionable messages. The
+screenshot-reported save failure has no confirmed root cause; availability failure alone does not
+prevent saving.
+
+### Companion 0.6.0: Anthropic and Gemini
+
+Add a per-server provider selector, native Messages/generateContent adapters, paginated model
+discovery, isolated API-key headers, and preservation of native reasoning/tool continuation.
+Existing Responses profiles migrate without changes. Native text/tool output is buffered and
+validated; no automatic generation replay is added. Local browser fixtures cover both providers
+through completed tool turns.
+
+### Companion 0.7.0: opt-in Google account prototype
+
+Add a developer-only Chrome Identity flow, fixed Code Assist access/generation adapter, revocable
+session authorization and explicit model IDs. Standard packaging keeps the option disabled without
+OAuth configuration. No live client acceptance is claimed; no Claude subscription login is added.
+
+- Companion 0.8.0 adds an experimental Claude account selector, authenticated loopback helper,
+  official Claude Code login/logout, and portable text/tool generation. No Claude OAuth tokens enter
+  Companion or websites. Live Claude account verification remains outstanding.
+
+- Unified Companion connection settings with grouped API/account choices, consistent cards and
+  controls, responsive light/dark styling, and inline Claude helper setup instructions.

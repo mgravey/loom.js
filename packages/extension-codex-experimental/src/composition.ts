@@ -1,3 +1,5 @@
+import { createGoogleSubscriptionAuth } from './google-subscription.js';
+import type { ResponsesModelsFetch } from './responses-models.js';
 import {
   CODEX_CLI_OAUTH_AUDIT_SNAPSHOT,
   CODEX_EXPERIMENTAL_PROVIDER_ID,
@@ -35,6 +37,10 @@ import {
   type CodexOriginAccessStore,
 } from './origin-access.js';
 import { createCodexExperimentSettings, type CodexExperimentSettings } from './settings.js';
+import {
+  createResponsesConnectionStore,
+  createResponsesConnectionListener,
+} from './responses-connections.js';
 import { createCodexModelPortListener } from './model-transport.js';
 
 export const CODEX_EXPERIMENTAL_CONFIGURATION = Object.freeze({
@@ -59,6 +65,7 @@ export interface CreateCodexExperimentalExtensionOptions {
   readonly fetchRequest: OAuthFetch;
   /** Required by the runtime service worker; optional only for auth-only composition tests. */
   readonly modelFetchRequest?: CodexModelFetch;
+  readonly modelsFetchRequest?: ResponsesModelsFetch;
   readonly allowedOrigins?: readonly string[];
   readonly manifestAuthorizer?: OriginAuthorizer;
 }
@@ -74,6 +81,7 @@ export interface CodexExperimentalExtensionComposition {
   readonly directAuthExternalMessageListener: ChromeExternalMessageListener;
   readonly originAccessStore: CodexOriginAccessStore;
   readonly originAccessExternalMessageListener: ChromeExternalMessageListener;
+  readonly responsesConnectionListener: ChromeExternalMessageListener;
   readonly modelPortListener: ReturnType<typeof createCodexModelPortListener>;
 }
 
@@ -214,6 +222,16 @@ export function createCodexExperimentalExtension(
     options.manifestAuthorizer ??
     createOriginAuthorizer(options.allowedOrigins ?? DEVELOPMENT_ALLOWED_ORIGINS);
   const authorizer = createGrantedOriginAuthorizer(manifestAuthorizer, originAccessStore);
+  const googleSubscription = createGoogleSubscriptionAuth(
+    options.chromeApi,
+    options.modelFetchRequest ?? (() => Promise.reject(new Error('Model transport unavailable.'))),
+  );
+  const responsesConnections = createResponsesConnectionStore(
+    options.chromeApi.storage.local,
+    options.chromeApi.permissions,
+    authorizer,
+    googleSubscription.authorize,
+  );
   const handler = createCredentialBrokerMessageHandler({
     authorizer,
     tokenService: gatedTokenService,
@@ -241,7 +259,13 @@ export function createCodexExperimentalExtension(
       tokenService: gatedTokenService,
       accountRoutingStore,
     }),
+    responsesConnectionListener: createResponsesConnectionListener(
+      responsesConnections,
+      authorizer,
+      options.modelsFetchRequest,
+    ),
     modelPortListener: createCodexModelPortListener({
+      customResponses: { store: responsesConnections, authorizer },
       providerId: provider.id,
       authorizer,
       tokenService: gatedTokenService,

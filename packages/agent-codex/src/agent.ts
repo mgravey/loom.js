@@ -451,8 +451,16 @@ function validatedCompactedContext(value: unknown): readonly JsonObject[] {
         },
       );
     }
-    if (!isRecord(item)) {
-      throw new CodexAgentError('MODEL_FAILURE', 'Model context compaction items must be objects.');
+    if (
+      !isRecord(item) ||
+      typeof item.type !== 'string' ||
+      item.type.length === 0 ||
+      item.type === 'compaction_trigger'
+    ) {
+      throw new CodexAgentError(
+        'MODEL_FAILURE',
+        'Model context compaction items require a durable item type.',
+      );
     }
     return item;
   });
@@ -749,10 +757,9 @@ function createAgent(bindings: ReturnType<typeof validateDependencies>): CodexAg
                 continue;
               } catch (compactionError) {
                 context?.signal?.throwIfCancelled();
-                if (compactionError instanceof CodexAgentError) throw compactionError;
                 throw new CodexAgentError(
-                  'MODEL_FAILURE',
-                  `Model context compaction failed during turn ${String(turn)}.`,
+                  'COMPACTION_UNAVAILABLE',
+                  `Compaction unavailable/context limit during turn ${String(turn)}; retry after restoring compaction.`,
                   {
                     cause: compactionError,
                     details: { turn, contextCompactionRequired: true },

@@ -5,6 +5,8 @@ import type { CodexAccountRoutingStore } from '../src/account-routing.js';
 import type { CodexExternalPort, CodexModelFetch } from '../src/chrome-contracts.js';
 import {
   CODEX_MODEL_END_ACK_TIMEOUT_MS,
+  CUSTOM_RESPONSES_PORT_NAME,
+  CUSTOM_RESPONSES_PROTOCOL,
   CODEX_MODEL_PORT_NAME,
   CODEX_MODEL_TRANSPORT_PROTOCOL,
   CODEX_MODEL_TRANSPORT_VERSION,
@@ -34,7 +36,7 @@ function routingStore(): CodexAccountRoutingStore {
   };
 }
 
-function port(): {
+function port(name: string = CODEX_MODEL_PORT_NAME): {
   readonly value: CodexExternalPort;
   readonly messages: unknown[];
   readonly disconnect: ReturnType<typeof vi.fn>;
@@ -50,7 +52,7 @@ function port(): {
     messages,
     disconnect,
     value: {
-      name: CODEX_MODEL_PORT_NAME,
+      name,
       sender: { origin: 'http://localhost:4173', url: 'http://localhost:4173/app' },
       onMessage: {
         addListener: (listener) => messageListeners.push(listener),
@@ -121,24 +123,10 @@ function request(
 }
 
 function compactRequest(): Readonly<Record<string, unknown>> {
-  return Object.freeze({
-    protocol: CODEX_MODEL_TRANSPORT_PROTOCOL,
-    version: CODEX_MODEL_TRANSPORT_VERSION,
-    type: 'compact',
-    requestId: 'request-compact',
-    sessionId: 'session-1',
-    threadId: 'thread-1',
-    wireProtocol: 'responses-lite',
-    body: JSON.stringify({
-      model: 'gpt-test',
-      input: [{ type: 'compaction', encrypted_content: 'opaque' }],
-      instructions: 'Preserve decisions.',
-      tools: [],
-      parallel_tool_calls: false,
-      reasoning: { effort: 'medium', context: 'all_turns' },
-      text: { verbosity: 'low' },
-    }),
-  });
+  const base = request('responses-lite');
+  const body = JSON.parse(base.body as string) as { input: unknown[] };
+  body.input.push({ type: 'compaction_trigger' });
+  return { ...base, type: 'compact', requestId: 'request-compact', body: JSON.stringify(body) };
 }
 
 async function waitForMessage(
@@ -303,7 +291,7 @@ describe('experimental Codex extension model transport', () => {
     );
   });
 
-  it('uses the isolated compact endpoint and a bounded JSON response stream', async () => {
+  it('uses the fixed Responses endpoint and SSE for compaction', async () => {
     const encoder = new TextEncoder();
     const fetchRequest = vi.fn<CodexModelFetch>(() =>
       Promise.resolve({
@@ -312,7 +300,7 @@ describe('experimental Codex extension model transport', () => {
           start(controller) {
             controller.enqueue(
               encoder.encode(
-                '{"output":[{"type":"compaction","encrypted_content":"replacement"}]}',
+                'data: {"type":"response.output_item.done","item":{"type":"compaction","encrypted_content":"replacement"}}\n\ndata: {"type":"response.completed"}\n\n',
               ),
             );
             controller.close();
@@ -340,7 +328,7 @@ describe('experimental Codex extension model transport', () => {
     expect(fetchRequest).toHaveBeenCalledWith(
       CODEX_RESPONSES_COMPACT_ENDPOINT,
       expect.objectContaining({
-        headers: expect.objectContaining({ Accept: 'application/json' }),
+        headers: expect.objectContaining({ Accept: 'text/event-stream' }),
       }),
     );
     const sentBody = JSON.parse(vi.mocked(fetchRequest).mock.calls[0]?.[1].body ?? '{}') as Record<
@@ -348,11 +336,12 @@ describe('experimental Codex extension model transport', () => {
       unknown
     >;
     expect(sentBody).toMatchObject({ prompt_cache_key: 'session-1' });
-    expect(sentBody).not.toHaveProperty('client_metadata');
+    expect(sentBody).toHaveProperty('client_metadata');
     expect(externalPort.messages).toContainEqual({
       type: 'chunk',
       requestId: 'request-compact',
-      chunk: '{"output":[{"type":"compaction","encrypted_content":"replacement"}]}',
+      chunk:
+        'data: {"type":"response.output_item.done","item":{"type":"compaction","encrypted_content":"replacement"}}\n\ndata: {"type":"response.completed"}\n\n',
     });
   });
 
@@ -414,7 +403,7 @@ describe('experimental Codex extension model transport', () => {
       expect.objectContaining({
         event: 'provider.response.rejected',
         providerCode: 'rate_limit_exceeded',
-        providerMessage: 'Rate limit reached for API key [REDACTED].',
+        providerMessage: 'The provider rejected the request.',
         retryable: true,
         retryAfterMs: 15_000,
       }),
@@ -604,5 +593,226 @@ describe('experimental Codex extension model transport', () => {
       ),
     );
     expect(JSON.stringify(refreshFailure.messages)).not.toContain('secret refresh detail');
+  });
+});
+
+describe('custom Responses relay', () => {
+  const body = JSON.stringify({
+    model: 'qwen3:8b',
+    instructions: 'Work',
+    input: [{ role: 'user', content: 'hello' }],
+    tools: [],
+    stream: true,
+  });
+  const envelope = {
+    protocol: CUSTOM_RESPONSES_PROTOCOL,
+    version: 1,
+    type: 'generate',
+    requestId: 'custom-1',
+    sessionId: 'session-1',
+    threadId: 'thread-1',
+    wireProtocol: 'classic',
+    connectionId: 'local',
+    body,
+  };
+  function setup(
+    key = 'private-custom-key',
+    provider: 'responses' | 'anthropic' | 'gemini' = 'responses',
+  ) {
+    const externalPort = port(CUSTOM_RESPONSES_PORT_NAME);
+    const tokens = tokenService();
+    const routing = routingStore();
+    const authorize = vi.fn(async () => ({
+      id: 'local',
+      label: 'Local',
+      provider,
+      endpoint:
+        provider === 'anthropic'
+          ? 'http://localhost:11434/v1/messages'
+          : provider === 'gemini'
+            ? 'http://localhost:11434/v1beta/'
+            : 'http://localhost:11434/v1/responses',
+      apiKey: key,
+      allowedOrigins: ['http://localhost:4173'],
+    }));
+    const fetchRequest = vi.fn<CodexModelFetch>(async () => ({
+      status: 200,
+      headers: { get: () => 'application/json' },
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('{"status":"completed","output":[]}'));
+          controller.close();
+        },
+      }),
+    }));
+    const diagnostics: CodexModelDiagnosticEvent[] = [];
+    createCodexModelPortListener({
+      providerId: 'codex',
+      tokenService: tokens,
+      accountRoutingStore: routing,
+      authorizer: {
+        assertAuthorized: vi.fn(() => {
+          throw new Error('Codex disabled');
+        }),
+      },
+      customResponses: {
+        authorizer: { assertAuthorized: vi.fn() },
+        store: { list: vi.fn(), save: vi.fn(), remove: vi.fn(), authorized: authorize },
+      },
+      fetchRequest,
+      diagnosticSink: (event) => diagnostics.push(event),
+    })(externalPort.value);
+    return { externalPort, tokens, routing, authorize, fetchRequest, diagnostics };
+  }
+  it.each(['anthropic', 'gemini'] as const)(
+    'rejects malformed %s output without forwarding partial calls or retrying',
+    async (provider) => {
+      const harness = setup('native-secret', provider);
+      harness.fetchRequest.mockResolvedValue({
+        status: 200,
+        body: new ReadableStream({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode('{"partial":"native-secret"'));
+            controller.close();
+          },
+        }),
+      });
+      harness.externalPort.send({
+        ...envelope,
+        body: JSON.stringify({ ...JSON.parse(body), model: 'fixture-model' }),
+      });
+      await vi.waitFor(() =>
+        expect(harness.externalPort.messages).toContainEqual(
+          expect.objectContaining({ type: 'error', stage: 'stream' }),
+        ),
+      );
+      expect(harness.fetchRequest).toHaveBeenCalledTimes(1);
+      expect(
+        harness.externalPort.messages.some(
+          (message) =>
+            typeof message === 'object' &&
+            message !== null &&
+            'type' in message &&
+            message.type === 'chunk',
+        ),
+      ).toBe(false);
+      expect(JSON.stringify(harness.externalPort.messages)).not.toContain('native-secret');
+      expect(JSON.stringify(harness.diagnostics)).not.toContain('native-secret');
+    },
+  );
+  it.each(['private-custom-key', ''])(
+    'injects only the saved optional key and relays JSON without Codex auth (%s)',
+    async (key) => {
+      const harness = setup(key);
+      harness.externalPort.send(envelope);
+      await waitForMessage(harness.externalPort.messages, { type: 'end', requestId: 'custom-1' });
+      expect(harness.fetchRequest).toHaveBeenCalledWith(
+        'http://localhost:11434/v1/responses',
+        expect.objectContaining({
+          credentials: 'omit',
+          redirect: 'error',
+          headers: {
+            Accept: 'text/event-stream, application/json',
+            'Content-Type': 'application/json',
+            ...(key === '' ? {} : { Authorization: `Bearer ${key}` }),
+          },
+        }),
+      );
+      expect(harness.tokens.getAccessToken).not.toHaveBeenCalled();
+      expect(harness.routing.get).not.toHaveBeenCalled();
+      expect(harness.externalPort.messages).toContainEqual({
+        type: 'start',
+        requestId: 'custom-1',
+        status: 200,
+        contentType: 'application/json',
+      });
+      expect(JSON.stringify(harness.externalPort.messages)).not.toContain('private-custom-key');
+      expect(JSON.stringify(harness.diagnostics)).not.toContain('private-custom-key');
+      expect(JSON.parse(harness.fetchRequest.mock.calls[0]?.[1].body ?? '{}')).toHaveProperty(
+        'store',
+        false,
+      );
+      harness.externalPort.send({ type: 'end-ack', requestId: 'custom-1' });
+      expect(harness.externalPort.listenerCount()).toBe(0);
+    },
+  );
+  it.each([
+    { endpoint: 'https://evil.example/v1/responses' },
+    { headers: { Authorization: 'page-key' } },
+    { type: 'compact' },
+    { wireProtocol: 'responses-lite' },
+    { body: JSON.stringify({ ...JSON.parse(body), store: true }) },
+  ])('rejects route/schema overrides before reading credentials: %j', async (extra) => {
+    const harness = setup();
+    harness.externalPort.send({ ...envelope, ...extra });
+    await vi.waitFor(() => expect(harness.externalPort.disconnect).toHaveBeenCalled());
+    expect(harness.authorize).not.toHaveBeenCalled();
+    expect(harness.fetchRequest).not.toHaveBeenCalled();
+  });
+  it('does not return reflected credentials in custom provider errors or diagnostics', async () => {
+    const harness = setup();
+    harness.fetchRequest.mockResolvedValue({
+      status: 401,
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(
+            new TextEncoder().encode(
+              JSON.stringify({
+                error: { code: 'private-custom-key', message: 'private-custom-key' },
+              }),
+            ),
+          );
+          controller.close();
+        },
+      }),
+    });
+    harness.externalPort.send(envelope);
+    await waitForMessage(harness.externalPort.messages, { type: 'end', requestId: 'custom-1' });
+    expect(JSON.stringify(harness.externalPort.messages)).not.toContain('private-custom-key');
+    expect(JSON.stringify(harness.diagnostics)).not.toContain('private-custom-key');
+    expect(harness.externalPort.messages).toContainEqual(
+      expect.objectContaining({ type: 'provider-error', status: 401, retryable: false }),
+    );
+    harness.externalPort.send({ type: 'end-ack', requestId: 'custom-1' });
+  });
+  it('enforces an overall deadline and disconnect cancellation without replay', async () => {
+    vi.useFakeTimers();
+    try {
+      for (const deadline of [true, false]) {
+        const harness = setup();
+        let signal: AbortSignal | undefined;
+        harness.fetchRequest.mockImplementation((_url, init) => {
+          signal = init.signal;
+          return new Promise((_resolve, reject) =>
+            init.signal.addEventListener('abort', () => reject(new Error('aborted'))),
+          );
+        });
+        harness.externalPort.send(envelope);
+        await vi.advanceTimersByTimeAsync(0);
+        expect(harness.fetchRequest).toHaveBeenCalledOnce();
+        if (deadline) await vi.advanceTimersByTimeAsync(300_000);
+        else harness.externalPort.disconnectExternally();
+        expect(signal?.aborted).toBe(true);
+        expect(harness.externalPort.listenerCount()).toBe(0);
+        if (deadline)
+          expect(harness.externalPort.messages).toContainEqual(
+            expect.objectContaining({ code: 'DEADLINE_EXCEEDED', requestId: 'custom-1' }),
+          );
+        expect(harness.fetchRequest).toHaveBeenCalledOnce();
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it('does not fetch after a connection/origin grant is denied', async () => {
+    const harness = setup();
+    harness.authorize.mockRejectedValue(new Error('private storage failure'));
+    harness.externalPort.send(envelope);
+    await vi.waitFor(() => expect(harness.externalPort.disconnect).toHaveBeenCalled());
+    expect(harness.fetchRequest).not.toHaveBeenCalled();
+    expect(harness.externalPort.messages).toContainEqual(
+      expect.objectContaining({ code: 'CONNECTION_UNAVAILABLE' }),
+    );
+    expect(JSON.stringify(harness.externalPort.messages)).not.toContain('private storage failure');
   });
 });

@@ -61,6 +61,18 @@
         gap: 1rem;
         margin-top: 1.5rem;
       }
+      #responses-connection-form label {
+        display: grid;
+        gap: 0.3rem;
+      }
+      #responses-connection-form select,
+      #responses-connection-form input,
+      #responses-connection-form textarea {
+        padding: 0.65rem;
+        font: inherit;
+        width: 100%;
+        box-sizing: border-box;
+      }
       button {
         justify-self: start;
         padding: 0.6rem 1rem;
@@ -101,6 +113,146 @@
           height: 5rem;
         }
       }
+      :root {
+        color-scheme: light dark;
+        --surface: #fff;
+        --canvas: #f5f7fb;
+        --ink: #17243a;
+        --muted: #59677b;
+        --line: #dbe2ec;
+        --accent: #315dd6;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        font-size: 15px;
+        max-width: 64rem;
+        background: var(--canvas);
+        color: var(--ink);
+        padding: 2.5rem 1.5rem;
+      }
+      .brand-logo {
+        width: 4rem;
+        height: 4rem;
+      }
+      h1 {
+        font-size: 1.65rem;
+        letter-spacing: -0.04em;
+      }
+      h2 {
+        font-size: 1.2rem;
+        margin: 0 0 0.5rem;
+      }
+      h3 {
+        font-size: 1rem;
+      }
+      p {
+        color: var(--muted);
+      }
+      .subtitle {
+        margin: 0.4rem 0 0;
+      }
+      .disclosure {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 1rem;
+        padding: 1.5rem;
+        margin-top: 1.25rem;
+      }
+      #chatgpt-account-fields .disclosure {
+        border: 0;
+        padding: 0;
+      }
+      .actions {
+        gap: 1rem;
+        margin-top: 1rem;
+      }
+      label {
+        font-size: 0.92rem;
+        font-weight: 550;
+      }
+      input,
+      select,
+      textarea {
+        background: var(--surface);
+        color: var(--ink);
+        border: 1px solid var(--line);
+        border-radius: 0.5rem;
+      }
+      button {
+        font: inherit;
+        font-size: 0.9rem;
+        font-weight: 550;
+        color: var(--ink);
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 0.5rem;
+        cursor: pointer;
+        min-height: 2.65rem;
+      }
+      button:hover:not(:disabled) {
+        border-color: var(--accent);
+        background: var(--canvas);
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+      #responses-save,
+      #browser-authorize,
+      #claude-account-login {
+        background: var(--accent);
+        color: white;
+        border-color: var(--accent);
+      }
+      :is(button, input, select, a):focus-visible {
+        outline: 3px solid #8daeff;
+        outline-offset: 3px;
+      }
+      .warning {
+        background: var(--canvas);
+        border-color: var(--line);
+        font-size: 0.9rem;
+      }
+      #claude-account-fields,
+      #google-subscription-fields {
+        background: var(--canvas);
+        padding: 1rem;
+        border-radius: 0.6rem;
+      }
+      [role='status'] {
+        font-size: 0.9rem;
+        overflow-wrap: anywhere;
+      }
+      .origin-list {
+        padding-left: 1.2rem;
+      }
+      [hidden] {
+        display: none !important;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --surface: #192230;
+          --canvas: #101722;
+          --ink: #edf2fa;
+          --muted: #afbdd0;
+          --line: #344257;
+          --accent: #426be0;
+        }
+      }
+      @media (max-width: 32rem) {
+        .disclosure {
+          padding: 1rem;
+        }
+        .brand-logo {
+          width: 3rem;
+          height: 3rem;
+        }
+        button {
+          max-width: 100%;
+        }
+      }
     </style>
   </head>
   <body>
@@ -109,61 +261,179 @@
         <div id="brand-animation" class="brand-logo" aria-hidden="true">
           <img class="brand-fallback" src="icons/icon128.png" alt="" width="128" height="128" />
         </div>
-        <h1>Loom.js Companion</h1>
+        <div>
+          <h1>Loom.js Companion</h1>
+          <p class="subtitle">Your models. One connection to your workspace.</p>
+        </div>
       </header>
-      <p class="warning">
-        This integration is unsupported and may stop working without notice. It is not enabled by
-        default. Refresh credentials remain inside this extension and are never exposed to Loom
-        pages.
-      </p>
-      <section class="disclosure" aria-labelledby="data-disclosure-title">
-        <h2 id="data-disclosure-title">Before you enable the bridge</h2>
+      <section class="disclosure" aria-labelledby="responses-title">
+        <h2 id="responses-title">Model connections</h2>
         <p>
-          When you explicitly sign in and run Loom, this extension normally stores a refresh
-          credential and account-routing ID only until Chrome exits. You may separately choose to
-          remember them in this Chrome profile. It sends authentication exchanges to
-          <code>auth.openai.com</code>. For a model run it returns a short-lived access token and
-          the stored routing ID to the authorized Loom workbench, which sends prompts and selected
-          project context directly to <code>chatgpt.com</code>. If the browser fails before an HTTP
-          response, the extension retries that request and temporarily processes its model content.
+          Connect an account or add an API server. Your connections appear together in the model
+          picker.
         </p>
-        <p>
-          Refresh and ID credentials are not exposed to the Loom website or browser runtimes. The
-          authorized workbench temporarily receives a short-lived access token. The extension does
-          not inspect unrelated pages, browsing history, or cookies, and it contains no developer
-          analytics. Read the
-          <a href="privacy.html" target="_blank">extension privacy disclosure</a>.
+        <form id="responses-connection-form" class="actions">
+          <label
+            >Provider
+            <select id="server-provider">
+              <optgroup label="API connections">
+                <option value="responses">OpenAI Responses / compatible (Ollama)</option>
+                <option value="anthropic">Anthropic Claude (API key)</option>
+
+                <option value="gemini">Google Gemini (API key)</option>
+              </optgroup>
+              <optgroup label="Account connections">
+                <option value="chatgpt">ChatGPT / Codex account</option>
+                <option value="claude-code">Claude account (local helper)</option>
+                <option id="google-subscription-option" value="gemini-subscription" disabled>
+                  Google account / Code Assist (experimental build required)
+                </option>
+              </optgroup>
+            </select>
+          </label>
+          <div id="chatgpt-account-fields" hidden>
+            <p class="warning">
+              This integration is unsupported and may stop working without notice. It is not enabled
+              by default. Refresh credentials remain inside this extension and are never exposed to
+              Loom pages.
+            </p>
+            <section class="disclosure" aria-labelledby="data-disclosure-title">
+              <h3 id="data-disclosure-title">ChatGPT account</h3>
+              <p>
+                When you explicitly sign in and run Loom, this extension normally stores a refresh
+                credential and account-routing ID only until Chrome exits. You may separately choose
+                to remember them in this Chrome profile. It sends authentication exchanges to
+                <code>auth.openai.com</code>. For a model run it returns a short-lived access token
+                and the stored routing ID to the authorized Loom workbench, which sends prompts and
+                selected project context directly to <code>chatgpt.com</code>. If the browser fails
+                before an HTTP response, the extension retries that request and temporarily
+                processes its model content.
+              </p>
+              <p>
+                Refresh and ID credentials are not exposed to the Loom website or browser runtimes.
+                The authorized workbench temporarily receives a short-lived access token. The
+                extension does not inspect unrelated pages, browsing history, or cookies, and it
+                contains no developer analytics. Read the
+                <a href="privacy.html" target="_blank">extension privacy disclosure</a>.
+              </p>
+            </section>
+            <div class="actions">
+              <label>
+                <input id="enabled" type="checkbox" />
+                I understand the data handling above and want to enable the experimental
+                ChatGPT/Codex authentication and model bridge.
+              </label>
+              <button id="remember" type="button" aria-pressed="false" disabled>
+                Remember sign-in on this Chrome profile
+              </button>
+              <p class="storage-note">
+                Private computers only. Persistent extension storage is not an encrypted credential
+                vault, and anyone using this unlocked Chrome profile may be able to use the
+                connected account.
+              </p>
+              <button id="browser-authorize" type="button" disabled>Sign in with ChatGPT</button>
+              <button id="device-authorize" type="button" disabled>Use device-code fallback</button>
+              <button id="logout" type="button" disabled>Sign out of ChatGPT</button>
+            </div>
+            <section id="challenge" hidden aria-live="polite">
+              <h2>Complete sign-in</h2>
+              <p>Open <a id="verification-url" target="_blank" rel="noreferrer"></a> and enter:</p>
+              <p id="user-code"></p>
+            </section>
+            <p id="status" role="status" aria-live="polite">The experiment is disabled.</p>
+            <p id="credential-status" role="status" aria-live="polite">Not authenticated.</p>
+          </div>
+          <div id="server-connection-fields" class="actions">
+            <div id="google-subscription-fields" hidden>
+              <p>
+                Experimental Google account access requires a Loom-owned OAuth client in this build.
+                Saving opens Google's consent flow and checks Code Assist access. Backend acceptance
+                of independent clients is unverified. No paid-credit overages are requested.
+              </p>
+              <label
+                >Google Cloud project ID (optional)
+                <input id="google-subscription-project" maxlength="200" autocomplete="off" />
+              </label>
+              <label
+                >Configured model IDs (comma-separated)
+                <input
+                  id="google-subscription-models"
+                  maxlength="6400"
+                  autocomplete="off"
+                  placeholder="Enter model IDs available to your account"
+                />
+              </label>
+              <p>
+                No subscription model-list endpoint is verified. These IDs join the model selector
+                after each fresh account-access check; availability is confirmed on generation.
+              </p>
+              <button id="google-subscription-logout" type="button">Sign out of Google</button>
+            </div>
+            <label
+              >Connection ID
+              <input
+                id="responses-connection-id"
+                value="local"
+                required
+                maxlength="64"
+                pattern="[a-zA-Z0-9_-]+"
+            /></label>
+            <label
+              >Connection name
+              <input id="responses-connection-label" value="Local model" required maxlength="128"
+            /></label>
+            <label
+              >API base URL
+              <input
+                id="responses-endpoint"
+                type="url"
+                value="http://localhost:11434/v1/"
+                required
+                autocomplete="off"
+                maxlength="2048"
+            /></label>
+            <label
+              ><span id="server-key-label">API key (optional)</span>
+              <input id="responses-api-key" type="password" autocomplete="off" maxlength="16384"
+            /></label>
+            <div id="claude-account-fields" hidden>
+              <p>
+                Run the Loom Claude helper on this computer, then enter its address and pairing
+                token above. Claude Code handles account login and credentials. The API-key
+                connection remains available separately. A recent official Claude Code installation
+                is required.
+              </p>
+              <p class="storage-note">
+                Start the helper from your Loom checkout:
+                <code>node scripts/claude-code-helper.mjs</code>. Paste the token it prints into the
+                field above.
+              </p>
+              <button id="claude-account-login" type="button">Sign in with Claude Code</button>
+              <button id="claude-account-logout" type="button">Sign out of Claude Code</button>
+              <p class="storage-note">
+                Sign-out also affects other applications using this local Claude Code account.
+              </p>
+            </div>
+            <p class="storage-note">
+              The endpoint and optional key are saved on this Chrome profile. Every website approved
+              in Companion can use all configured servers and models. Saving a blank key removes the
+              previous key. Chrome asks permission to connect to the server.
+            </p>
+            <button id="responses-save" type="submit">Save connection and allow server</button>
+          </div>
+        </form>
+        <p id="responses-status" role="status" aria-live="polite">
+          No requests are sent until an approved website runs a model.
         </p>
+        <ul id="responses-connections" class="origin-list"></ul>
       </section>
-      <div class="actions">
-        <label>
-          <input id="enabled" type="checkbox" />
-          I understand the data handling above and want to enable the experimental ChatGPT/Codex
-          authentication and model bridge.
-        </label>
-        <button id="remember" type="button" aria-pressed="false" disabled>
-          Remember sign-in on this Chrome profile
-        </button>
-        <p class="storage-note">
-          Private computers only. Persistent extension storage is not an encrypted credential vault,
-          and anyone using this unlocked Chrome profile may be able to use the connected account.
-        </p>
-        <button id="browser-authorize" type="button" disabled>Sign in with ChatGPT</button>
-        <button id="device-authorize" type="button" disabled>Use device-code fallback</button>
-        <button id="logout" type="button" disabled>Remove stored authorization</button>
-      </div>
-      <section id="challenge" hidden aria-live="polite">
-        <h2>Complete sign-in</h2>
-        <p>Open <a id="verification-url" target="_blank" rel="noreferrer"></a> and enter:</p>
-        <p id="user-code"></p>
-      </section>
-      <p id="credential-status" role="status" aria-live="polite">Not authenticated.</p>
       <section class="disclosure" aria-labelledby="website-access-title">
         <h2 id="website-access-title">Website access</h2>
         <p>
           A website must be permitted by the extension manifest and explicitly approved here before
-          it can request a short-lived access token. Approval applies to the exact origin, including
-          scheme and port, and remains until revoked or the experiment is disabled.
+          it can use Companion. An approved website can access every configured server and model.
+          Approval applies to the website origin and remains until revoked. Custom servers do not
+          require enabling the ChatGPT experiment.
         </p>
         <h3>Waiting for approval</h3>
         <ul id="pending-origins" class="origin-list">
@@ -174,7 +444,6 @@
           <li>No websites are approved.</li>
         </ul>
       </section>
-      <p id="status" role="status" aria-live="polite">The experiment is disabled.</p>
     </main>
     <script type="module" src="brand-animation.js"></script>
     <script type="module" src="options.js"></script>

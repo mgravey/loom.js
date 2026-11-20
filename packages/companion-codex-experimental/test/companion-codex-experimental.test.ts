@@ -9,6 +9,9 @@ import {
   LOOM_COMPANION_EXTENSION_ID,
   createCodexCompanion,
   createCodexExtensionTransport,
+  createExtensionResponsesTransport,
+  getExtensionResponsesConnection,
+  listExtensionResponsesModels,
   requestCodexOriginAccess,
   type CodexCompanionPort,
   type CodexCompanionRuntime,
@@ -287,6 +290,50 @@ describe('experimental Loom.js Companion client', () => {
     await expect(response).rejects.not.toThrow('secret provider detail');
   });
 
+  it('keeps remote failure stages and does not report an authentication rejection as disconnection', async () => {
+    const harness = createPortHarness();
+    const diagnostics: unknown[] = [];
+    const runtime = {
+      connect: () => harness.port,
+      sendMessage: vi.fn(),
+    } as unknown as CodexCompanionRuntime;
+    const transport = createCodexExtensionTransport({
+      runtime,
+      sessionId: 'session-1',
+      requestIdFactory: () => 'compact-auth',
+      diagnosticSink: (event) => diagnostics.push(event),
+    });
+    const pending = transport.send({
+      operation: 'compact',
+      wireProtocol: 'responses-lite',
+      body: '{}',
+    });
+    harness.message({
+      type: 'error',
+      requestId: 'compact-auth',
+      code: 'AUTHENTICATION_FAILED',
+      stage: 'authentication',
+      message: 'prompt encrypted_content private-token',
+    });
+    await expect(pending).rejects.toMatchObject({
+      code: 'EXTENSION_REQUEST_FAILED',
+      remoteCode: 'AUTHENTICATION_FAILED',
+      requestId: 'compact-auth',
+      operation: 'compact',
+      stage: 'authentication',
+    });
+    expect(diagnostics).toContainEqual(
+      expect.objectContaining({
+        event: 'model.connection.closed',
+        operation: 'compact',
+        code: 'FAILED',
+      }),
+    );
+    expect(JSON.stringify(diagnostics)).not.toContain('DISCONNECTED');
+    expect(JSON.stringify(diagnostics)).not.toContain('private-token');
+    expect(harness.listenerCount()).toBe(0);
+  });
+
   it('validates and exposes only bounded provider failure metadata', async () => {
     const harness = createPortHarness();
     const diagnostics: unknown[] = [];
@@ -550,4 +597,134 @@ describe('experimental Loom.js Companion client', () => {
       }),
     ).toThrow(CodexCompanionError);
   });
+});
+
+describe('custom Responses Companion transport', () => {
+  it('sends only a saved connection ID, preserves JSON content type and cleans up an early consumer', async () => {
+    const harness = createPortHarness();
+    const connect = vi.fn(() => harness.port);
+    const runtime = { connect, sendMessage: vi.fn() } as unknown as CodexCompanionRuntime;
+    const transport = createExtensionResponsesTransport({
+      runtime,
+      sessionId: 'session',
+      connectionId: 'local',
+      requestIdFactory: () => 'custom-1',
+    });
+    const pending = transport.send({ body: '{"model":"local","input":[]}' });
+    expect(connect).toHaveBeenCalledWith(expect.any(String), { name: 'loom/responses/v1' });
+    expect(harness.posted[0]).toMatchObject({
+      protocol: 'loom/responses',
+      connectionId: 'local',
+      type: 'generate',
+      wireProtocol: 'classic',
+    });
+    expect(harness.posted[0]).not.toHaveProperty('endpoint');
+    expect(harness.posted[0]).not.toHaveProperty('headers');
+    harness.message({
+      type: 'start',
+      requestId: 'custom-1',
+      status: 200,
+      contentType: 'application/json',
+    });
+    const response = await pending;
+    expect(response.contentType).toBe('application/json');
+    harness.message({ type: 'chunk', requestId: 'custom-1', chunk: '{}' });
+    for await (const chunk of response.body) {
+      expect(chunk).toBe('{}');
+      break;
+    }
+    expect(harness.disconnectSpy).toHaveBeenCalledOnce();
+    expect(harness.listenerCount()).toBe(0);
+  });
+  it('cancels a pending custom request without retrying or leaving listeners', async () => {
+    const harness = createPortHarness();
+    const cancellation = createTestCancellationSource();
+    const connect = vi.fn(() => harness.port);
+    const transport = createExtensionResponsesTransport({
+      runtime: { connect, sendMessage: vi.fn() } as unknown as CodexCompanionRuntime,
+      sessionId: 'session',
+      connectionId: 'local',
+    });
+    const pending = transport.send({
+      body: '{"model":"local","input":[]}',
+      signal: cancellation.signal,
+    });
+    cancellation.cancel('stop');
+    await expect(pending).rejects.toMatchObject({ code: 'CANCELLED' });
+    expect(connect).toHaveBeenCalledOnce();
+    expect(harness.listenerCount()).toBe(0);
+  });
+  it('returns only connection metadata, never keys or extra remote fields', async () => {
+    const runtime: CodexCompanionRuntime = {
+      connect: vi.fn(),
+      sendMessage(_id, message, _options, callback) {
+        expect(message).toEqual({
+          protocol: 'loom/responses-connections',
+          version: 1,
+          type: 'get',
+          connectionId: 'local',
+        });
+        callback({
+          ok: true,
+          connection: {
+            id: 'local',
+            label: 'Local',
+            endpoint: 'http://localhost:11434/v1/responses',
+            apiKey: 'must-not-escape',
+          },
+        });
+      },
+    };
+    await expect(
+      getExtensionResponsesConnection({ runtime, connectionId: 'local', sessionId: 'session' }),
+    ).resolves.toEqual({
+      id: 'local',
+      label: 'Local',
+      endpoint: 'http://localhost:11434/v1/responses',
+    });
+  });
+});
+
+it('merges model IDs with collision-free server prefixes while preserving raw slash/colon model names', async () => {
+  const runtime: CodexCompanionRuntime = {
+    connect: vi.fn(),
+    sendMessage(_id, message, _options, callback) {
+      expect(message).toEqual({
+        protocol: 'loom/responses-connections',
+        version: 1,
+        type: 'catalogue',
+      });
+      callback({
+        ok: true,
+        servers: [
+          {
+            id: 'a',
+            label: 'Same label',
+            models: ['org/model:latest', 'org/model:latest'],
+            unavailable: false,
+            apiKey: 'secret',
+          },
+          { id: 'b', label: 'Same label', models: ['org/model:latest'], unavailable: false },
+          { id: 'offline', label: 'Offline', models: [], unavailable: true },
+        ],
+      });
+    },
+  };
+  const result = await listExtensionResponsesModels({ runtime, sessionId: 'session' });
+  expect(result.models).toEqual([
+    {
+      id: 'responses:a/org/model:latest',
+      model: 'org/model:latest',
+      connectionId: 'a',
+      serverLabel: 'Same label',
+    },
+    {
+      id: 'responses:b/org/model:latest',
+      model: 'org/model:latest',
+      connectionId: 'b',
+      serverLabel: 'Same label',
+    },
+  ]);
+  expect(result.unavailableConnections).toEqual([{ id: 'offline', label: 'Offline' }]);
+  expect(JSON.stringify(result)).not.toContain('secret');
 });

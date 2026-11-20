@@ -79,9 +79,40 @@ after-effects-reference-animation/renders/
 # Local model catalogue captures may contain account-specific metadata.
 model-catalogue-dumps/
 
-# Private ChatGPT login diagnostics and organization support drafts.
+# Local pinned upstream Codex source used for compaction contract investigations.
+.codex-contract-evidence/
+
+# Private custom-server connection exports and local relay captures.
+responses-connection-dumps/
+
+# Private multi-server catalogue debug captures.
+merged-model-catalogue-dumps/
+
+# Local server availability probe captures
+server-availability-dumps/
+
+# Local setup debugging captures
+companion-setup-diagnostics/
+
+# Native provider fixture and diagnostic captures
+native-provider-dumps/
+
+# Google account prototype configuration and temporary evidence
+google-subscription-local.env
+subscription-auth-dumps/
+# Private diagnostics from manual ChatGPT login tests, including extension-free sign-in.
 openai-login-diagnostics/
+# Private browser-only sign-in captures, including callback/network diagnostics; never commit real tokens.
 chatgpt-browser-diagnostics/
+# Organization-specific support drafts and account/workspace identifiers.
 openai-support-private/
+
+# Local Claude helper diagnostics and pairing material
+.claude-helper/
+loom-claude-helper*.log
+
+# Local settings design previews
+output/playwright/
+
 # Local workbench visual review captures.
 workbench-design-previews/

@@ -10,3 +10,7 @@ export * from './credential-persistence.js';
 export * from './direct-auth.js';
 export * from './origin-access.js';
 export * from './model-transport.js';
+
+export * from './responses-connections.js';
+
+export * from './responses-models.js';

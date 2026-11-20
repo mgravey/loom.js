@@ -47,7 +47,8 @@ Use this in the Developer Dashboard **Single purpose** field:
 
 > Authenticate a user-initiated Loom coding session and provide its authorized workbench with a
 > short-lived credential for a direct-first model request, with an extension relay only when the
-> browser receives no HTTP response.
+> browser receives no HTTP response. Also connect approved websites to user-configured Responses
+> servers while keeping their API keys inside the extension.
 
 Every feature must remain subordinate to that purpose:
 
@@ -72,7 +73,7 @@ The name is neutral and does not suggest that Google or OpenAI publishes or endo
 
 ### Manifest summary (132-character maximum)
 
-`Authenticates Loom sessions and relays model requests only when direct browser access fails.`
+`Connects approved Loom websites to ChatGPT and custom Responses servers with extension-managed credentials.`
 
 ### Category
 
@@ -105,6 +106,11 @@ productivity/developer category shown by the current dashboard.
 > account-routing metadata, and short-lived provider authentication to OpenAI/ChatGPT only to
 > produce the response you request.
 >
+> You can also configure a custom HTTP(S) `/v1/responses` endpoint, including localhost, in
+> extension settings. Saving requests optional host access. Every website approved in Companion can
+> use all configured servers, and its optional API key is never returned to websites. Remove a
+> connection to delete its key; these connections are independent of ChatGPT sign-in.
+>
 > This is an experimental, independently developed integration. It is not affiliated with, endorsed
 > by, or supported by Google or OpenAI. Provider account eligibility, availability, and terms still
 > apply.
@@ -127,6 +133,18 @@ These answers must match the final code and public privacy policy exactly.
 | `https://chatgpt.com/backend-api/codex/*` | Required only for direct-first fallback. The extension contacts this path after the browser receives no HTTP response and streams the result back to the approved origin.                                                                                                                                                                                |
 | `externally_connectable` HTTPS routing    | Routes HTTPS connection requests to the extension's approval gate. Before approval, only a validated origin-access request is accepted; credential, status, logout, direct-auth, and model-relay operations require the separately stored exact-origin grant. The HTTP entries are restricted by the service worker to the fixed local development port. |
 | web-accessible `callback.html`            | The exact authentication callback transformation must reach the packaged callback page. No executable remote resource is loaded.                                                                                                                                                                                                                         |
+
+### Optional custom-server host permissions (Companion 0.4.0+)
+
+The manifest declares `http://*/*` and `https://*/*` as **optional** host permissions so a user can
+select their own Responses server. Companion 0.5.0 also discovers each saved server’s sibling
+`/v1/models` catalogue with its own key and merges approved model IDs in the website selector. No
+broad access is granted on install. Saving a profile in trusted options UI requests only that server
+host. One Companion-wide website-origin grant allows every configured server; revoking it blocks all
+servers. Cookies are omitted and redirects rejected. Websites cannot supply a URL or authentication
+headers. Custom API keys remain in trusted local extension storage and are deleted with their
+profile. Update the Dashboard permission and privacy disclosures to cover custom endpoints, keys and
+transient model traffic; see [custom connection setup](local-models.md).
 
 ### Remote code
 

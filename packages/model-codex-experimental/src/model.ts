@@ -31,6 +31,8 @@ import {
   validCodexRetryAfterMs,
 } from './provider-failure.js';
 
+import { compactWithBudget, retryDelay, transportFailure, waitForRetry } from './resilience.js';
+
 const DEFAULT_ORIGINATOR = 'loom_js_experimental';
 const MAXIMUM_COMPACTION_ITEMS = 2_000;
 const MAXIMUM_COMPACTION_RESPONSE_CHARACTERS = 4 * 1024 * 1024;
@@ -169,6 +171,12 @@ function validateOptions(options: CreateCodexExperimentalModelOptions): Validate
       'Experimental Codex model direct mode requires an injected fetch adapter.',
     );
   }
+  if (direct.compactEndpoint !== undefined && direct.compactEndpoint !== direct.endpoint) {
+    throw new CodexExperimentalModelError(
+      'INVALID_CONFIGURATION',
+      'Codex compaction must use the generation endpoint.',
+    );
+  }
   const accountId = direct.accountId;
   const getAccountId =
     typeof accountId === 'function'
@@ -179,10 +187,7 @@ function validateOptions(options: CreateCodexExperimentalModelOptions): Validate
   return Object.freeze({
     kind: 'direct',
     endpoint: requiredString(direct.endpoint, 'endpoint'),
-    compactEndpoint: requiredString(
-      direct.compactEndpoint ?? `${direct.endpoint.replace(/\/+$/u, '')}/compact`,
-      'compact endpoint',
-    ),
+    compactEndpoint: requiredString(direct.compactEndpoint ?? direct.endpoint, 'compact endpoint'),
     model,
     reasoningEffort,
     wireProtocol,
@@ -377,40 +382,10 @@ export function createCodexCompactionRequestBody(
   wireProtocol: CodexResponsesWireProtocol = 'classic',
   reasoningEffort: CodexReasoningEffort = 'medium',
 ): JsonObject {
-  const candidate: unknown = request;
-  if (
-    !isRecord(candidate) ||
-    typeof candidate.instructions !== 'string' ||
-    !Array.isArray(candidate.messages) ||
-    !Array.isArray(candidate.tools)
-  ) {
-    throw new CodexExperimentalModelError(
-      'INVALID_REQUEST',
-      'Experimental Codex model received an invalid compaction request.',
-    );
-  }
-  const aliases = operationAliases(request);
-  const tools = request.tools.map((tool) => ({
-    type: 'function',
-    name: providerOperation(aliases, tool.operation),
-    description: tool.description,
-    parameters: tool.inputSchema,
-    strict: false,
-  }));
+  const body = createCodexResponsesRequestBody(request, model, wireProtocol, reasoningEffort);
   return {
-    model,
-    input: [
-      ...validatedContextItems(request),
-      ...request.messages.flatMap((message) => encodeMessage(message, aliases)),
-    ],
-    instructions: request.instructions,
-    tools,
-    parallel_tool_calls: wireProtocol !== 'responses-lite',
-    reasoning:
-      wireProtocol === 'responses-lite'
-        ? { effort: reasoningEffort, context: 'all_turns' }
-        : { effort: reasoningEffort },
-    text: { verbosity: 'low' },
+    ...body,
+    input: [...(body.input as readonly JsonValue[]), { type: 'compaction_trigger' }],
   };
 }
 
@@ -459,15 +434,18 @@ async function sendRequest<Request>(
         Symbol.asyncIterator
       ] !== 'function'
     ) {
-      throw new Error('bad response');
+      throw new CodexExperimentalModelError('MALFORMED_RESPONSE', 'Invalid transport response.', {
+        retryable: false,
+      });
     }
     return response;
   } catch (error) {
     if (error instanceof CodexExperimentalModelError) throw error;
     signal?.throwIfCancelled();
-    throw new CodexExperimentalModelError(
-      'TRANSPORT_FAILED',
-      'Experimental Codex transport failed.',
+    throw transportFailure(
+      error,
+      (request as { operation?: 'generate' | 'compact' }).operation ?? 'generate',
+      'request',
     );
   }
 }
@@ -783,17 +761,46 @@ export async function* decodeCodexResponsesEvents(
   body: AsyncIterable<string>,
   context?: OperationContext,
   providerOperations: ReadonlyMap<string, string> = new Map(),
+  metadata: CodexProviderFailureDetails & { readonly status?: number } = {},
 ): AsyncIterable<CodexModelEvent> {
   try {
     yield* decodeEvents(body, context, providerOperations);
   } catch (error) {
-    if (error instanceof CodexExperimentalModelError) throw error;
     context?.signal?.throwIfCancelled();
-    throw new CodexExperimentalModelError(
-      'TRANSPORT_FAILED',
-      'Experimental Codex response stream failed.',
-    );
+    const underlying = transportFailure(error, 'generate', 'stream');
+    throw new CodexExperimentalModelError(underlying.code, underlying.message, {
+      ...copiedFailureDetails(underlying),
+      ...metadata,
+      operation: 'generate',
+      stage: 'stream',
+    });
   }
+}
+
+function safeRequestId(value: unknown): { readonly requestId?: string } {
+  const requestId = boundedCodexProviderString(value);
+  return requestId === undefined ? {} : { requestId };
+}
+
+function copiedFailureDetails(
+  error: CodexExperimentalModelError,
+): CodexProviderFailureDetails & { readonly status?: number } {
+  return Object.fromEntries(
+    Object.entries({
+      operation: error.operation,
+      requestId: error.requestId,
+      stage: error.stage,
+      remoteCode: error.remoteCode,
+      status: error.status,
+      providerCode: error.providerCode,
+      providerMessage: error.providerMessage,
+      incompleteReason: error.incompleteReason,
+      retryable: error.retryable,
+      retryAfterMs: error.retryAfterMs,
+      contextCompactionRequired: error.contextCompactionRequired,
+      cause: error.cause,
+    }).filter(([, value]) => value !== undefined),
+  );
 }
 
 function httpFailureDetails(
@@ -807,6 +814,9 @@ function httpFailureDetails(
   const retryAfterMs = validCodexRetryAfterMs(response.retryAfterMs);
   return {
     status: response.status,
+    ...safeRequestId(response.requestId),
+    ...(response.operation === undefined ? {} : { operation: response.operation }),
+    stage: 'provider',
     ...(providerCode === undefined ? {} : { providerCode }),
     ...(providerMessage === undefined ? {} : { providerMessage }),
     retryable: isRetryableProviderFailure(response.status, providerCode),
@@ -817,71 +827,97 @@ function httpFailureDetails(
 
 async function decodeCompactionResponse(
   body: AsyncIterable<string>,
+  requestBody: string,
   context?: OperationContext,
 ): Promise<CodexContextCompactionResult> {
-  let encoded = '';
-  for await (const chunk of body) {
+  let characters = 0;
+  async function* boundedBody() {
+    for await (const chunk of body) {
+      context?.signal?.throwIfCancelled();
+      if (
+        typeof chunk !== 'string' ||
+        (characters += chunk.length) > MAXIMUM_COMPACTION_RESPONSE_CHARACTERS
+      ) {
+        throw new CodexExperimentalModelError(
+          'MALFORMED_RESPONSE',
+          'Invalid or oversized compaction stream.',
+        );
+      }
+      yield chunk;
+    }
+  }
+  const summaries: JsonObject[] = [];
+  let completed = false;
+  for await (const message of parseCodexResponsesSse(boundedBody())) {
     context?.signal?.throwIfCancelled();
-    if (typeof chunk !== 'string') {
-      throw new CodexExperimentalModelError(
-        'MALFORMED_RESPONSE',
-        'Experimental Codex compaction returned a non-text body chunk.',
-      );
+    const event = parseProviderEvent(message);
+    if (event === undefined) continue;
+    const type = eventType(event, message);
+    if (type === 'error' || type === 'response.failed' || type === 'response.incomplete') {
+      throw streamedProviderFailure(type, event);
     }
-    encoded += chunk;
-    if (encoded.length > MAXIMUM_COMPACTION_RESPONSE_CHARACTERS) {
-      throw new CodexExperimentalModelError(
-        'MALFORMED_RESPONSE',
-        'Experimental Codex compaction response exceeded the 4 MiB limit.',
-      );
+    if (
+      event.type === 'response.output_item.done' &&
+      isRecord(event.item) &&
+      (event.item.type === 'compaction' || event.item.type === 'compaction_summary')
+    ) {
+      if (
+        typeof event.item.encrypted_content !== 'string' ||
+        event.item.encrypted_content.length === 0
+      ) {
+        throw new CodexExperimentalModelError(
+          'MALFORMED_RESPONSE',
+          'Compaction output has no encrypted content.',
+        );
+      }
+      summaries.push(continuationItem(event.item));
+    }
+    if (type === 'response.completed') {
+      if (
+        !isRecord(event.response) ||
+        typeof event.response.id !== 'string' ||
+        event.response.id.length === 0 ||
+        event.response.status !== 'completed'
+      ) {
+        throw new CodexExperimentalModelError(
+          'MALFORMED_RESPONSE',
+          'Invalid compaction completion.',
+        );
+      }
+      completed = true;
     }
   }
-  let value: unknown;
-  try {
-    value = JSON.parse(encoded);
-  } catch {
+  context?.signal?.throwIfCancelled();
+  if (!completed || summaries.length !== 1) {
     throw new CodexExperimentalModelError(
       'MALFORMED_RESPONSE',
-      'Experimental Codex compaction returned invalid JSON.',
+      'Compaction requires exactly one summary and a completed response.',
     );
   }
-  if (
-    !isRecord(value) ||
-    !Array.isArray(value.output) ||
-    value.output.length === 0 ||
-    value.output.length > MAXIMUM_COMPACTION_ITEMS
-  ) {
+  const input = (JSON.parse(requestBody) as { input: JsonObject[] }).input;
+  // The upstream v2 checkpoint retains user/client developer messages plus the opaque summary.
+  // Loom retains all such messages without upstream's lossy token/image trimming.
+  const retained = input.filter(
+    (item, index) =>
+      item.type === 'message' &&
+      (item.role === 'user' || item.role === 'developer') &&
+      !(index === 1 && input[0]?.type === 'additional_tools'),
+  );
+  const items = immutableJson([...retained, ...summaries]) as readonly JsonObject[];
+  if (items.length > MAXIMUM_COMPACTION_ITEMS) {
     throw new CodexExperimentalModelError(
       'MALFORMED_RESPONSE',
-      'Experimental Codex compaction returned an invalid item list.',
+      'Compaction checkpoint exceeds the item limit.',
     );
   }
-  const items = value.output.map((candidate) => {
-    let item: JsonValue;
-    try {
-      item = immutableJson(candidate);
-    } catch {
-      throw new CodexExperimentalModelError(
-        'MALFORMED_RESPONSE',
-        'Experimental Codex compaction returned a non-JSON item.',
-      );
-    }
-    if (!isRecord(item)) {
-      throw new CodexExperimentalModelError(
-        'MALFORMED_RESPONSE',
-        'Experimental Codex compaction items must be objects.',
-      );
-    }
-    return item;
-  });
-  return Object.freeze({ items: Object.freeze(items) });
+  return Object.freeze({ items });
 }
 
 export function createCodexExperimentalModel(
   options: CreateCodexExperimentalModelOptions,
 ): CodexExperimentalModel {
   const validated = validateOptions(options);
-  const compact = async (
+  const compactOnce = async (
     request: CodexModelRequest,
     context?: OperationContext,
   ): Promise<CodexContextCompactionResult> => {
@@ -912,7 +948,7 @@ export function createCodexExperimentalModel(
         ...validated.headers,
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
-        Accept: 'application/json',
+        Accept: 'text/event-stream',
         originator: validated.originator,
       };
       if (validated.wireProtocol === 'responses-lite') {
@@ -931,14 +967,97 @@ export function createCodexExperimentalModel(
     }
     if (!Number.isInteger(response.status) || response.status < 200 || response.status >= 300) {
       throw new CodexExperimentalModelError(
-        'HTTP_ERROR',
-        'Experimental Codex compaction request was rejected.',
-        httpFailureDetails(response),
+        response.status === 404 || response.status === 405 || response.status === 501
+          ? 'COMPACTION_UNAVAILABLE'
+          : response.status === 401 || response.status === 403
+            ? 'AUTHENTICATION_FAILED'
+            : 'HTTP_ERROR',
+        'Codex compaction is unavailable; the original context is intact.',
+        {
+          ...httpFailureDetails(response),
+          operation: 'compact',
+          retryable:
+            ![404, 405, 501].includes(response.status) &&
+            isRetryableProviderFailure(response.status, response.providerCode),
+        },
       );
     }
-    return decodeCompactionResponse(response.body, context);
+    try {
+      return await decodeCompactionResponse(response.body, body, context);
+    } catch (caught) {
+      context?.signal?.throwIfCancelled();
+      const error = transportFailure(caught, 'compact', 'stream');
+      throw new CodexExperimentalModelError(error.code, error.message, {
+        ...copiedFailureDetails(error),
+        operation: 'compact',
+        stage: 'stream',
+        status: response.status,
+        ...safeRequestId(response.requestId),
+        retryable: false,
+      });
+    }
   };
+  const timeoutMs = options.compactionTimeoutMs ?? 60_000;
+  if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 300_000) {
+    throw new CodexExperimentalModelError('INVALID_CONFIGURATION', 'Invalid compaction timeout.');
+  }
+  // Per model/transport instance (and endpoint), further scoped by caller session. Bounded memory.
+  const unavailable = new Map<string, { until: number; error: CodexExperimentalModelError }>();
+  const compact = (
+    request: CodexModelRequest,
+    context?: OperationContext,
+  ): Promise<CodexContextCompactionResult> =>
+    compactWithBudget(
+      async (activeContext) => {
+        const key = context?.sessionId ?? 'default';
+        const cached = unavailable.get(key);
+        if (cached !== undefined && cached.until > Date.now()) throw cached.error;
+        unavailable.delete(key);
+        for (let attempt = 0; ; attempt += 1) {
+          activeContext.signal?.throwIfCancelled();
+          try {
+            return await compactOnce(request, activeContext);
+          } catch (caught) {
+            activeContext.signal?.throwIfCancelled();
+            const underlying = transportFailure(caught, 'compact', 'stream');
+            const error = new CodexExperimentalModelError(underlying.code, underlying.message, {
+              ...copiedFailureDetails(underlying),
+              operation: 'compact',
+              stage: underlying.stage ?? 'stream',
+            });
+            if (error.code === 'COMPACTION_UNAVAILABLE') {
+              const oldest = unavailable.keys().next().value;
+              if (unavailable.size >= 128 && oldest !== undefined) unavailable.delete(oldest);
+              unavailable.set(key, { until: Date.now() + 300_000, error });
+            }
+            // Only failures before an accepted stream are replayed. No generation or tool replay.
+            if (
+              attempt >= 2 ||
+              !error.retryable ||
+              !(error.code === 'HTTP_ERROR' || error.remoteCode === 'PROVIDER_FETCH_FAILED')
+            )
+              throw error;
+            await waitForRetry(retryDelay(error, attempt), activeContext);
+          }
+        }
+      },
+      context,
+      timeoutMs,
+    );
   return Object.freeze({
+    resetCompactionAvailability() {
+      unavailable.clear();
+    },
+    requestCharacters(request: CodexModelRequest) {
+      return JSON.stringify(
+        createCodexResponsesRequestBody(
+          request,
+          validated.model,
+          validated.wireProtocol,
+          validated.reasoningEffort,
+        ),
+      ).length;
+    },
     compact,
     async *generate(request: CodexModelRequest, context?: OperationContext) {
       context?.signal?.throwIfCancelled();
@@ -970,7 +1089,11 @@ export function createCodexExperimentalModel(
             httpFailureDetails(response),
           );
         }
-        yield* decodeCodexResponsesEvents(response.body, context, aliases.byProviderName);
+        yield* decodeCodexResponsesEvents(response.body, context, aliases.byProviderName, {
+          ...safeRequestId(response.requestId),
+          status: response.status,
+          retryable: false,
+        });
         return;
       }
       const token = await accessToken(validated);
@@ -1008,7 +1131,11 @@ export function createCodexExperimentalModel(
           httpFailureDetails(response),
         );
       }
-      yield* decodeCodexResponsesEvents(response.body, context, aliases.byProviderName);
+      yield* decodeCodexResponsesEvents(response.body, context, aliases.byProviderName, {
+        ...safeRequestId(response.requestId),
+        status: response.status,
+        retryable: false,
+      });
     },
   });
 }

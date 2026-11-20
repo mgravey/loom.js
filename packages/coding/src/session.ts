@@ -1,5 +1,6 @@
 import {
   CODEX_AGENT_FACTORY,
+  CodexAgentError,
   DEFAULT_CODEX_INSTRUCTIONS,
   type CodexAgentConfiguration,
   type CodexAgentEvent,
@@ -86,6 +87,9 @@ export interface CreateCodingSessionOptions {
   /** Opt in to provider-native compaction before the projected context reaches this size. */
   readonly contextCompaction?: {
     readonly maximumCharacters: number;
+    /** Explicit host-confirmed budget for uncompressed model requests. No fallback without it.
+     * Include model token/output reserves when choosing this conservative character budget. */
+    readonly fallbackMaximumCharacters?: number;
   };
   readonly runtimes?: Readonly<Record<string, ExecutionRuntime<JsonValue, unknown>>>;
 }
@@ -179,6 +183,13 @@ function contextCheckpoint(
     if (typeof normalized !== 'object' || normalized === null || Array.isArray(normalized)) {
       throw new TypeError('Coding context checkpoint items must be JSON objects.');
     }
+    if (
+      typeof (normalized as JsonObject).type !== 'string' ||
+      (normalized as JsonObject).type === '' ||
+      (normalized as JsonObject).type === 'compaction_trigger'
+    ) {
+      throw new TypeError('Coding checkpoint item requires a type.');
+    }
     return normalized as JsonObject;
   });
   return Object.freeze({
@@ -247,6 +258,13 @@ export function createCodingSession(options: CreateCodingSessionOptions): Coding
   let coveredTranscriptEntries = checkpoint?.coveredTranscriptEntries ?? 0;
   let contextItems = checkpoint?.items ?? Object.freeze([]);
   const compactionThreshold = maximumContextCharacters(options.contextCompaction);
+  const fallbackMaximum = options.contextCompaction?.fallbackMaximumCharacters;
+  if (
+    fallbackMaximum !== undefined &&
+    (!Number.isInteger(fallbackMaximum) || fallbackMaximum < 1 || fallbackMaximum > 4 * 1024 * 1024)
+  ) {
+    throw new TypeError('Invalid compaction fallback context budget.');
+  }
   const compactor = compactableModel(options.model);
   if (compactionThreshold !== undefined && compactor === undefined) {
     throw new TypeError('Coding context compaction requires a model with compact().');
@@ -254,8 +272,33 @@ export function createCodingSession(options: CreateCodingSessionOptions): Coding
   const runtimes = Object.freeze({ ...(options.runtimes ?? {}) });
   nextCodingSession += 1;
   const id = options.id ?? sessionId(`coding-${String(nextCodingSession)}`);
+  let fallbackActive = false;
+  const measuredModel = options.model as CodexModel & {
+    requestCharacters?: (request: CodexModelRequest) => number;
+  };
+  const guardedModel: CodexModel = {
+    ...(compactor === undefined ? {} : { compact: compactor.compact.bind(compactor) }),
+    async *generate(request, context) {
+      if (fallbackActive) {
+        const size = measuredModel.requestCharacters?.(request);
+        if (
+          size === undefined ||
+          fallbackMaximum === undefined ||
+          size >= fallbackMaximum ||
+          size >= 4 * 1024 * 1024 - 4096
+        ) {
+          throw new CodexAgentError(
+            'COMPACTION_UNAVAILABLE',
+            'Compaction unavailable/context limit: uncompressed generation cannot fit the verified budget.',
+            { contextCompactionRequired: true },
+          );
+        }
+      }
+      yield* options.model.generate(request, context);
+    },
+  };
   const agent = CODEX_AGENT_FACTORY.create({
-    model: options.model,
+    model: guardedModel,
     tools: options.tools,
     configuration: configuration(options.configuration),
   }) as CodexAgent;
@@ -283,6 +326,7 @@ export function createCodingSession(options: CreateCodingSessionOptions): Coding
     active = cancellation;
     setState('running');
     let response = '';
+    fallbackActive = false;
     try {
       const pendingEntries = entries.slice(coveredTranscriptEntries);
       const inputCharacters = encodedCharacters({
@@ -296,37 +340,83 @@ export function createCodingSession(options: CreateCodingSessionOptions): Coding
         inputCharacters >= compactionThreshold &&
         (contextItems.length > 0 || pendingEntries.length > 0)
       ) {
-        const result = await compactor.compact(
-          {
+        try {
+          const result = await compactor.compact(
+            {
+              instructions: options.configuration?.instructions ?? DEFAULT_CODEX_INSTRUCTIONS,
+              ...(contextItems.length === 0 ? {} : { contextItems }),
+              messages: transcriptMessages(pendingEntries),
+              tools: Object.freeze([]),
+            },
+            { sessionId: id, signal: cancellation.signal },
+          );
+          cancellation.signal.throwIfCancelled();
+          const nextCheckpoint = contextCheckpoint(
+            {
+              items: result.items,
+              coveredTranscriptEntries: entries.length,
+            },
+            entries.length,
+          );
+          if (nextCheckpoint === undefined) {
+            throw new TypeError('Coding context compactor returned no checkpoint.');
+          }
+          checkpoint = nextCheckpoint;
+          contextItems = checkpoint.items;
+          coveredTranscriptEntries = checkpoint.coveredTranscriptEntries;
+          emit(
+            Object.freeze({
+              type: 'context-compacted',
+              checkpoint,
+              inputCharacters,
+              outputCharacters: encodedCharacters(contextItems),
+            }),
+          );
+        } catch (error) {
+          cancellation.signal.throwIfCancelled();
+          const code =
+            typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined;
+          const eligible = [
+            'COMPACTION_UNAVAILABLE',
+            'HTTP_ERROR',
+            'PROVIDER_ERROR',
+            'MALFORMED_RESPONSE',
+            'DEADLINE_EXCEEDED',
+          ].includes(String(code));
+          // The caller's budget covers context. Actual wire/transport limits are enforced by the model/relay.
+          // Include instructions/tools and the real contextual prompt, not only transcript text.
+          const projected = encodedCharacters({
             instructions: options.configuration?.instructions ?? DEFAULT_CODEX_INSTRUCTIONS,
-            ...(contextItems.length === 0 ? {} : { contextItems }),
-            messages: transcriptMessages(pendingEntries),
-            tools: Object.freeze([]),
-          },
-          { sessionId: id, signal: cancellation.signal },
-        );
-        cancellation.signal.throwIfCancelled();
-        const nextCheckpoint = contextCheckpoint(
-          {
-            items: result.items,
-            coveredTranscriptEntries: entries.length,
-          },
-          entries.length,
-        );
-        if (nextCheckpoint === undefined) {
-          throw new TypeError('Coding context compactor returned no checkpoint.');
+            contextItems,
+            messages: [
+              {
+                role: 'user',
+                content: contextualPrompt(entries.slice(coveredTranscriptEntries), prompt),
+              },
+            ],
+            tools: options.tools,
+          });
+          if (!eligible) throw error;
+          if (
+            (typeof error === 'object' &&
+              error !== null &&
+              'contextCompactionRequired' in error &&
+              error.contextCompactionRequired === true) ||
+            fallbackMaximum === undefined ||
+            measuredModel.requestCharacters === undefined ||
+            projected >= fallbackMaximum
+          ) {
+            throw new CodexAgentError(
+              'COMPACTION_UNAVAILABLE',
+              'Compaction unavailable/context limit: the original transcript and checkpoint are intact. Retry after restoring compaction or increasing a verified context budget.',
+              {
+                cause: error,
+                contextCompactionRequired: true,
+              },
+            );
+          }
+          fallbackActive = true;
         }
-        checkpoint = nextCheckpoint;
-        contextItems = checkpoint.items;
-        coveredTranscriptEntries = checkpoint.coveredTranscriptEntries;
-        emit(
-          Object.freeze({
-            type: 'context-compacted',
-            checkpoint,
-            inputCharacters,
-            outputCharacters: encodedCharacters(contextItems),
-          }),
-        );
       }
       const requestPrompt = contextualPrompt(entries.slice(coveredTranscriptEntries), prompt);
       const userEntry = Object.freeze({ role: 'user' as const, content: prompt });

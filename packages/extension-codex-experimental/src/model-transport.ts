@@ -1,3 +1,4 @@
+import { GoogleSubscriptionError } from './google-subscription.js';
 import {
   createOriginAuthorizer,
   ExtensionBrokerError,
@@ -8,24 +9,59 @@ import type { CodexAccountRoutingStore } from './account-routing.js';
 import type { CodexExternalPort, CodexModelFetch } from './chrome-contracts.js';
 import { DEVELOPMENT_ALLOWED_ORIGINS } from './composition.js';
 
+import { nativeRequest, nativeResponse, serverHeaders } from './server-provider.js';
+import type { ServerProvider, ResponsesConnectionStore } from './responses-connections.js';
+
+export const CUSTOM_RESPONSES_PORT_NAME = 'loom/responses/v1';
+export const CUSTOM_RESPONSES_PROTOCOL = 'loom/responses';
+
 export const CODEX_MODEL_PORT_NAME = 'loom/codex-model-experimental/v1' as const;
 export const CODEX_MODEL_TRANSPORT_PROTOCOL = 'loom/codex-model-experimental' as const;
 export const CODEX_MODEL_TRANSPORT_VERSION = 1 as const;
 export const CODEX_MODEL_END_ACK_TIMEOUT_MS = 1_000 as const;
 export const CODEX_RESPONSES_ENDPOINT = 'https://chatgpt.com/backend-api/codex/responses' as const;
-export const CODEX_RESPONSES_COMPACT_ENDPOINT =
-  'https://chatgpt.com/backend-api/codex/responses/compact' as const;
+export const CODEX_RESPONSES_COMPACT_ENDPOINT = CODEX_RESPONSES_ENDPOINT;
 
 const MAXIMUM_REQUEST_BODY_LENGTH = 4 * 1024 * 1024;
 const MAXIMUM_PROVIDER_ERROR_BODY_LENGTH = 16 * 1024;
 const MAXIMUM_PROVIDER_MESSAGE_LENGTH = 512;
 const MAXIMUM_RETRY_AFTER_MS = 24 * 60 * 60 * 1_000;
 const GENERIC_PROVIDER_MESSAGE = 'The provider rejected the request.';
+// Unknown custom-server error codes may themselves contain a reflected credential.
+const CUSTOM_PROVIDER_CODES = new Set([
+  'invalid_api_key',
+  'authentication_error',
+  'unauthorized',
+  'permission_denied',
+  'rate_limit_exceeded',
+  'too_many_requests',
+  'insufficient_quota',
+  'model_not_found',
+  'context_length_exceeded',
+  'context_window_exceeded',
+  'invalid_request_error',
+  'server_error',
+  'overloaded',
+  'service_unavailable',
+  'unsupported_operation',
+  'rate_limit_error',
+  'overloaded_error',
+  'api_error',
+  'not_found_error',
+  'INVALID_ARGUMENT',
+  'UNAUTHENTICATED',
+  'PERMISSION_DENIED',
+  'RESOURCE_EXHAUSTED',
+  'NOT_FOUND',
+  'INTERNAL',
+  'UNAVAILABLE',
+]);
 const NON_RETRYABLE_PROVIDER_CODE =
   /(account|auth|billing|credit|forbidden|insufficient_quota|invalid|payment|permission|policy|quota_exceeded|restricted|unauthorized)/u;
 
 interface CodexPortRequest {
-  readonly protocol: typeof CODEX_MODEL_TRANSPORT_PROTOCOL;
+  readonly protocol: typeof CODEX_MODEL_TRANSPORT_PROTOCOL | typeof CUSTOM_RESPONSES_PROTOCOL;
+  readonly connectionId?: string;
   readonly version: typeof CODEX_MODEL_TRANSPORT_VERSION;
   readonly type: 'generate' | 'compact';
   readonly requestId: string;
@@ -37,6 +73,10 @@ interface CodexPortRequest {
 }
 
 export interface CreateCodexModelPortListenerOptions {
+  readonly customResponses?: {
+    readonly store: ResponsesConnectionStore;
+    readonly authorizer: OriginAuthorizer;
+  };
   readonly providerId: string;
   readonly tokenService: ExtensionTokenService;
   readonly accountRoutingStore: CodexAccountRoutingStore;
@@ -49,6 +89,8 @@ export type CodexModelDiagnosticStage =
   'port' | 'authorization' | 'validation' | 'routing' | 'authentication' | 'provider' | 'stream';
 
 export type CodexModelTransportFailureCode =
+  | 'DEADLINE_EXCEEDED'
+  | 'CONNECTION_UNAVAILABLE'
   | 'CANCELLED'
   | 'UNAUTHORIZED_ORIGIN'
   | 'INVALID_REQUEST'
@@ -61,6 +103,7 @@ export interface CodexModelDiagnosticEvent {
   readonly event: string;
   readonly stage: CodexModelDiagnosticStage;
   readonly requestId?: string;
+  readonly operation?: 'generate' | 'compact';
   readonly code?: CodexModelTransportFailureCode;
   readonly brokerCode?: string;
   readonly status?: number;
@@ -236,7 +279,10 @@ async function readProviderErrorMetadata(
           ? envelope
           : undefined;
     if (error === undefined) return fallback;
-    const providerCode = providerIdentifier(error.code);
+    const providerCode =
+      providerIdentifier(error.code) ??
+      providerIdentifier(error.type) ??
+      providerIdentifier(error.status);
     return Object.freeze({
       ...(providerCode === undefined ? {} : { providerCode }),
       providerMessage: sanitizedProviderMessage(error.message),
@@ -339,57 +385,45 @@ function normalizedRequestBody(
 function normalizedCompactionBody(
   value: string,
   sessionId: string,
+  threadId: string,
   wireProtocol: CodexPortRequest['wireProtocol'],
 ): string {
-  let body: unknown;
-  try {
-    body = JSON.parse(value);
-  } catch {
-    throw new Error('Invalid experimental compaction request.');
+  const normalized = normalizedRequestBody(value, sessionId, threadId, wireProtocol);
+  const body = JSON.parse(normalized) as { input: unknown[] };
+  const trigger = body.input.at(-1);
+  if (
+    !isRecord(trigger) ||
+    trigger.type !== 'compaction_trigger' ||
+    Object.keys(trigger).length !== 1 ||
+    body.input.slice(0, -1).some((item) => isRecord(item) && item.type === 'compaction_trigger')
+  ) {
+    throw new Error('Invalid compaction trigger.');
   }
+  return normalized;
+}
+
+function normalizedCustomBody(source: string): string {
+  const body: unknown = JSON.parse(source);
   if (
     !isRecord(body) ||
     Object.keys(body).some(
       (key) =>
-        ![
-          'model',
-          'input',
-          'instructions',
-          'tools',
-          'parallel_tool_calls',
-          'reasoning',
-          'text',
-        ].includes(key),
+        !['model', 'instructions', 'input', 'tools', 'stream', 'reasoning', 'store'].includes(key),
     ) ||
     !boundedString(body.model, 256) ||
-    !Array.isArray(body.input) ||
     typeof body.instructions !== 'string' ||
+    !Array.isArray(body.input) ||
     !Array.isArray(body.tools) ||
-    typeof body.parallel_tool_calls !== 'boolean' ||
-    !isRecord(body.reasoning) ||
-    body.reasoning.effort !== 'medium' ||
-    !isRecord(body.text) ||
-    Object.keys(body.text).some((key) => key !== 'verbosity') ||
-    body.text.verbosity !== 'low'
-  ) {
-    throw new Error('Invalid experimental compaction request.');
-  }
-  if (
-    wireProtocol === 'classic'
-      ? !body.parallel_tool_calls || Object.keys(body.reasoning).some((key) => key !== 'effort')
-      : body.parallel_tool_calls ||
-        Object.keys(body.reasoning).some((key) => key !== 'effort' && key !== 'context') ||
-        body.reasoning.context !== 'all_turns'
-  ) {
-    throw new Error('Invalid experimental compaction request.');
-  }
-  return JSON.stringify({
-    ...body,
-    prompt_cache_key: sessionId,
-  });
+    typeof body.stream !== 'boolean' ||
+    (body.store !== undefined && body.store !== false)
+  )
+    throw new Error('Invalid Responses request.');
+  if (body.tools.some((tool) => !isRecord(tool) || tool.type !== 'function'))
+    throw new Error('Only function tools are supported.');
+  return JSON.stringify({ ...body, store: false });
 }
 
-function parseModelRequest(value: unknown): CodexPortRequest {
+function parseModelRequest(value: unknown, custom = false): CodexPortRequest {
   if (
     !isRecord(value) ||
     Object.keys(value).some(
@@ -403,15 +437,21 @@ function parseModelRequest(value: unknown): CodexPortRequest {
           'threadId',
           'body',
           'wireProtocol',
+          ...(custom ? ['connectionId'] : []),
         ].includes(key),
     )
   ) {
     throw new Error('Invalid experimental model request.');
   }
   if (
-    value.protocol !== CODEX_MODEL_TRANSPORT_PROTOCOL ||
+    value.protocol !== (custom ? CUSTOM_RESPONSES_PROTOCOL : CODEX_MODEL_TRANSPORT_PROTOCOL) ||
     value.version !== CODEX_MODEL_TRANSPORT_VERSION ||
-    (value.type !== 'generate' && value.type !== 'compact') ||
+    (custom
+      ? value.type !== 'generate' ||
+        typeof value.connectionId !== 'string' ||
+        !/^[a-zA-Z0-9_-]{1,64}$/u.test(value.connectionId) ||
+        value.wireProtocol !== 'classic'
+      : value.type !== 'generate' && value.type !== 'compact') ||
     !headerIdentifier(value.requestId) ||
     !headerIdentifier(value.sessionId) ||
     !headerIdentifier(value.threadId) ||
@@ -420,18 +460,22 @@ function parseModelRequest(value: unknown): CodexPortRequest {
   ) {
     throw new Error('Invalid experimental model request.');
   }
-  const body =
-    value.type === 'compact'
-      ? normalizedCompactionBody(value.body, value.sessionId, value.wireProtocol)
+  const body = custom
+    ? normalizedCustomBody(value.body)
+    : value.type === 'compact'
+      ? normalizedCompactionBody(value.body, value.sessionId, value.threadId, value.wireProtocol)
       : normalizedRequestBody(value.body, value.sessionId, value.threadId, value.wireProtocol);
+  if (body.length > MAXIMUM_REQUEST_BODY_LENGTH)
+    throw new Error('Normalized model request exceeds the limit.');
   const parsedBody: unknown = JSON.parse(body);
   if (!isRecord(parsedBody) || typeof parsedBody.model !== 'string') {
     throw new Error('Invalid experimental model request.');
   }
   return Object.freeze({
-    protocol: CODEX_MODEL_TRANSPORT_PROTOCOL,
+    protocol: custom ? CUSTOM_RESPONSES_PROTOCOL : CODEX_MODEL_TRANSPORT_PROTOCOL,
+    ...(custom ? { connectionId: value.connectionId as string } : {}),
     version: CODEX_MODEL_TRANSPORT_VERSION,
-    type: value.type,
+    type: value.type as CodexPortRequest['type'],
     requestId: value.requestId,
     sessionId: value.sessionId,
     threadId: value.threadId,
@@ -481,16 +525,39 @@ export function createCodexModelPortListener(
 ): (port: CodexExternalPort) => void {
   const authorizer = options.authorizer ?? createOriginAuthorizer(DEVELOPMENT_ALLOWED_ORIGINS);
   return (port) => {
-    if (port.name !== CODEX_MODEL_PORT_NAME) return;
+    const custom =
+      port.name === CUSTOM_RESPONSES_PORT_NAME && options.customResponses !== undefined;
+    if (port.name !== CODEX_MODEL_PORT_NAME && !custom) return;
     report(options.diagnosticSink, { event: 'port.connected', stage: 'port' });
     const abortController = new AbortController();
     let state: 'accepting' | 'running' | 'awaiting-end-ack' | 'closed' = 'accepting';
     let activeRequestId: string | undefined;
+    let activeOperation: 'generate' | 'compact' | undefined;
     let endAckTimer: ReturnType<typeof setTimeout> | undefined;
+    const deadlineTimer = custom
+      ? setTimeout(() => {
+          report(options.diagnosticSink, {
+            event: 'request.deadline',
+            stage: 'provider',
+            ...(activeRequestId === undefined ? {} : { requestId: activeRequestId }),
+            operation: 'generate',
+            code: 'DEADLINE_EXCEEDED',
+            retryable: false,
+          });
+          post(port, {
+            type: 'error',
+            requestId: activeRequestId ?? 'invalid-request',
+            code: 'DEADLINE_EXCEEDED',
+            stage: 'provider',
+          });
+          cleanup(true, true);
+        }, 300_000)
+      : undefined;
 
     const cleanup = (abort: boolean, disconnect: boolean): void => {
       if (state === 'closed') return;
       state = 'closed';
+      clearTimeout(deadlineTimer);
       if (endAckTimer !== undefined) {
         clearTimeout(endAckTimer);
         endAckTimer = undefined;
@@ -522,7 +589,13 @@ export function createCodexModelPortListener(
 
     function onDisconnect(): void {
       if (state === 'closed') return;
-      report(options.diagnosticSink, { event: 'port.disconnected', stage: 'port' });
+      report(options.diagnosticSink, {
+        event: 'port.disconnected',
+        stage: 'port',
+        ...(activeRequestId === undefined ? {} : { requestId: activeRequestId }),
+        ...(activeOperation === undefined ? {} : { operation: activeOperation }),
+        retryable: false,
+      });
       cleanup(true, false);
     }
 
@@ -541,91 +614,155 @@ export function createCodexModelPortListener(
       void (async () => {
         let awaitingEndAcknowledgement = false;
         let requestId = 'invalid-request';
+        let operation: 'generate' | 'compact' | undefined;
+        const diagnostic = (event: CodexModelDiagnosticEvent): void =>
+          report(options.diagnosticSink, {
+            ...event,
+            ...(operation === undefined ? {} : { operation }),
+          });
         let stage: CodexModelDiagnosticStage = 'authorization';
         try {
-          report(options.diagnosticSink, { event: 'request.received', stage });
-          await authorizer.assertAuthorized(port.sender ?? {});
-          report(options.diagnosticSink, { event: 'origin.authorized', stage });
+          diagnostic({ event: 'request.received', stage });
+          await (custom ? options.customResponses.authorizer : authorizer).assertAuthorized(
+            port.sender ?? {},
+          );
+          diagnostic({ event: 'origin.authorized', stage });
           stage = 'validation';
-          const request = parseModelRequest(untrustedMessage);
+          const request = parseModelRequest(untrustedMessage, custom);
           requestId = request.requestId;
-          report(options.diagnosticSink, {
+          operation = request.type;
+          activeRequestId = requestId;
+          activeOperation = operation;
+          diagnostic({
             event: 'request.validated',
             stage,
             requestId,
             characters: request.body.length,
           });
           stage = 'routing';
-          const accountId = await options.accountRoutingStore.get();
-          if (accountId === undefined) {
-            throw new Error('ChatGPT account routing is unavailable.');
+          let endpoint: string = CODEX_RESPONSES_ENDPOINT;
+          let provider: ServerProvider = 'responses';
+          let requestBody = request.body;
+          let headers: Readonly<Record<string, string>>;
+          if (custom && request.connectionId !== undefined) {
+            const connection = await options.customResponses.store.authorized(
+              request.connectionId,
+              port.sender ?? {},
+            );
+            provider =
+              connection.provider === 'claude-code'
+                ? 'responses'
+                : (connection.provider ?? 'responses');
+            const adapted = nativeRequest(connection, request.body);
+            endpoint = adapted.endpoint;
+            requestBody = adapted.body;
+            if (requestBody.length > MAXIMUM_REQUEST_BODY_LENGTH)
+              throw new Error('Provider request exceeds limit.');
+            headers = Object.freeze({
+              'Content-Type': 'application/json',
+              Accept: 'text/event-stream, application/json',
+              ...serverHeaders(connection),
+            });
+          } else {
+            const accountId = await options.accountRoutingStore.get();
+            if (accountId === undefined) throw new Error('ChatGPT account routing is unavailable.');
+            diagnostic({ event: 'routing.available', stage, requestId });
+            stage = 'authentication';
+            diagnostic({ event: 'access-token.requested', stage, requestId });
+            const token = await options.tokenService.getAccessToken(options.providerId);
+            diagnostic({ event: 'access-token.available', stage, requestId });
+            headers = Object.freeze({
+              Authorization: `Bearer ${token.accessToken}`,
+              'ChatGPT-Account-ID': accountId,
+              Accept: 'text/event-stream',
+              'Content-Type': 'application/json',
+              originator: 'loom_extension_experiment',
+              'session-id': request.sessionId,
+              'thread-id': request.threadId,
+              'x-client-request-id': request.requestId,
+              version: 'loom.js/0.8.0',
+              ...(request.wireProtocol === 'responses-lite'
+                ? { 'x-openai-internal-codex-responses-lite': 'true' }
+                : {}),
+            });
           }
-          report(options.diagnosticSink, { event: 'routing.available', stage, requestId });
-          stage = 'authentication';
-          report(options.diagnosticSink, { event: 'access-token.requested', stage, requestId });
-          const token = await options.tokenService.getAccessToken(options.providerId);
-          report(options.diagnosticSink, { event: 'access-token.available', stage, requestId });
+          if (abortController.signal.aborted) return;
           stage = 'provider';
-          report(options.diagnosticSink, {
+          diagnostic({
             event: 'provider.fetch.started',
             stage,
             requestId,
             characters: request.body.length,
             method: 'POST',
-            targetHost: 'chatgpt.com',
-            targetPath:
-              request.type === 'compact'
-                ? '/backend-api/codex/responses/compact'
-                : '/backend-api/codex/responses',
+            ...(custom ? {} : { targetHost: 'chatgpt.com' }),
+            targetPath: custom
+              ? provider === 'anthropic'
+                ? '/v1/messages'
+                : provider === 'gemini-subscription'
+                  ? '/v1internal:generateContent'
+                  : provider === 'gemini'
+                    ? '/v1beta/models/:model:generateContent'
+                    : '/v1/responses'
+              : '/backend-api/codex/responses',
             model: request.model,
           });
-          const response = await options.fetchRequest(
-            request.type === 'compact'
-              ? CODEX_RESPONSES_COMPACT_ENDPOINT
-              : CODEX_RESPONSES_ENDPOINT,
-            {
-              method: 'POST',
-              headers: Object.freeze({
-                Authorization: `Bearer ${token.accessToken}`,
-                'ChatGPT-Account-ID': accountId,
-                Accept: request.type === 'compact' ? 'application/json' : 'text/event-stream',
-                'Content-Type': 'application/json',
-                originator: 'loom_extension_experiment',
-                'session-id': request.sessionId,
-                'thread-id': request.threadId,
-                'x-client-request-id': request.requestId,
-                version: 'loom.js/0.2.0',
-                ...(request.wireProtocol === 'responses-lite'
-                  ? { 'x-openai-internal-codex-responses-lite': 'true' }
-                  : {}),
-              }),
-              body: request.body,
-              cache: 'no-store',
-              credentials: 'omit',
-              redirect: 'error',
-              signal: abortController.signal,
-            },
-          );
-          report(options.diagnosticSink, {
+          const response = await options.fetchRequest(endpoint, {
+            method: 'POST',
+            headers,
+            body: requestBody,
+            cache: 'no-store',
+            credentials: 'omit',
+            redirect: 'error',
+            signal: abortController.signal,
+          });
+          diagnostic({
             event: 'provider.response.started',
             stage,
             requestId,
             status: response.status,
           });
-          if (!post(port, { type: 'start', requestId, status: response.status })) return;
+          const contentType =
+            provider !== 'responses'
+              ? 'application/json'
+              : custom
+                ? response.headers?.get('content-type')?.toLowerCase().includes('text/event-stream')
+                  ? 'text/event-stream'
+                  : 'application/json'
+                : undefined;
+          if (
+            !post(port, {
+              type: 'start',
+              requestId,
+              status: response.status,
+              ...(contentType === undefined ? {} : { contentType }),
+            })
+          )
+            return;
           if (response.status < 200 || response.status >= 300) {
             const retryAfterMs = retryAfterMilliseconds(response.headers);
-            const metadata = await readProviderErrorMetadata(
+            const receivedMetadata = await readProviderErrorMetadata(
               response.body,
               response.status,
               retryAfterMs,
             );
-            report(options.diagnosticSink, {
+            const { providerCode, ...safeMetadata } = receivedMetadata;
+            const metadata = {
+              ...safeMetadata,
+              ...(providerCode !== undefined && (!custom || CUSTOM_PROVIDER_CODES.has(providerCode))
+                ? { providerCode }
+                : {}),
+              ...(custom ? { providerMessage: GENERIC_PROVIDER_MESSAGE } : {}),
+              ...(request.type === 'compact' && [404, 405, 501].includes(response.status)
+                ? { retryable: false }
+                : {}),
+            };
+            diagnostic({
               event: 'provider.response.rejected',
               stage,
               requestId,
               status: response.status,
               ...metadata,
+              providerMessage: GENERIC_PROVIDER_MESSAGE,
             });
             post(port, { type: 'provider-error', requestId, status: response.status, ...metadata });
             awaitingEndAcknowledgement = finishWithEndHandshake(requestId);
@@ -633,26 +770,36 @@ export function createCodexModelPortListener(
           }
           stage = 'stream';
           if (response.body === null) throw new Error('Provider response body is unavailable.');
+          let nativeBody = '';
           let chunks = 0;
           let characters = 0;
           for await (const chunk of decodedBody(response.body)) {
             chunks += 1;
             characters += chunk.length;
-            report(options.diagnosticSink, {
+            if (custom && characters > 8 * 1024 * 1024)
+              throw new Error('Responses stream exceeded the limit.');
+            diagnostic({
               event: 'provider.response.chunk',
               stage,
               requestId,
               chunks,
               characters: chunk.length,
             });
-            if (
-              abortController.signal.aborted ||
-              !post(port, { type: 'chunk', requestId, chunk })
-            ) {
+            if (provider !== 'responses') {
+              nativeBody += chunk;
+              continue;
+            }
+            if (!post(port, { type: 'chunk', requestId, chunk })) {
               return;
             }
           }
-          report(options.diagnosticSink, {
+          if (provider !== 'responses') {
+            const chunk = nativeResponse(provider, nativeBody, globalThis.crypto.randomUUID());
+            if (chunk.length > 8 * 1024 * 1024)
+              throw new Error('Converted response exceeds limit.');
+            if (!post(port, { type: 'chunk', requestId, chunk })) return;
+          }
+          diagnostic({
             event: 'provider.response.completed',
             stage,
             requestId,
@@ -661,13 +808,23 @@ export function createCodexModelPortListener(
           });
           awaitingEndAcknowledgement = finishWithEndHandshake(requestId);
         } catch (error) {
-          const code = failureCode(stage, abortController.signal.aborted);
-          report(options.diagnosticSink, {
+          const code =
+            custom && stage === 'routing' && !abortController.signal.aborted
+              ? 'CONNECTION_UNAVAILABLE'
+              : failureCode(stage, abortController.signal.aborted);
+          diagnostic({
             event: 'request.failed',
             stage,
             requestId,
             code,
+            retryable: code === 'PROVIDER_FETCH_FAILED',
             ...(error instanceof ExtensionBrokerError ? { brokerCode: error.code } : {}),
+            ...(error instanceof GoogleSubscriptionError
+              ? {
+                  providerCode: error.code,
+                  ...(error.status === undefined ? {} : { status: error.status }),
+                }
+              : {}),
           });
           post(port, {
             type: 'error',

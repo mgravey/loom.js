@@ -30,7 +30,12 @@ export interface CodexResponsesHttpRequest {
 /** Response chunks are decoded text; decoding remains the responsibility of the host transport. */
 export interface CodexResponsesHttpResponse {
   readonly status: number;
+  readonly requestId?: string;
+  readonly operation?: CodexResponsesOperation;
+  readonly stage?: string;
   readonly body: AsyncIterable<string>;
+  /** Present for the shared extension relay when serving portable Responses. */
+  readonly contentType?: string;
   /** Sanitized allowlisted metadata; transports must never attach raw bodies or headers. */
   readonly providerCode?: string;
   readonly providerMessage?: string;
@@ -62,6 +67,9 @@ export interface CodexContextCompactionResult {
 }
 
 export interface CodexExperimentalModel extends CodexModel {
+  resetCompactionAvailability(): void;
+  /** Exact serialized generation body size before relay-owned metadata. */
+  requestCharacters(request: CodexModelRequest): number;
   compact(
     request: CodexModelRequest,
     context?: OperationContext,
@@ -69,6 +77,8 @@ export interface CodexExperimentalModel extends CodexModel {
 }
 
 export interface CodexExperimentalModelOptions {
+  /** Overall compaction deadline, including retries; default 60 seconds, maximum 5 minutes. */
+  readonly compactionTimeoutMs?: number;
   readonly model: string;
   readonly reasoningEffort?: CodexReasoningEffort;
   /** Defaults to classic. Responses Lite moves tools and instructions into input items. */
@@ -78,12 +88,14 @@ export interface CodexExperimentalModelOptions {
 }
 
 export interface CodexExperimentalDirectFetchOptions {
+  /** Overall compaction deadline, including retries; default 60 seconds, maximum 5 minutes. */
+  readonly compactionTimeoutMs?: number;
   readonly model: string;
   readonly reasoningEffort?: CodexReasoningEffort;
   readonly wireProtocol?: CodexResponsesWireProtocol;
   /** Experimental endpoint audited by the host; intentionally no provider URL is baked in. */
   readonly endpoint: string;
-  /** Defaults to `${endpoint}/compact`. */
+  /** Defaults to endpoint; must equal endpoint. Compaction uses the Responses stream. */
   readonly compactEndpoint?: string;
   readonly authentication: AuthProvider | AccessTokenSupplier;
   readonly fetch: CodexResponsesFetch;

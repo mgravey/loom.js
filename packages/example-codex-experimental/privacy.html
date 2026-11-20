@@ -88,9 +88,10 @@
               the companion website.
             </li>
             <li>
-              <strong>Direct model-server settings:</strong> when the user selects an
-              OpenAI-compatible server, the website stores its API base URL, selected model,
-              connection type, and user-supplied Bearer API key in origin-scoped browser storage.
+              <strong>Custom model-server settings:</strong> the website stores a connection ID,
+              model and provider selection. The endpoint and optional API key are stored only in
+              trusted local Companion extension storage. Approved servers’ model catalogues are
+              fetched through Companion and combined in the website selector.
             </li>
           </ul>
           <p>
@@ -119,11 +120,10 @@
           <p>
             OpenAI receives sign-in information at auth.openai.com and prompts, selected project
             context, and tool results at api.openai.com when you run a model. Manage app access and
-            plan usage in
-            <a href="https://chatgpt.com/settings/usage">ChatGPT usage settings</a>. This local
-            browser compatibility test does not establish support for public hosted sign-in. The
-            extension storage descriptions elsewhere on this page apply to the separate Companion
-            providers.
+            plan usage in <a href="https://chatgpt.com/settings/usage">ChatGPT usage settings</a>.
+            This local browser compatibility test does not establish support for public hosted
+            sign-in. The extension storage descriptions elsewhere on this page apply to the separate
+            Companion providers.
           </p>
         </section>
 
@@ -132,8 +132,8 @@
           <p>
             Information is used only to authenticate a user-initiated Loom session and perform the
             requested model operation. The workbench either uses the disclosed direct-first ChatGPT
-            path with extension fallback or directly contacts the OpenAI-compatible server that the
-            user explicitly configured.
+            path with extension fallback or routes through the custom Responses connection
+            configured by the user in Companion settings.
           </p>
           <table class="package-table">
             <thead>
@@ -174,7 +174,7 @@
                 <td>
                   Prompt/model request, selected project context, tool schemas/results, and API key
                 </td>
-                <td>Produce the direct local or network model response requested by the user</td>
+                <td>Produce the local or network model response through Companion</td>
               </tr>
             </tbody>
           </table>
@@ -188,9 +188,9 @@
             No user data is sent to a server operated by the publisher. Authentication data is
             exchanged directly with OpenAI authentication services. During fallback relay only,
             model requests and responses pass transiently through the extension between the approved
-            workbench and OpenAI/ChatGPT and are not retained by the extension. Direct compatible
-            requests go from the browser to the exact server configured by the user and do not pass
-            through the publisher or Companion extension.
+            workbench and OpenAI/ChatGPT and are not retained by the extension. Responses, Anthropic
+            and Gemini requests always pass through Companion to the exact saved server. Their keys
+            are never returned to the website and their requests do not pass through the publisher.
           </p>
           <div class="callout">
             <strong>Chrome Web Store Limited Use</strong>
@@ -225,14 +225,14 @@
             </li>
             <li>
               Exact website origins approved by the user are stored in trusted local extension
-              storage until revoked or the experiment is disabled. Pending origin requests remain
-              session-only. A manifest match alone does not authorize credential delivery.
+              storage until revoked. Approval grants access to every configured server, including
+              new servers, and is independent of the ChatGPT experiment. Pending origin requests
+              remain session-only. A manifest match alone does not authorize credential delivery.
             </li>
             <li>
-              OpenAI/ChatGPT traffic uses HTTPS. A user-configured compatible server may use HTTP
-              from the local HTTP workbench or HTTPS. Its API key is intentionally retained in
-              origin-scoped website storage until cleared, but is never written to workspaces,
-              conversation records, browser runtimes, logs, or diagnostic errors.
+              OpenAI/ChatGPT traffic uses HTTPS. Custom servers may use HTTP or HTTPS. HTTP sends
+              traffic without TLS. Custom keys persist in trusted local extension storage, never
+              website storage, workspaces, conversation records, execution runtimes or diagnostics.
             </li>
             <li>
               Authentication state remains until logout, disable, provider revocation, credential
@@ -245,10 +245,10 @@
               by the user; these can be removed through browser site-data controls.
             </li>
             <li>
-              The compatible-server API key, base URL, model, and provider selection remain until
-              the user selects
-              <strong>Clear API key</strong>, changes them, or removes this website's browser data.
-              Website storage is not an encrypted credential vault.
+              Custom connection profiles and keys remain until edited, removed in Companion
+              settings, extension data is cleared, or Companion is uninstalled. They are independent
+              of ChatGPT logout/disable. Trusted local extension storage is not an encrypted vault.
+              Website site-data controls remove the non-secret connection ID and model selection.
             </li>
           </ul>
           <p>
@@ -269,14 +269,14 @@
               extension-owned authorization state from both session and persistent storage.
             </li>
             <li>
-              Turning off
-              <strong>Remember sign-in on this Chrome profile</strong> removes the local copy and
-              keeps any current authorization only until Chrome exits.
+              Turning off <strong>Remember sign-in on this Chrome profile</strong> removes the local
+              copy and keeps any current authorization only until Chrome exits.
             </li>
             <li>Uninstalling the extension removes its Chrome storage.</li>
             <li>
-              <strong>Clear API key</strong> removes the compatible-server key from website storage;
-              browser site-data controls remove all compatible connection settings.
+              <strong>Remove</strong> beside a connection in Companion deletes its profile and key.
+              New requests are denied; a running request may finish. Revoke host permissions in
+              Chrome separately. Legacy website API-key storage is deleted when the workbench loads.
             </li>
             <li>
               The user chooses which project directory or uploaded archive the website may access.

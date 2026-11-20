@@ -97,6 +97,7 @@ test.describe('experimental Codex credential extension', () => {
     try {
       const options = await context.newPage();
       await options.goto(`chrome-extension://${extensionId}/options.html`);
+      await options.locator('#server-provider').selectOption('chatgpt');
       await expect(options.locator('#brand-animation')).toHaveClass(/\bis-animated\b/u);
       await expect(options.locator('#brand-animation svg')).toBeVisible();
       await expect(options.locator('#enabled')).not.toBeChecked();
@@ -128,6 +129,7 @@ test.describe('experimental Codex credential extension', () => {
     try {
       const options = await context.newPage();
       await options.goto(`chrome-extension://${extensionId}/options.html`);
+      await options.locator('#server-provider').selectOption('chatgpt');
       await expect(options.locator('#brand-animation')).not.toHaveClass(/\bis-animated\b/u);
       await expect(options.locator('#brand-animation svg')).toHaveCount(0);
       await expect(options.locator('.brand-fallback')).toBeVisible();
@@ -199,6 +201,7 @@ test.describe('experimental Codex credential extension', () => {
 
       const options = await context.newPage();
       await options.goto(`chrome-extension://${extensionId}/options.html`);
+      await options.locator('#server-provider').selectOption('chatgpt');
       await options.locator('#enabled').check();
       await options.getByRole('button', { name: 'Use device-code fallback' }).click();
       await expect(options.locator('#status')).toHaveText(/Authorization complete/);
@@ -241,6 +244,7 @@ test.describe('experimental Codex credential extension', () => {
       context = first.context;
       const options = await context.newPage();
       await options.goto(`chrome-extension://${first.extensionId}/options.html`);
+      await options.locator('#server-provider').selectOption('chatgpt');
       await options.evaluate(
         async ({ accountStorageKey, experimentEnabledKey, refreshStorageKey }) => {
           const chromeApi = (
@@ -270,6 +274,7 @@ test.describe('experimental Codex credential extension', () => {
         },
       );
       await options.reload();
+      await options.locator('#server-provider').selectOption('chatgpt');
       options.once('dialog', (dialog) => dialog.accept());
       await options
         .getByRole('button', { name: 'Remember sign-in on this Chrome profile' })
@@ -285,6 +290,7 @@ test.describe('experimental Codex credential extension', () => {
       context = restarted.context;
       const restartedOptions = await context.newPage();
       await restartedOptions.goto(`chrome-extension://${restarted.extensionId}/options.html`);
+      await restartedOptions.locator('#server-provider').selectOption('chatgpt');
       await expect(restartedOptions.locator('#credential-status')).toHaveText(
         /remembered on this Chrome profile/i,
       );
@@ -292,7 +298,7 @@ test.describe('experimental Codex credential extension', () => {
         restartedOptions.getByRole('button', { name: 'Stop remembering after Chrome closes' }),
       ).toHaveAttribute('aria-pressed', 'true');
 
-      await restartedOptions.getByRole('button', { name: 'Remove stored authorization' }).click();
+      await restartedOptions.getByRole('button', { name: 'Sign out of ChatGPT' }).click();
       await expect(restartedOptions.locator('#credential-status')).toHaveText(/Not authenticated/);
       const stored = await restartedOptions.evaluate(
         async ({ accountStorageKey, refreshStorageKey }) => {

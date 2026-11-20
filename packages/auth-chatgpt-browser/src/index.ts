@@ -1,5 +1,10 @@
 export * from './client.js';
-export * from './constants.js';
+export {
+  CHATGPT_BROWSER_DEFAULT_CALLBACK_PATH,
+  CHATGPT_BROWSER_DEFAULT_MESSAGE_TYPE,
+  CHATGPT_BROWSER_DEFAULT_STORAGE_PREFIX,
+  CHATGPT_MANAGE_USAGE_URL,
+} from './constants.js';
 export {
   completeChatGPTBrowserCallback,
   detectChatGPTBrowserSupport,

@@ -499,7 +499,7 @@ function syncChatGPTStatus(): void {
     : status.authenticated && status.planEnabled
       ? `Connected${status.accountLabel === undefined ? '' : ` as ${accountDisplayLabel(status.accountLabel)}`}. Your ChatGPT plan is enabled.`
       : status.authenticated
-        ? 'Your ChatGPT plan is not enabled for this session. Continue with ChatGPT to complete consent.'
+        ? 'Your ChatGPT plan is not enabled for this session. Add the account again to review its permissions.'
         : 'Use your ChatGPT account and plan.';
   if (
     status.notice !== undefined &&

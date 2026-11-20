@@ -85,8 +85,9 @@ to reuse the browser's non-secret registration metadata.
 2. Sign in on OpenAI's page, choose the account/workspace, and consent to ChatGPT plan usage for
    Loom.js. The popup returns to `/auth/callback`; the original tab completes verification.
 3. Check the displayed account and plan status. A verified identity without the plan permission
-   cannot run models. Keep that account selected and click **Continue with ChatGPT** again to reopen
-   plan consent. The model picker uses the account's advertised catalogue.
+   cannot run models. OpenAI documents no consent screen when reauthorizing an issued registration,
+   so review the permissions again by adding the account as a new registration. The model picker
+   uses the account's advertised catalogue.
 4. Choose **Temporary browser project**, click **Open workspace**, and send
    `Reply with exactly: Loom login test OK. Do not use tools.` Login and a completed model response
    are separate checks; stop on any provider rejection and record only its sanitized error.

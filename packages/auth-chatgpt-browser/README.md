@@ -62,12 +62,54 @@ both functions when overriding them.
 | `toolNamespace`                       | `loom`, generic description     | Namespace wrapping function tools                                         |
 | `fetch`, `now`                        | global `fetch`, `Date.now`      | Injection for tests and embedded hosts                                    |
 | `signInTimeoutMs`, `requestTimeoutMs` | 5 min, 10 min                   | Attempt and per-request lifetimes                                         |
+| `sessionStore`                        | none (memory only)              | Opt-in host store for resuming a session after reload                     |
+
+## Remembering a session (opt-in)
+
+By default a reload signs the user out. A host that wants to resume sessions passes a `sessionStore`
+with async `load()`, `save(session)` and `clear()`:
+
+```ts
+const client = createChatGPTBrowserClient({
+  appName: 'My App',
+  sessionStore: {
+    load: () => myVault.read(), // previously saved value, or null
+    save: (session) => myVault.write(session),
+    clear: () => myVault.remove(),
+  },
+});
+
+await client.restoreSession(); // 'restored' | 'none' | 'discarded' | 'unavailable' | 'superseded'
+```
+
+- `session` is an opaque, versioned, JSON-serialisable `ChatGPTBrowserPersistedSession`. It holds
+  the **refresh token**, the issued client ID, the verified subject/email, the sign-in nonce and the
+  granted scopes. Treat it as a secret. Access and ID tokens are never included.
+- **The host decides where it lives and is responsible for protecting it.** Browser storage
+  (`localStorage`, `sessionStorage`, IndexedDB, script-readable cookies) is discouraged: any script
+  on the origin could read it. Prefer a server-side or user-owned secret store reached over an
+  authenticated channel.
+- `restoreSession()` never opens a popup and never trusts the stored value: it refreshes the token
+  and requires a freshly signed ID token for the stored subject and client ID, exactly like a normal
+  refresh. Malformed values, terminal refresh errors, `invalid_client`, and identity mismatches call
+  `clear()`; store or network failures keep the value (`unavailable`). If the refresh succeeded but
+  verification was only delayed, the rotated refresh token is saved for the next attempt.
+- `save()` runs after sign-in, after every refresh-token rotation, after a restore, and on
+  `saveSession()`. `clear()` runs on `signOut()`, when a refresh confirms the session is unusable,
+  and on `forgetStoredSession()`. `dispose()` does not clear.
+- Store calls run one at a time in order, so a sign-out issued during a save clears after it, and a
+  restore overtaken by sign-in, sign-out or disposal returns `superseded` without applying anything.
+  Each method must settle; apply your own timeouts. Store failures never fail sign-in and never
+  appear in errors.
+- Refresh tokens rotate. Two pages restoring or refreshing the same stored session concurrently can
+  trigger `refresh_token_reused`, which ends the session; restore in one page at a time.
 
 ## Security properties
 
 - Access, refresh, and ID tokens and login transactions (state, nonce, PKCE verifier) stay in memory
-  and are never written to Web Storage. Storage holds only issued client IDs, labels, the verified
-  subject/email, and the opaque `ext_agent_host_id`.
+  and are never written to Web Storage. Only an explicitly configured `sessionStore` receives the
+  refresh token. Storage holds only issued client IDs, labels, the verified subject/email, and the
+  opaque `ext_agent_host_id`.
 - The callback must match the attempt's `state`, origin, path, popup source, and message type and is
   consumed once. The ID token's signature (published JWKS), issuer, audience, expiry, and nonce are
   verified; `chatgpt.tokens.use.direct` must be granted before any model request.

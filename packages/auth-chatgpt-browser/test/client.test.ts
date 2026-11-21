@@ -8,6 +8,7 @@ import {
   createChatGPTBrowserClient,
   type ChatGPTBrowserClient,
   type ChatGPTBrowserClientOptions,
+  type ChatGPTBrowserSessionStore,
 } from '../src/index.js';
 
 const ORIGIN = 'http://127.0.0.1:4174';
@@ -1315,5 +1316,313 @@ describe('ChatGPT browser error mapping', () => {
     await h.login(CLIENT);
     h.fetchMock.mockImplementationOnce(async () => json({ error: 'invalid_client' }, 401));
     await expect(h.client.listModels()).rejects.toMatchObject({ kind: 'client-configuration' });
+  });
+});
+
+describe('ChatGPT browser session store', () => {
+  function memoryStore(initial?: unknown) {
+    const state: { value: unknown } = { value: initial };
+    const calls: string[] = [];
+    const store = {
+      load: vi.fn(async () => {
+        calls.push('load');
+        return state.value;
+      }),
+      save: vi.fn(async (next: unknown) => {
+        calls.push('save');
+        state.value = next;
+      }),
+      clear: vi.fn(async () => {
+        calls.push('clear');
+        state.value = undefined;
+      }),
+    };
+    return { store, calls, state };
+  }
+  const stored = (overrides: Record<string, unknown> = {}) => ({
+    format: 'loom.chatgpt-browser.session',
+    version: 1,
+    clientId: CLIENT,
+    subject: 'verified-subject',
+    email: 'alice@example.test',
+    nonce: 'stored-nonce',
+    scopes: SCOPE.split(' '),
+    refreshToken: 'stored-refresh-secret',
+    savedAt: 1,
+    ...overrides,
+  });
+  const refreshWithIdentity = async (
+    h: ReturnType<typeof harness>,
+    overrides: Record<string, unknown> = {},
+    claims: Record<string, unknown> = {},
+  ) => {
+    const id = await h.sign('stored-nonce', CLIENT, claims);
+    h.fetchMock.mockImplementationOnce(async () =>
+      json({
+        access_token: 'restored-access-secret',
+        refresh_token: 'restored-refresh-secret',
+        id_token: id,
+        token_type: 'Bearer',
+        expires_in: 3600,
+        ...overrides,
+      }),
+    );
+  };
+
+  it('keeps the default behaviour without a store', async () => {
+    const h = harness();
+    expect(await h.client.restoreSession()).toBe('none');
+    expect(await h.client.saveSession()).toBe(false);
+    expect(await h.client.forgetStoredSession()).toBe(false);
+    await h.login();
+    expect(h.client.getStatus()).toMatchObject({ authenticated: true, restoring: false });
+    expect(() => h.create()).not.toThrow();
+    expect(() =>
+      createChatGPTBrowserClient({
+        appName: 'Loom.js',
+        sessionStore: { load: 'no' } as unknown as ChatGPTBrowserSessionStore,
+      }),
+    ).toThrow('Invalid ChatGPT session store.');
+  });
+
+  it('saves a versioned session after sign-in and never writes it to Web Storage', async () => {
+    const memory = memoryStore();
+    const h = harness(ORIGIN, { sessionStore: memory.store });
+    await h.login();
+    await vi.waitFor(() => expect(memory.store.save).toHaveBeenCalledOnce());
+    expect(memory.state.value).toEqual({
+      format: 'loom.chatgpt-browser.session',
+      version: 1,
+      clientId: CLIENT,
+      subject: 'verified-subject',
+      email: 'alice@example.test',
+      nonce: h.authorization().searchParams.get('nonce'),
+      scopes: SCOPE.split(' '),
+      refreshToken: 'refresh-secret',
+      savedAt: expect.any(Number),
+    });
+    expect(JSON.stringify([...h.storage])).not.toContain('refresh-secret');
+    expect(JSON.stringify(h.client.getStatus())).not.toContain('secret');
+  });
+
+  it('restores without a popup, re-validates identity, and saves the rotated refresh token', async () => {
+    const memory = memoryStore(stored());
+    const h = harness(ORIGIN, { sessionStore: memory.store });
+    await refreshWithIdentity(h);
+    const restoring = h.client.restoreSession();
+    expect(h.client.getStatus().restoring).toBe(true);
+    expect(await restoring).toBe('restored');
+    expect(h.open).not.toHaveBeenCalled();
+    expect(h.client.getStatus()).toMatchObject({
+      authenticated: true,
+      planEnabled: true,
+      restoring: false,
+      activeAccountId: CLIENT,
+      accountLabel: `alice@example.test (${CLIENT})`,
+      accounts: [{ id: CLIENT, verified: true }],
+    });
+    const refresh = h.fetchMock.mock.calls.find(([url]) => url === TOKEN)?.[1]
+      ?.body as URLSearchParams;
+    expect(Object.fromEntries(refresh)).toEqual({
+      grant_type: 'refresh_token',
+      client_id: CLIENT,
+      refresh_token: 'stored-refresh-secret',
+      resource: RESOURCE,
+    });
+    expect(memory.state.value).toMatchObject({ refreshToken: 'restored-refresh-secret' });
+    expect(JSON.stringify([...h.storage])).not.toContain('secret');
+    expect(await h.client.listModels()).toHaveLength(2);
+    const catalog = h.fetchMock.mock.calls.find(([url]) => url === `${RESOURCE}/models`)?.[1];
+    expect((catalog?.headers as Record<string, string>).Authorization).toBe(
+      'Bearer restored-access-secret',
+    );
+    expect(await h.client.restoreSession()).toBe('superseded');
+  });
+
+  it.each([
+    ['a different subject', {}, { sub: 'someone-else' }],
+    ['a missing ID token', { id_token: undefined }, {}],
+  ])('discards a stored session that returns %s', async (_, overrides, claims) => {
+    const memory = memoryStore(stored());
+    const h = harness(ORIGIN, { sessionStore: memory.store });
+    await refreshWithIdentity(h, overrides, claims);
+    expect(await h.client.restoreSession()).toBe('discarded');
+    expect(memory.store.clear).toHaveBeenCalledOnce();
+    expect(memory.state.value).toBeUndefined();
+    expect(h.client.getStatus().authenticated).toBe(false);
+  });
+
+  it('discards malformed values and a subject that conflicts with a saved registration', async () => {
+    for (const value of [
+      { ...stored(), version: 2 },
+      { ...stored(), clientId: 'not-a-client' },
+      { ...stored(), refreshToken: '' },
+      'opaque',
+    ]) {
+      const memory = memoryStore(value);
+      const h = harness(ORIGIN, { sessionStore: memory.store });
+      expect(await h.client.restoreSession()).toBe('discarded');
+      expect(memory.state.value).toBeUndefined();
+      expect(h.fetchMock).not.toHaveBeenCalled();
+    }
+    const memory = memoryStore();
+    const h = harness(ORIGIN, { sessionStore: memory.store });
+    await h.login();
+    await vi.waitFor(() => expect(memory.store.save).toHaveBeenCalledOnce());
+    memory.state.value = stored({ subject: 'other-subject' });
+    const next = h.create();
+    expect(await next.restoreSession()).toBe('discarded');
+  });
+
+  it('clears after a terminal refresh error and keeps the value after a transient one', async () => {
+    const terminal = memoryStore(stored());
+    const h = harness(ORIGIN, { sessionStore: terminal.store });
+    h.fetchMock.mockImplementationOnce(async () =>
+      json({ error: 'invalid_grant', error_description: 'stored-refresh-secret' }, 400),
+    );
+    expect(await h.client.restoreSession()).toBe('discarded');
+    expect(terminal.state.value).toBeUndefined();
+
+    const transient = memoryStore(stored());
+    const t = harness(ORIGIN, { sessionStore: transient.store });
+    t.fetchMock.mockImplementationOnce(async () => json({ error: 'server_error' }, 503));
+    expect(await t.client.restoreSession()).toBe('unavailable');
+    expect(transient.state.value).toEqual(stored());
+    expect(transient.store.clear).not.toHaveBeenCalled();
+
+    const failing = harness(ORIGIN, {
+      sessionStore: {
+        load: () => Promise.reject(new Error('load failed: stored-refresh-secret')),
+        save: () => Promise.resolve(),
+        clear: () => Promise.resolve(),
+      },
+    });
+    expect(await failing.client.restoreSession()).toBe('unavailable');
+    expect(failing.fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps a rotated refresh token when verification is only delayed', async () => {
+    const memory = memoryStore(stored());
+    const h = harness(ORIGIN, { sessionStore: memory.store });
+    await refreshWithIdentity(h);
+    h.fetchMock.mockImplementationOnce(async () => {
+      throw new TypeError('offline');
+    });
+    expect(await h.client.restoreSession()).toBe('unavailable');
+    expect(h.client.getStatus().authenticated).toBe(false);
+    expect(memory.state.value).toMatchObject({
+      refreshToken: 'restored-refresh-secret',
+      subject: 'verified-subject',
+    });
+  });
+
+  it('saves rotated refresh tokens and clears the store on sign-out', async () => {
+    const memory = memoryStore();
+    const h = harness(ORIGIN, { sessionStore: memory.store });
+    h.setGrant({ expires_in: 1 });
+    await h.login();
+    await h.client.listModels();
+    await vi.waitFor(() =>
+      expect(memory.state.value).toMatchObject({ refreshToken: 'rotated-refresh-secret' }),
+    );
+    expect(await h.client.signOut()).toEqual({ revoked: true });
+    expect(memory.state.value).toBeUndefined();
+    expect(memory.calls.at(-1)).toBe('clear');
+  });
+
+  it('clears the store when a refresh confirms the session is unusable', async () => {
+    const memory = memoryStore();
+    const h = harness(ORIGIN, { sessionStore: memory.store });
+    h.setGrant({ expires_in: 1 });
+    await h.login();
+    h.fetchMock.mockImplementationOnce(async () => json({ error: 'invalid_grant' }, 400));
+    await expect(h.client.listModels()).rejects.toMatchObject({
+      kind: 'reauthentication-required',
+    });
+    await vi.waitFor(() => expect(memory.store.clear).toHaveBeenCalledOnce());
+    expect(memory.state.value).toBeUndefined();
+  });
+
+  it('lets sign-out win over a pending restore and a pending save', async () => {
+    const memory = memoryStore(stored());
+    const loadGate = deferred<unknown>();
+    memory.store.load.mockImplementationOnce(() => loadGate.promise);
+    const h = harness(ORIGIN, { sessionStore: memory.store });
+    const restoring = h.client.restoreSession();
+    await h.client.signOut();
+    loadGate.resolve(stored());
+    expect(await restoring).toBe('superseded');
+    expect(h.client.getStatus().authenticated).toBe(false);
+    expect(memory.state.value).toBeUndefined();
+    expect(h.fetchMock.mock.calls.some(([url]) => url === TOKEN)).toBe(false);
+
+    const ordered = memoryStore();
+    const saveGate = deferred<undefined>();
+    ordered.store.save.mockImplementationOnce(async (next: unknown) => {
+      ordered.calls.push('save');
+      await saveGate.promise;
+      ordered.state.value = next;
+    });
+    const s = harness(ORIGIN, { sessionStore: ordered.store });
+    await s.login();
+    await vi.waitFor(() => expect(ordered.store.save).toHaveBeenCalledOnce());
+    const signingOut = s.client.signOut();
+    await Promise.resolve();
+    expect(ordered.store.clear).not.toHaveBeenCalled();
+    saveGate.resolve(undefined);
+    await signingOut;
+    expect(ordered.calls).toEqual(['save', 'clear']);
+    expect(ordered.state.value).toBeUndefined();
+  });
+
+  it('drops a restore superseded by a new sign-in', async () => {
+    const memory = memoryStore(stored());
+    const loadGate = deferred<unknown>();
+    memory.store.load.mockImplementationOnce(() => loadGate.promise);
+    const h = harness(ORIGIN, { sessionStore: memory.store });
+    const restoring = h.client.restoreSession();
+    await h.login();
+    loadGate.resolve(stored());
+    expect(await restoring).toBe('superseded');
+    expect(h.client.getStatus()).toMatchObject({ authenticated: true, activeAccountId: CLIENT });
+  });
+
+  it('never lets store failures break sign-in or leak into errors', async () => {
+    const h = harness(ORIGIN, {
+      sessionStore: {
+        load: () => Promise.resolve(null),
+        save: () => Promise.reject(new Error('save failed: refresh-secret')),
+        clear: () => Promise.reject(new Error('clear failed')),
+      },
+    });
+    expect(await h.client.restoreSession()).toBe('none');
+    await h.login();
+    expect(h.client.getStatus().authenticated).toBe(true);
+    expect(await h.client.saveSession()).toBe(false);
+    expect(await h.client.forgetStoredSession()).toBe(false);
+    expect(await h.client.signOut()).toEqual({ revoked: true });
+  });
+
+  it('saves on request and forgets without signing out', async () => {
+    const memory = memoryStore();
+    const h = harness(ORIGIN, { sessionStore: memory.store });
+    expect(await h.client.saveSession()).toBe(false);
+    await h.login();
+    await vi.waitFor(() => expect(memory.store.save).toHaveBeenCalledOnce());
+    expect(await h.client.forgetStoredSession()).toBe(true);
+    expect(memory.state.value).toBeUndefined();
+    expect(h.client.getStatus().authenticated).toBe(true);
+    expect(await h.client.saveSession()).toBe(true);
+    expect(memory.state.value).toMatchObject({ refreshToken: 'refresh-secret' });
+  });
+
+  it('reports none on unsupported pages and after disposal', async () => {
+    const memory = memoryStore(stored());
+    const h = harness('http://localhost:4174', { sessionStore: memory.store });
+    expect(await h.client.restoreSession()).toBe('none');
+    const local = harness(ORIGIN, { sessionStore: memory.store });
+    local.client.dispose();
+    expect(await local.client.restoreSession()).toBe('none');
+    expect(memory.store.load).not.toHaveBeenCalled();
   });
 });

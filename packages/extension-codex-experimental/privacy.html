@@ -132,6 +132,24 @@
         disabling the Codex experiment do not delete independent custom connections. Remove prevents
         new requests; running requests may finish. Revoke host permissions separately in Chrome.
       </p>
+      <h2>Optional website ChatGPT sign-in helper</h2>
+      <p>
+        Off by default. When you turn it on in the options, Chrome asks for access to api.openai.com
+        and 127.0.0.1. An approved website can then ask Companion to open OpenAI's sign-in window.
+        Companion rewrites only that window's navigation to the registered
+        <code>http://127.0.0.1:1456/auth/callback</code> address into a packaged page (nothing
+        listens on 127.0.0.1), and hands the one-time callback, including its authorization code,
+        only to the website tab that started that sign-in. The website exchanges the code itself and
+        keeps your ChatGPT tokens in its own memory or storage.
+      </p>
+      <p>
+        Companion also forwards four fixed requests for that website, because OpenAI does not let
+        websites read them directly: OpenAI's sign-in configuration and signing keys, the model
+        list, and model responses. For the last two the website supplies its access token per
+        request. Requests, tokens, codes, and responses pass transiently through the extension,
+        without cookies, and are not stored or logged. No other address can be reached. Turning the
+        helper off or revoking the website stops new and running requests.
+      </p>
       <h2>Optional Google account experiment</h2>
       <p>
         Developer builds configured with a Google OAuth client can request Google Cloud access

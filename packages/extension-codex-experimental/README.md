@@ -170,17 +170,28 @@ ZIP inventory, checksum, promotional image, and screenshot before every dashboar
 
 ## Permissions and hosts
 
-| Declaration                               | Why it exists                                                                                                                                                                                                                        |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `storage`                                 | Keep refresh/routing state in trusted session storage by default; persist it locally only after explicit private-computer confirmation. Store approved exact origins locally and pending login/origin requests only for the session. |
-| `declarativeNetRequest`                   | Install one exact, temporary, tab-scoped redirect from the registered localhost OAuth callback to the extension callback page.                                                                                                       |
-| `http://localhost:1455/*`                 | Match only the provider's registered loopback callback target. No localhost server is contacted.                                                                                                                                     |
-| `https://auth.openai.com/*`               | User-initiated authorization, device-code exchange, and token refresh.                                                                                                                                                               |
-| `https://chatgpt.com/backend-api/codex/*` | Direct-first fallback only: relay a model request when the page receives no HTTP response.                                                                                                                                           |
-| `externally_connectable`                  | Let HTTPS websites request connection approval. The service worker separately requires the user-approved exact origin before auth or model operations; only the fixed local development origins are routed over HTTP.                |
+| Declaration                                               | Why it exists                                                                                                                                                                                                                        |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `storage`                                                 | Keep refresh/routing state in trusted session storage by default; persist it locally only after explicit private-computer confirmation. Store approved exact origins locally and pending login/origin requests only for the session. |
+| `declarativeNetRequest`                                   | Install one exact, temporary, tab-scoped redirect from the registered localhost OAuth callback to the extension callback page.                                                                                                       |
+| `http://localhost:1455/*`                                 | Match only the provider's registered loopback callback target. No localhost server is contacted.                                                                                                                                     |
+| `https://auth.openai.com/*`                               | User-initiated authorization, device-code exchange, and token refresh.                                                                                                                                                               |
+| `https://chatgpt.com/backend-api/codex/*`                 | Direct-first fallback only: relay a model request when the page receives no HTTP response.                                                                                                                                           |
+| `externally_connectable`                                  | Let HTTPS websites request connection approval. The service worker separately requires the user-approved exact origin before auth or model operations; only the fixed local development origins are routed over HTTP.                |
+| `chatgpt-callback.html` (web accessible)                  | Target of the tab-scoped rewrite of `http://127.0.0.1:1456/auth/callback` for the website ChatGPT sign-in helper.                                                                                                                    |
+| optional `https://api.openai.com/*`, `http://127.0.0.1/*` | Requested only when the user enables the website ChatGPT sign-in helper: relay `/v1/models` and `/v1/responses`, and redirect the loopback callback in the helper's own tab.                                                         |
 
 The extension does not request `history`, `cookies`, `scripting`, `activeTab`, broad website access,
 or background analytics.
+
+## Website ChatGPT sign-in helper
+
+Off by default (**Options → Website ChatGPT sign-in helper**). When on, an approved website can run
+its own Sign in with ChatGPT from any origin: Companion opens the sign-in window, rewrites only that
+tab's navigation to `http://127.0.0.1:1456/auth/callback` into `chatgpt-callback.html`, hands the
+callback to the initiating page port, and relays four fixed OpenAI requests with backpressure.
+Tokens stay in the website. Details, message contract and manual test steps:
+[docs/chatgpt-extension-helper.md](../../docs/chatgpt-extension-helper.md).
 
 ## Publication documents
 

@@ -18,6 +18,7 @@ import { createCodexOriginAccessStore } from './origin-access.js';
 import { createCodexExperimentSettings, type CodexCredentialPersistenceMode } from './settings.js';
 
 import { initializeResponsesOptions } from './responses-options.js';
+import { initializeChatGPTHelperOptions } from './chatgpt-helper-options.js';
 
 function requiredElement<T extends Element>(root: Document, id: string): T {
   const element = root.querySelector(`#${id}`);
@@ -360,3 +361,4 @@ void initialize().catch(() => {
 });
 
 initializeResponsesOptions(host.document, host.chrome, host.fetch.bind(globalThis));
+initializeChatGPTHelperOptions(host.document, host.chrome);

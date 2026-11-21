@@ -161,12 +161,17 @@ if (
 const accessible = manifest.web_accessible_resources;
 if (
   !Array.isArray(accessible) ||
-  accessible.length !== 1 ||
-  JSON.stringify(accessible[0]) !==
-    JSON.stringify({
-      resources: ['callback.html'],
-      matches: ['http://localhost:1455/*', 'https://auth.openai.com/*'],
-    })
+  JSON.stringify(accessible) !==
+    JSON.stringify([
+      {
+        resources: ['callback.html'],
+        matches: ['http://localhost:1455/*', 'https://auth.openai.com/*'],
+      },
+      {
+        resources: ['chatgpt-callback.html'],
+        matches: ['http://127.0.0.1/*', 'https://auth.openai.com/*'],
+      },
+    ])
 ) {
   throw new Error('Store package must expose only the reviewed callback resource and origins.');
 }
@@ -200,6 +205,8 @@ const runtimeFiles = [
   'brand-animation.js',
   'callback.html',
   'callback.js',
+  'chatgpt-callback.html',
+  'chatgpt-callback.js',
   'manifest.json',
   'options.html',
   'options.js',

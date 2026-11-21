@@ -37,6 +37,10 @@
     {
       "resources": ["callback.html"],
       "matches": ["http://localhost:1455/*", "https://auth.openai.com/*"]
+    },
+    {
+      "resources": ["chatgpt-callback.html"],
+      "matches": ["http://127.0.0.1/*", "https://auth.openai.com/*"]
     }
   ],
   "externally_connectable": {

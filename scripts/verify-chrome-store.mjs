@@ -23,6 +23,8 @@ const allowedEntries = new Set([
   'brand-animation.js',
   'callback.html',
   'callback.js',
+  'chatgpt-callback.html',
+  'chatgpt-callback.js',
   'manifest.json',
   'options.html',
   'options.js',

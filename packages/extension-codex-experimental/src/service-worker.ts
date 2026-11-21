@@ -4,11 +4,25 @@ import type { CodexChromeExtensionApi, CodexModelFetch, OAuthFetch } from './chr
 import { createExternallyConnectableAuthorizer } from './manifest-origins.js';
 import { isCodexDirectAuthRequest } from './direct-auth.js';
 import { isResponsesConnectionRequest } from './responses-connections.js';
-import { isCodexOriginAccessRequest } from './origin-access.js';
+import { createGrantedOriginAuthorizer, isCodexOriginAccessRequest } from './origin-access.js';
+import {
+  createChatGPTHelper,
+  isChatGPTHelperRequest,
+  type ChatGPTHelper,
+  type ChatGPTHelperChromeApi,
+  type ChatGPTHelperFetch,
+} from './chatgpt-helper.js';
+
+type ChatGPTHelperCallbackListener = ChatGPTHelper['callbackMessageListener'];
 
 const host = globalThis as unknown as {
-  readonly chrome: CodexChromeExtensionApi;
-  readonly fetch: OAuthFetch & CodexModelFetch & ResponsesModelsFetch;
+  readonly chrome: CodexChromeExtensionApi &
+    ChatGPTHelperChromeApi & {
+      readonly runtime: {
+        readonly onMessage: { addListener(listener: ChatGPTHelperCallbackListener): void };
+      };
+    };
+  readonly fetch: OAuthFetch & CodexModelFetch & ResponsesModelsFetch & ChatGPTHelperFetch;
 };
 const fetchRequest = host.fetch.bind(globalThis);
 if (host.chrome.runtime.getManifest === undefined) {
@@ -37,18 +51,32 @@ const composition = createCodexExperimentalExtension({
   manifestAuthorizer,
 });
 
+// Generic ChatGPT sign-in helper for approved websites. It shares the exact-origin approvals.
+const chatgptHelper = createChatGPTHelper({
+  chromeApi: host.chrome,
+  fetch: fetchRequest,
+  manifestAuthorizer,
+  authorizer: createGrantedOriginAuthorizer(manifestAuthorizer, composition.originAccessStore),
+});
+void chatgptHelper.removeStaleRules();
+host.chrome.runtime.onMessage.addListener((message, sender, sendResponse) =>
+  chatgptHelper.callbackMessageListener(message, sender, sendResponse),
+);
+
 host.chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => {
   globalThis.console.info(
     '[loom:extension-auth]',
     Object.freeze({ event: 'message.received', ...authEnvelopeMetadata(message) }),
   );
-  const listener = isResponsesConnectionRequest(message)
-    ? composition.responsesConnectionListener
-    : isCodexOriginAccessRequest(message)
-      ? composition.originAccessExternalMessageListener
-      : isCodexDirectAuthRequest(message)
-        ? composition.directAuthExternalMessageListener
-        : composition.externalMessageListener;
+  const listener = isChatGPTHelperRequest(message)
+    ? chatgptHelper.externalMessageListener
+    : isResponsesConnectionRequest(message)
+      ? composition.responsesConnectionListener
+      : isCodexOriginAccessRequest(message)
+        ? composition.originAccessExternalMessageListener
+        : isCodexDirectAuthRequest(message)
+          ? composition.directAuthExternalMessageListener
+          : composition.externalMessageListener;
   return listener(message, sender, (response) => {
     globalThis.console.info(
       '[loom:extension-auth]',
@@ -59,3 +87,4 @@ host.chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse
 });
 
 host.chrome.runtime.onConnectExternal.addListener(composition.modelPortListener);
+host.chrome.runtime.onConnectExternal.addListener((port) => chatgptHelper.portListener(port));

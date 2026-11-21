@@ -444,6 +444,25 @@
           <li>No websites are approved.</li>
         </ul>
       </section>
+      <section class="disclosure" aria-labelledby="chatgpt-helper-title">
+        <h2 id="chatgpt-helper-title">Website ChatGPT sign-in helper</h2>
+        <p>
+          Lets an approved website run its own "Sign in with ChatGPT" even though it is not opened
+          at <code>http://127.0.0.1</code>. Companion opens the OpenAI sign-in window, returns the
+          one-time sign-in result only to the website tab that started it, and forwards four fixed
+          OpenAI requests that browsers otherwise block. The website keeps your ChatGPT tokens in
+          its own memory; Companion never stores or logs them.
+        </p>
+        <p>
+          Enabling asks Chrome for access to <code>api.openai.com</code> and <code>127.0.0.1</code>.
+          Nothing is sent until an approved website signs in.
+        </p>
+        <label class="actions">
+          <input id="chatgpt-helper-enabled" type="checkbox" />
+          Allow approved websites to use the ChatGPT sign-in helper
+        </label>
+        <p id="chatgpt-helper-status" role="status" aria-live="polite">The helper is off.</p>
+      </section>
     </main>
     <script type="module" src="brand-animation.js"></script>
     <script type="module" src="options.js"></script>

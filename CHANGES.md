@@ -4,6 +4,20 @@ This project follows a milestone changelog alongside Changesets for public packa
 
 ## Unreleased — Browser-only ChatGPT sign-in test
 
+- Add a generic, opt-in **website ChatGPT sign-in helper** to the Loom.js Companion. Any website the
+  user approved can run its own page-held Sign in with ChatGPT from a non-loopback origin: the
+  extension opens the sign-in window, rewrites only that tab's navigation to
+  `http://127.0.0.1:1456/auth/callback` into a packaged page with a declarativeNetRequest session
+  rule, and returns the callback to the initiating page port (bound by tab, attempt identifier and
+  `state`). It relays only OpenAI's discovery, JWKS, `GET /v1/models` and streaming
+  `POST /v1/responses` with fixed headers, no cookies or redirects, size and time limits, abort
+  propagation and credit-based backpressure. Tokens stay in the page. Enabling it requests the
+  optional `api.openai.com` and `127.0.0.1` host permissions; no install-time permission changes.
+  `auth-chatgpt-browser` gains `redirectBroker` and a `redirect-broker` support mode;
+  `companion-codex-experimental` gains `connectCompanionChatGPTHelper()`. Restored sessions use the
+  relay too. See [docs/chatgpt-extension-helper.md](docs/chatgpt-extension-helper.md), including the
+  CORS findings for using the plan without an extension.
+
 - Add `@mgravey/loom-model-anthropic-messages`, a credential-free Anthropic Messages adapter:
   streamed text and tool use with partial-JSON input, tool-result continuations, verbatim replay of
   thinking and other content blocks, stop-reason handling (`pause_turn`, `max_tokens`, `refusal`),

@@ -63,6 +63,27 @@ both functions when overriding them.
 | `fetch`, `now`                        | global `fetch`, `Date.now`      | Injection for tests and embedded hosts                                    |
 | `signInTimeoutMs`, `requestTimeoutMs` | 5 min, 10 min                   | Attempt and per-request lifetimes                                         |
 | `sessionStore`                        | none (memory only)              | Opt-in host store for resuming a session after reload                     |
+| `redirectBroker`                      | none (page popup + callback)    | Helper that captures the loopback callback on non-loopback origins        |
+
+## Non-loopback origins with a redirect broker
+
+A `ChatGPTBrowserRedirectBroker` lets a page that is not served from `http://127.0.0.1:<port>` sign
+in: the broker owns the sign-in window, captures the browser's navigation to its loopback
+`redirectUri` without anything listening there, and resolves
+`authorize({ authorizationUrl, state, signal })` with `{ status: 'callback', url }` or
+`cancelled`/`unavailable`/`failed`. The client still creates state, nonce and PKCE, validates the
+callback against the broker's `redirectUri` and the attempt's `state`, exchanges the code, verifies
+the ID token and keeps the tokens. Pair it with a `fetch` that can read OpenAI's discovery, JWKS,
+models and responses. The Loom.js Companion extension provides both; see the
+[website ChatGPT sign-in helper](../../docs/chatgpt-extension-helper.md):
+
+```ts
+const { helper } = await connectCompanionChatGPTHelper({ runtime: () => chrome.runtime });
+const chatgpt = createChatGPTBrowserClient({ appName: 'My App', ...helper?.clientOptions });
+```
+
+`detectChatGPTBrowserSupport(environment, { redirectBroker: true })` reports
+`{ supported: true, mode: 'redirect-broker' }`. Without a broker nothing changes.
 
 ## Remembering a session (opt-in)
 
@@ -139,7 +160,8 @@ await client.restoreSession(); // 'restored' | 'none' | 'discarded' | 'unavailab
 As of 2026-11-20, `https://auth.openai.com/.well-known/openid-configuration` and its JWKS return no
 `Access-Control-Allow-Origin` header, so browser ID-token verification fails with a
 `temporarily-unavailable` error even when authorization succeeds. Signature verification is
-mandatory; this package does not proxy or skip it. See the
+mandatory; this package does not proxy or skip it (a host may supply a `fetch` that can, such as the
+Companion helper's). See the
 [authentication notes](../../docs/codex-auth-experiment.md#extension-free-sign-in-with-chatgpt).
 
 Licensed under MPL-2.0.

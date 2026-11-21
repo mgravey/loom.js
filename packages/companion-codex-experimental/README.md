@@ -55,6 +55,30 @@ unsupported experiments; do not describe them as an official OpenAI authenticati
 
 Licensed under MPL-2.0.
 
+## Website ChatGPT sign-in helper
+
+A Companion build that includes this helper can let an approved website run its own page-held "Sign
+in with ChatGPT" from any origin. The extension captures the loopback callback in a window it owns
+and relays only OpenAI's discovery, JWKS, `GET /v1/models` and `POST /v1/responses`; tokens stay in
+the page.
+
+```ts
+import { createChatGPTBrowserClient } from '@mgravey/loom-auth-chatgpt-browser';
+import { connectCompanionChatGPTHelper } from '@mgravey/loom-companion-codex-experimental';
+
+const { status, helper } = await connectCompanionChatGPTHelper({
+  runtime: () => globalThis.chrome?.runtime,
+});
+const chatgpt = createChatGPTBrowserClient({ appName: 'My App', ...helper?.clientOptions });
+```
+
+`status` is `{ available: true, redirectUri }` or `{ available: false, reason }`
+(`extension-unavailable`, `origin-not-approved`, `helper-disabled`, `unsupported-version`).
+Lower-level: `getCompanionChatGPTHelperStatus()` and
+`createCompanionChatGPTHelper({ redirectUri, fallbackFetch })`. The returned objects are
+structurally compatible with `@mgravey/loom-auth-chatgpt-browser`; this package does not depend on
+it. See [the helper guide](../../docs/chatgpt-extension-helper.md).
+
 ## Custom Responses connections
 
 Companion 0.4.0+ supports custom domains and localhost `/v1/responses` servers. Configure the

@@ -133,6 +133,7 @@ These answers must match the final code and public privacy policy exactly.
 | `https://chatgpt.com/backend-api/codex/*` | Required only for direct-first fallback. The extension contacts this path after the browser receives no HTTP response and streams the result back to the approved origin.                                                                                                                                                                                |
 | `externally_connectable` HTTPS routing    | Routes HTTPS connection requests to the extension's approval gate. Before approval, only a validated origin-access request is accepted; credential, status, logout, direct-auth, and model-relay operations require the separately stored exact-origin grant. The HTTP entries are restricted by the service worker to the fixed local development port. |
 | web-accessible `callback.html`            | The exact authentication callback transformation must reach the packaged callback page. No executable remote resource is loaded.                                                                                                                                                                                                                         |
+| web-accessible `chatgpt-callback.html`    | Website ChatGPT sign-in helper: the tab-scoped rule rewrites `http://127.0.0.1:1456/auth/callback` in the helper's own sign-in window to this packaged page, which returns the callback to the initiating approved website. No executable remote resource is loaded.                                                                                     |
 
 ### Optional custom-server host permissions (Companion 0.4.0+)
 
@@ -145,6 +146,17 @@ servers. Cookies are omitted and redirects rejected. Websites cannot supply a UR
 headers. Custom API keys remain in trusted local extension storage and are deleted with their
 profile. Update the Dashboard permission and privacy disclosures to cover custom endpoints, keys and
 transient model traffic; see [custom connection setup](local-models.md).
+
+### Optional website ChatGPT sign-in helper host permissions
+
+Off by default. Enabling it in the options requests `https://api.openai.com/*` and
+`http://127.0.0.1/*` from the declared optional host permissions (no install-time change). Justify:
+`api.openai.com` is used only to relay `GET /v1/models` and `POST /v1/responses` for an approved
+website, with the website's own per-request bearer token, because OpenAI's successful responses lack
+CORS headers; `127.0.0.1` is needed only so the declarativeNetRequest rule may redirect the
+registered loopback callback in the helper's own sign-in tab (no local server is contacted).
+Disclose that tokens, codes, prompts and responses pass transiently through the extension and are
+not stored. See [the helper guide](chatgpt-extension-helper.md).
 
 ### Remote code
 

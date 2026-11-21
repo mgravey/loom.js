@@ -205,7 +205,9 @@ OpenAI's documented open-source Sign in with ChatGPT flow in the page (loopback
 `http://127.0.0.1:<port>` origins only), keeps every token in memory, and exposes a reusable
 callback helper, status subscription, and typed recovery errors. See the
 [adapter documentation](./packages/model-openai-responses/README.md) and the
-[browser ChatGPT client](./packages/auth-chatgpt-browser/README.md).
+[browser ChatGPT client](./packages/auth-chatgpt-browser/README.md). On other origins, a website the
+user approved in the Loom.js Companion extension can run the same flow through the opt-in
+[website ChatGPT sign-in helper](./docs/chatgpt-extension-helper.md); tokens still stay in the page.
 
 `@mgravey/loom-model-anthropic-messages` maps the same agent protocol to the Anthropic Messages API
 with streamed tool use and replayed thinking blocks. Its injected transport can be a trusted host

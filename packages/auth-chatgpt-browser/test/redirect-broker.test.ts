@@ -5,6 +5,8 @@ import {
   createChatGPTBrowserClient,
   detectChatGPTBrowserSupport,
   type ChatGPTBrowserClient,
+  type ChatGPTBrowserClientOptions,
+  type ChatGPTBrowserPersistedSession,
   type ChatGPTBrowserRedirectBroker,
   type ChatGPTBrowserRedirectRequest,
   type ChatGPTBrowserRedirectResult,
@@ -42,7 +44,7 @@ interface PendingAuthorization {
   reject(error: unknown): void;
 }
 
-function harness(origin = SITE) {
+function harness(origin = SITE, extra: Partial<ChatGPTBrowserClientOptions> = {}) {
   const open = vi.fn();
   const listeners = new Set<(event: MessageEvent) => void>();
   vi.stubGlobal('window', {
@@ -93,15 +95,22 @@ function harness(origin = SITE) {
         expires_in: 3600,
       });
     }
+    if (url === 'https://api.openai.com/v1/models')
+      return json({ models: [{ slug: 'model-a', display_name: 'Model A', visibility: 'list' }] });
     throw new Error('Unexpected endpoint');
   });
-  const client = createChatGPTBrowserClient({
-    appName: 'Broker test',
-    storage: null,
-    fetch,
-    redirectBroker: broker,
-  });
-  clients.push(client);
+  const create = () => {
+    const created = createChatGPTBrowserClient({
+      appName: 'Broker test',
+      storage: null,
+      fetch,
+      redirectBroker: broker,
+      ...extra,
+    });
+    clients.push(created);
+    return created;
+  };
+  const client = create();
   const started = async () => {
     await vi.waitFor(() => expect(pending.length).toBeGreaterThan(0));
     const current = pending.at(-1);
@@ -110,7 +119,7 @@ function harness(origin = SITE) {
   };
   const callback = (state: string, fields: Record<string, string> = {}) =>
     `${REDIRECT}?${new URLSearchParams({ code: 'code-secret', state, client_id: CLIENT, ...fields }).toString()}`;
-  return { client, broker, open, listeners, pending, fetch, forms, started, callback };
+  return { client, create, broker, open, listeners, pending, fetch, forms, started, callback };
 }
 
 describe('ChatGPT redirect broker', () => {
@@ -134,6 +143,41 @@ describe('ChatGPT redirect broker', () => {
       accountLabel: `user@example.test (${CLIENT})`,
     });
     expect(attempt.request.signal.aborted).toBe(true);
+  });
+
+  it('restores a stored session on a non-loopback origin through the injected fetch', async () => {
+    let saved: ChatGPTBrowserPersistedSession | undefined;
+    const sessionStore = {
+      load: vi.fn(() => Promise.resolve(saved)),
+      save: vi.fn((value: ChatGPTBrowserPersistedSession) => {
+        saved = value;
+        return Promise.resolve();
+      }),
+      clear: vi.fn(() => {
+        saved = undefined;
+        return Promise.resolve();
+      }),
+    };
+    const h = harness(SITE, { sessionStore });
+    const signIn = h.client.signIn();
+    const attempt = await h.started();
+    attempt.resolve({ status: 'callback', url: h.callback(attempt.request.state) });
+    await signIn;
+    await vi.waitFor(() => expect(sessionStore.save).toHaveBeenCalled());
+    h.client.dispose();
+    h.fetch.mockClear();
+    const restored = h.create();
+    expect(await restored.restoreSession()).toBe('restored');
+    expect(h.broker.authorize).toHaveBeenCalledOnce();
+    expect(h.forms.at(-1)?.get('grant_type')).toBe('refresh_token');
+    expect(await restored.listModels()).toEqual([{ slug: 'model-a', displayName: 'Model A' }]);
+    // Discovery, signing keys, refresh and the catalogue all went through the host's fetch.
+    expect(h.fetch.mock.calls.map(([url]) => url)).toEqual([
+      `${AUTH}/api/accounts/oauth/token`,
+      `${AUTH}/.well-known/openid-configuration`,
+      `${AUTH}/.well-known/jwks.json`,
+      'https://api.openai.com/v1/models',
+    ]);
   });
 
   it('ignores page postMessage callbacks while a broker owns the attempt', async () => {

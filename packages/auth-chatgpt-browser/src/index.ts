@@ -14,9 +14,16 @@ export {
   type ChatGPTBrowserCallbackWindow,
   type ChatGPTBrowserLocationLike,
   type ChatGPTBrowserSupport,
+  type ChatGPTBrowserSupportMode,
+  type DetectChatGPTBrowserSupportOptions,
   type ChatGPTBrowserUnsupportedReason,
   type CompleteChatGPTBrowserCallbackOptions,
 } from './environment.js';
+export type {
+  ChatGPTBrowserRedirectBroker,
+  ChatGPTBrowserRedirectRequest,
+  ChatGPTBrowserRedirectResult,
+} from './redirect-broker.js';
 export {
   ChatGPTBrowserError,
   type ChatGPTBrowserErrorKind,

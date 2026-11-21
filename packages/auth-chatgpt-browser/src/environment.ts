@@ -19,9 +19,22 @@ export type ChatGPTBrowserUnsupportedReason =
   /** The client was disposed. */
   | 'disposed';
 
+/**
+ * How a supported page signs in. Reported only when a redirect broker was considered:
+ * `redirect-broker` means a helper (for example the Loom.js Companion extension) captures the
+ * loopback callback, so the page origin itself need not be `127.0.0.1`.
+ */
+export type ChatGPTBrowserSupportMode = 'redirect-broker';
+
 export interface ChatGPTBrowserSupport {
   readonly supported: boolean;
   readonly reason?: ChatGPTBrowserUnsupportedReason;
+  readonly mode?: ChatGPTBrowserSupportMode;
+}
+
+export interface DetectChatGPTBrowserSupportOptions {
+  /** True when a validated redirect broker is available; lifts the loopback-origin requirement. */
+  readonly redirectBroker?: boolean;
 }
 
 export interface ChatGPTBrowserLocationLike {
@@ -34,12 +47,17 @@ export function isLoopbackRedirectOrigin(location: ChatGPTBrowserLocationLike): 
   return location.protocol === 'http:' && location.hostname === '127.0.0.1';
 }
 
-/** Reports whether the current page can run browser-only Sign in with ChatGPT, and why not. */
+/**
+ * Reports whether the current page can run browser-only Sign in with ChatGPT, and why not. With
+ * `{ redirectBroker: true }` any origin is supported and the result carries
+ * `mode: 'redirect-broker'`; without it the result is unchanged (loopback origins only).
+ */
 export function detectChatGPTBrowserSupport(
   environment: {
     readonly window?: { readonly location?: ChatGPTBrowserLocationLike };
     readonly crypto?: Partial<Pick<Crypto, 'subtle' | 'getRandomValues'>>;
   } = globalThis,
+  options: DetectChatGPTBrowserSupportOptions = {},
 ): ChatGPTBrowserSupport {
   const location = environment.window?.location;
   if (location === undefined) return Object.freeze({ supported: false, reason: 'no-window' });
@@ -48,6 +66,8 @@ export function detectChatGPTBrowserSupport(
     typeof environment.crypto.getRandomValues !== 'function'
   )
     return Object.freeze({ supported: false, reason: 'web-crypto-unavailable' });
+  if (options.redirectBroker === true)
+    return Object.freeze({ supported: true, mode: 'redirect-broker' });
   if (!isLoopbackRedirectOrigin(location))
     return Object.freeze({ supported: false, reason: 'origin-not-loopback' });
   return Object.freeze({ supported: true });

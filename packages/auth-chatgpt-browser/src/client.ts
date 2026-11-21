@@ -37,6 +37,11 @@ import {
   type FetchFunction,
 } from './http.js';
 import { shapeRequest, shapeStream } from './stream.js';
+import {
+  brokerCallback,
+  validateRedirectBroker,
+  type ChatGPTBrowserRedirectBroker,
+} from './redirect-broker.js';
 
 /** Non-secret metadata storage. Tokens and login transactions are never written to it. */
 export interface ChatGPTBrowserMetadataStorage {
@@ -81,6 +86,12 @@ export interface ChatGPTBrowserClientOptions {
   readonly signInTimeoutMs?: number;
   /** Total lifetime of one model or catalog request. Defaults to 10 minutes. */
   readonly requestTimeoutMs?: number;
+  /**
+   * Optional helper that owns the sign-in window and captures the loopback callback, so pages
+   * outside `http://127.0.0.1:<port>` can sign in (see `ChatGPTBrowserRedirectBroker`). Omitted by
+   * default: the page opens the popup and serves the callback itself.
+   */
+  readonly redirectBroker?: ChatGPTBrowserRedirectBroker;
 }
 
 export interface ChatGPTBrowserAccount {
@@ -145,7 +156,8 @@ interface Session {
   refreshing?: Promise<void>;
 }
 interface Attempt {
-  popup: Window;
+  /** Undefined when a redirect broker owns the sign-in window. */
+  popup: Window | undefined;
   controller: AbortController;
   state: string;
   nonce: string;
@@ -237,7 +249,11 @@ export function createChatGPTBrowserClient(
   const now = options.now ?? (() => Date.now());
   const fetch: FetchFunction = options.fetch ?? ((input, init) => globalThis.fetch(input, init));
   const hostWindow = (globalThis as { readonly window?: Window }).window;
-  const support = detectChatGPTBrowserSupport();
+  const broker = validateRedirectBroker(options.redirectBroker);
+  const support =
+    broker === undefined
+      ? detectChatGPTBrowserSupport()
+      : detectChatGPTBrowserSupport(globalThis, { redirectBroker: true });
   const hostsKey = `${prefix}host.v1`;
   const accountsKey = `${prefix}registrations.v1`;
   let storage: ChatGPTBrowserMetadataStorage | undefined;
@@ -557,9 +573,10 @@ export function createChatGPTBrowserClient(
   async function callback(pending: Attempt, url: URL): Promise<void> {
     try {
       checkAttempt(pending);
+      const expected = new URL(pending.redirect);
       if (
-        url.origin !== hostWindow?.location.origin ||
-        url.pathname !== callbackPath ||
+        url.origin !== expected.origin ||
+        url.pathname !== expected.pathname ||
         url.hash ||
         url.username ||
         url.password ||
@@ -655,7 +672,7 @@ export function createChatGPTBrowserClient(
   function onMessage(event: MessageEvent<unknown>): void {
     const pending = attempt;
     if (
-      pending === undefined ||
+      pending?.popup === undefined ||
       !pending.ready ||
       pending.consumed ||
       event.source !== pending.popup ||
@@ -694,9 +711,13 @@ export function createChatGPTBrowserClient(
     cancelSignIn();
     epoch += 1;
     // Must run before any await/crypto operation, in the original click's activation.
-    let popup: Window | null;
+    // A redirect broker opens its own window instead.
+    let popup: Window | null | undefined;
     try {
-      popup = hostWindow.open('about:blank', '_blank', 'popup,width=560,height=760');
+      popup =
+        broker === undefined
+          ? hostWindow.open('about:blank', '_blank', 'popup,width=560,height=760')
+          : undefined;
     } catch {
       popup = null;
     }
@@ -719,7 +740,7 @@ export function createChatGPTBrowserClient(
         signInTimeout,
       );
       const poll = setInterval(() => {
-        if (!pending.consumed && opened.closed)
+        if (!pending.consumed && opened?.closed === true)
           pending.finish(
             chatgptError('sign-in-cancelled', 'ChatGPT sign-in popup was closed. Try again.'),
           );
@@ -730,7 +751,7 @@ export function createChatGPTBrowserClient(
         state: '',
         nonce: '',
         verifier: '',
-        redirect: `${origin}${callbackPath}`,
+        redirect: broker?.redirectUri ?? `${origin}${callbackPath}`,
         selected,
         expiresAt: now() + signInTimeout,
         ready: false,
@@ -746,7 +767,7 @@ export function createChatGPTBrowserClient(
           pending.verifier = '';
           if (attempt === pending) attempt = undefined;
           try {
-            opened.close();
+            opened?.close();
           } catch {
             /* Cross-origin close can fail. */
           }
@@ -787,7 +808,18 @@ export function createChatGPTBrowserClient(
             code_challenge: base64url(new Uint8Array(digest)),
           }).toString();
           pending.ready = true;
-          opened.location.replace(url.href);
+          if (broker === undefined) opened?.location.replace(url.href);
+          else {
+            const returned = await brokerCallback(broker, {
+              authorizationUrl: url.href,
+              state: pending.state,
+              signal: pending.controller.signal,
+            });
+            checkAttempt(pending);
+            if (pending.consumed) return;
+            pending.consumed = true;
+            await callback(pending, returned);
+          }
         } catch (error) {
           pending.finish(
             error instanceof OpenAIResponsesModelError

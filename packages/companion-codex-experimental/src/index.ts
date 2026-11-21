@@ -1,3 +1,4 @@
+export * from './chatgpt-helper.js';
 export * from './companion.js';
 export type * from './contracts.js';
 export * from './errors.js';
